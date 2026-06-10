@@ -33,6 +33,70 @@ uv run python scripts/create_admin.py admin@example.com admin <password>
 # (docker: docker compose exec backend python scripts/create_admin.py ...)
 ```
 
+## Kubernetes 배포
+
+### 이미지 빌드 (CI)
+
+`.github/workflows/build.yml` 이 main push / `v*` 태그마다:
+1. backend 테스트+린트, frontend 타입체크+빌드
+2. 두 이미지를 GHCR로 빌드/푸시:
+   - `ghcr.io/oronaminc/atlas/backend` (`latest`, `sha-...`, semver 태그)
+   - `ghcr.io/oronaminc/atlas/frontend`
+3. kustomize 매니페스트 렌더링 + kubeconform 스키마 검증
+
+수동 빌드:
+
+```bash
+docker build -t ghcr.io/oronaminc/atlas/backend:v0.1.0 ./backend
+docker build -t ghcr.io/oronaminc/atlas/frontend:v0.1.0 ./frontend
+docker push ghcr.io/oronaminc/atlas/backend:v0.1.0
+docker push ghcr.io/oronaminc/atlas/frontend:v0.1.0
+```
+
+### 매니페스트 (kustomize)
+
+```
+deploy/k8s/
+  base/            # Namespace, ConfigMap, backend(+migrate initContainer),
+                   # worker, frontend, Service, Ingress
+  overlays/dev/    # + in-cluster postgres/redis, dev secret, replicas=1
+```
+
+운영 배포:
+
+```bash
+# 1) ConfigMap의 MIMIR_*_URL 을 기존 관측 스택 주소로 수정
+# 2) secret 생성 (deploy/k8s/base/secret.example.yaml 의 명령 참고)
+kubectl -n atlas create secret generic atlas-secrets --from-literal=SECRET_KEY=... ...
+# 3) 이미지 태그 고정 후 적용
+cd deploy/k8s/base && kustomize edit set image \
+  ghcr.io/oronaminc/atlas/backend=ghcr.io/oronaminc/atlas/backend:v0.1.0 \
+  ghcr.io/oronaminc/atlas/frontend=ghcr.io/oronaminc/atlas/frontend:v0.1.0
+kubectl apply -k deploy/k8s/base
+# 4) 최초 admin
+kubectl -n atlas exec deploy/atlas-backend -- python scripts/create_admin.py admin@example.com admin <pw>
+```
+
+- DB 마이그레이션은 backend Pod의 `migrate` initContainer가 기동 시 자동 실행 (`alembic upgrade head`)
+- frontend nginx의 백엔드 주소는 `BACKEND_ORIGIN` 환경변수로 주입 (k8s: `http://atlas-backend:8000`)
+- Ingress: `/api` → backend, `/` → frontend (host는 환경에 맞게 수정)
+
+### 로컬에서 k8s 테스트 (kind)
+
+```bash
+# 필요: docker, kind, kubectl
+./deploy/kind-up.sh     # 클러스터 생성 → 이미지 빌드/로드 → dev 오버레이 배포 → rollout 대기
+kubectl -n atlas exec deploy/atlas-backend -- python scripts/create_admin.py admin@example.com admin <pw>
+kubectl -n atlas port-forward svc/atlas-frontend 8080:80
+# 크롬에서 http://localhost:8080
+```
+
+클러스터 없이 매니페스트만 검증하려면:
+
+```bash
+kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -
+```
+
 ## Local development
 
 ### Backend (uv)

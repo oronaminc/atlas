@@ -1,0 +1,63 @@
+# Dev-only in-cluster PostgreSQL. For production use a managed/operated DB.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: atlas-postgres
+  namespace: atlas
+  labels:
+    app.kubernetes.io/name: atlas
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: atlas-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: atlas
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: atlas
+        app.kubernetes.io/component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: pg
+          env:
+            - name: POSTGRES_USER
+              value: atlas
+            - name: POSTGRES_PASSWORD
+              value: atlas
+            - name: POSTGRES_DB
+              value: atlas
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "atlas"]
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atlas-postgres
+  namespace: atlas
+spec:
+  selector:
+    app.kubernetes.io/name: atlas
+    app.kubernetes.io/component: postgres
+  ports:
+    - port: 5432
+      targetPort: pg

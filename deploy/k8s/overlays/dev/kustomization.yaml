@@ -1,0 +1,61 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - postgres.yaml
+  - redis.yaml
+
+# Dev-only credentials. Never use a generator like this in production.
+secretGenerator:
+  - name: atlas-secrets
+    namespace: atlas
+    behavior: create
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - SECRET_KEY=dev-secret-key-change-me-0123456789abcdef
+      - FERNET_KEY=2u0J0O5cWxOSrTNqCslZDzcs2qxYBclkjPaAV0PXrz4=
+      - DATABASE_URL=postgresql+asyncpg://atlas:atlas@atlas-postgres:5432/atlas
+      - REDIS_URL=redis://atlas-redis:6379/0
+      - OIDC_ISSUER=
+      - OIDC_CLIENT_ID=
+      - OIDC_CLIENT_SECRET=
+      - OIDC_REDIRECT_URI=
+
+patches:
+  # Dev runs everything single-replica and over plain http.
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: atlas-backend
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: atlas-frontend
+  - patch: |-
+      - op: replace
+        path: /data/APP_ENV
+        value: dev
+      - op: replace
+        path: /data/CORS_ORIGINS
+        value: http://localhost:8080,http://atlas.local
+      - op: replace
+        path: /data/FRONTEND_URL
+        value: http://atlas.local
+    target:
+      kind: ConfigMap
+      name: atlas-config
+  - patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: atlas.local
+    target:
+      kind: Ingress
+      name: atlas

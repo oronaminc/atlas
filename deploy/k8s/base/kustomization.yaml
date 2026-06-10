@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - backend.yaml
+  - worker.yaml
+  - frontend.yaml
+  - ingress.yaml
+
+# Retag both images in one place:
+#   kustomize edit set image ghcr.io/oronaminc/atlas/backend=ghcr.io/oronaminc/atlas/backend:v0.1.0
+images:
+  - name: ghcr.io/oronaminc/atlas/backend
+    newTag: latest
+  - name: ghcr.io/oronaminc/atlas/frontend
+    newTag: latest
