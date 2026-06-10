@@ -68,7 +68,13 @@ async function request<T>(
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
-  if (res.status === 401 && options.retry !== false) {
+  // The auth endpoints own their own 401 semantics (bad credentials / no
+  // refresh cookie) — don't run the session-refresh dance for them, or a
+  // failed login surfaces a misleading "Session expired" instead of the
+  // real error message.
+  const isAuthEndpoint = path.startsWith("/auth/login") || path.startsWith("/auth/refresh");
+
+  if (res.status === 401 && options.retry !== false && !isAuthEndpoint) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
       return request<T>(method, path, { ...options, retry: false });
