@@ -1,0 +1,81 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "search": "Search",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "empty": "No data",
+    "actions": "Actions",
+    "name": "Name",
+    "description": "Description",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "next": "Next",
+    "previous": "Previous",
+    "test": "Test",
+    "validate": "Validate",
+    "success": "Success",
+    "failed": "Failed"
+  },
+  "theme": {
+    "toggle": "Toggle theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "servers": "Servers",
+    "rules": "Alert Rules",
+    "ruleGroups": "Rule Groups",
+    "alerts": "Active Alerts",
+    "notifications": "Notifications",
+    "groups": "Groups",
+    "users": "Users",
+    "audit": "Audit Log",
+    "profile": "Profile",
+    "logout": "Log out"
+  },
+  "auth": {
+    "login": "Log in",
+    "loginWithSSO": "Log in with SSO",
+    "email": "Email",
+    "password": "Password",
+    "or": "or",
+    "loginFailed": "Login failed",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "newPassword": "New password"
+  },
+  "rules": {
+    "title": "Alert Rules",
+    "create": "Create rule",
+    "scope": "Scope",
+    "severity": "Severity",
+    "expression": "Expression",
+    "forDuration": "For",
+    "datasource": "Datasource",
+    "emergencyApply": "Emergency apply",
+    "emergencyReason": "Reason for emergency apply",
+    "emergencyConfirm": "This rule will be pushed to the Mimir Ruler immediately. Continue?",
+    "preview": "Preview evaluation",
+    "validateOk": "Syntax is valid",
+    "labels": "Labels",
+    "annotations": "Annotations"
+  },
+  "sync": {
+    "status": "Sync status",
+    "syncNow": "Sync now",
+    "lastSynced": "Last synced"
+  },
+  "dashboard": {
+    "activeAlerts": "Active alerts",
+    "recentAudit": "Recent audit log",
+    "syncState": "Sync state"
+  }
+}
