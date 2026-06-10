@@ -6,6 +6,10 @@ Usage:
 
 import asyncio
 import sys
+from pathlib import Path
+
+# Allow running as `python scripts/create_admin.py` from the backend dir.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select
 
