@@ -7,12 +7,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import TimestampedBase
 
 
-class SyncTarget(str, enum.Enum):
+class SyncTarget(enum.StrEnum):
     ruler = "ruler"
     alertmanager = "alertmanager"
 
 
-class SyncStatus(str, enum.Enum):
+class SyncStatus(enum.StrEnum):
     ok = "ok"
     pending = "pending"
     failed = "failed"
@@ -23,9 +23,7 @@ class SyncState(TimestampedBase):
     __table_args__ = (UniqueConstraint("target", name="uq_sync_target"),)
 
     target: Mapped[SyncTarget] = mapped_column(Enum(SyncTarget, name="sync_target"))
-    last_synced_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[SyncStatus] = mapped_column(
         Enum(SyncStatus, name="sync_status"), default=SyncStatus.pending
     )

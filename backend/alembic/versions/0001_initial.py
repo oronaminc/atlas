@@ -12,7 +12,6 @@ explicit alembic operations.
 from collections.abc import Sequence
 
 from alembic import op
-
 from app.models import Base
 
 revision: str = "0001"

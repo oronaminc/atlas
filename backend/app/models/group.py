@@ -7,7 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import TimestampedBase
 
 
-class GroupRole(str, enum.Enum):
+class GroupRole(enum.StrEnum):
     member = "member"
     manager = "manager"
 

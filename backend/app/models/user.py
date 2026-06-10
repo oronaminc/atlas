@@ -7,12 +7,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import TimestampedBase
 
 
-class AuthProvider(str, enum.Enum):
+class AuthProvider(enum.StrEnum):
     local = "local"
     oidc = "oidc"
 
 
-class GlobalRole(str, enum.Enum):
+class GlobalRole(enum.StrEnum):
     admin = "admin"
     editor = "editor"
     viewer = "viewer"

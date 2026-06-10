@@ -17,20 +17,20 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import JsonType, TimestampedBase
 
 
-class ScopeType(str, enum.Enum):
+class ScopeType(enum.StrEnum):
     global_ = "global"
     server = "server"
     user = "user"
     group = "group"
 
 
-class Severity(str, enum.Enum):
+class Severity(enum.StrEnum):
     critical = "critical"
     warning = "warning"
     info = "info"
 
 
-class Datasource(str, enum.Enum):
+class Datasource(enum.StrEnum):
     metrics = "metrics"
     logs = "logs"
 

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import JsonType, TimestampedBase
 
 
-class ReceiverType(str, enum.Enum):
+class ReceiverType(enum.StrEnum):
     slack = "slack"
     email = "email"
     webhook = "webhook"
