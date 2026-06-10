@@ -25,6 +25,14 @@ docker compose up --build
 # frontend: http://localhost:5173
 ```
 
+최초 admin 계정 생성:
+
+```bash
+cd backend
+uv run python scripts/create_admin.py admin@example.com admin <password>
+# (docker: docker compose exec backend python scripts/create_admin.py ...)
+```
+
 ## Local development
 
 ### Backend (uv)
@@ -76,5 +84,16 @@ frontend/src/
 8. **Rule Groups + sync + emergency-apply**: `uv run pytest tests/test_sync.py`.
 9. **Notifications**: `uv run pytest tests/test_notifications.py`.
 10. **Alerts 프록시 + 대시보드**: `uv run pytest tests/test_alerts.py`.
-11. **Frontend 화면**: `cd frontend && pnpm build` (화면 추가마다 타입에러 0 유지).
-12. **마무리**: `curl localhost:8000/healthz`, `curl localhost:8000/readyz`.
+11. **Frontend 화면**: `cd frontend && pnpm build` (화면 추가마다 타입에러 0 유지) + `pnpm lint`.
+12. **마무리**: `curl localhost:8000/healthz`, `curl localhost:8000/readyz`, OpenAPI는 `/docs`.
+
+## 주요 설계 노트
+
+- **X-Scope-OrgID**: `backend/app/integrations/base.py`의 `make_client()`에서 단 한 번 주입.
+  모든 Mimir/Alertmanager/Loki 클라이언트가 이를 상속하며, 개별 호출에는 작성하지 않는다.
+- **동기화 흐름**: 룰/룰그룹 변경 → `sync_state(ruler)=pending` → 워커(30s)가 rule group을
+  Prometheus YAML로 직렬화 → checksum 비교 → 변경분만 Ruler PUT. Redis lock으로 중복 방지.
+- **긴급 적용**: `POST /api/v1/rules/emergency-apply` — 검증 → `emergency` namespace로 즉시
+  push → DB 반영 → audit(emergency=true). UI의 룰 목록 ⋮ 메뉴에서 사유 입력 후 실행.
+- **Receiver secret**: config의 url/api_key 등은 Fernet 암호화 저장, API 응답에서는 마스킹.
+- **RBAC**: 전역 role(admin/editor/viewer) + group manager. scope=user 룰은 본인/admin만.

@@ -34,11 +34,24 @@ export default [
     rules: {
       ...tsPlugin.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      // TypeScript already checks undefined identifiers; no-undef false-positives on DOM types.
+      "no-undef": "off",
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [
         "warn",
         { argsIgnorePattern: "^_" },
       ],
+    },
+  },
+  {
+    files: ["*.config.js", "*.config.ts"],
+    languageOptions: {
+      globals: {
+        require: "readonly",
+        __dirname: "readonly",
+        module: "readonly",
+        process: "readonly",
+      },
     },
   },
 ];
