@@ -48,6 +48,7 @@ const navItems: NavItem[] = [
   { to: "/notifications", labelKey: "nav.notifications", icon: BellRing },
   { to: "/groups", labelKey: "nav.groups", icon: UsersRound },
   { to: "/users", labelKey: "nav.users", icon: Users, adminOnly: true },
+  { to: "/settings", labelKey: "nav.settings", icon: Settings, adminOnly: true },
   { to: "/audit", labelKey: "nav.audit", icon: ClipboardList },
 ];
 

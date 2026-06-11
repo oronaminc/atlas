@@ -18,6 +18,7 @@ secretGenerator:
       - FERNET_KEY=2u0J0O5cWxOSrTNqCslZDzcs2qxYBclkjPaAV0PXrz4=
       - DATABASE_URL=postgresql+asyncpg://atlas:atlas@atlas-postgres:5432/atlas
       - REDIS_URL=redis://atlas-redis:6379/0
+      - INGEST_API_KEY=dev-ingest-key
       - OIDC_ISSUER=
       - OIDC_CLIENT_ID=
       - OIDC_CLIENT_SECRET=

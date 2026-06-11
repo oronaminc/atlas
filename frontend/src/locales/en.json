@@ -39,7 +39,8 @@
     "users": "Users",
     "audit": "Audit Log",
     "profile": "Profile",
-    "logout": "Log out"
+    "logout": "Log out",
+    "settings": "Engine Settings"
   },
   "auth": {
     "login": "Log in",
@@ -77,5 +78,16 @@
     "activeAlerts": "Active alerts",
     "recentAudit": "Recent audit log",
     "syncState": "Sync state"
+  },
+  "settings": {
+    "title": "Engine Settings",
+    "description": "Alert correlation engine settings (admin-only edits)",
+    "correlation": "Correlation engine",
+    "correlationHelp": "Changes take effect on the worker's next batch.",
+    "dedupWindow": "Dedup window",
+    "correlationWindow": "Correlation window",
+    "groupAttrs": "Group attributes (priority order)",
+    "groupAttrsHelp": "Comma-separated; earlier attrs win",
+    "seconds": "in seconds"
   }
 }

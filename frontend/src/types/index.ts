@@ -153,3 +153,9 @@ export interface ActiveAlert {
   startsAt: string;
   endsAt: string;
 }
+
+export interface CorrelationConfig {
+  dedup_window_seconds: number;
+  correlation_window_seconds: number;
+  group_attrs: string[];
+}

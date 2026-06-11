@@ -50,9 +50,24 @@ Never commit atlas-secrets in plaintext (SOPS/SealedSecrets).
 - Some CDNs (jsdelivr) are blocked.
 - Working branch: `claude/epic-dijkstra-mgq4oa` (push only to this branch).
 
+## Correlation engine (KeepHQ-style, implemented)
+
+3 stages in `services/correlation/`: dedup (fingerprint + Redis window) → group
+(`AttributeTimeStrategy`: priority-first group_key host>service>cluster + time window;
+`LLMStrategy` = stub) → incident (attach/create, timeline, severity=max).
+- Ingest: `POST /api/v1/ingest/{provider}` (X-Atlas-Ingest-Key static auth, 202 after durable
+  insert; correlation async). Providers in `app/providers/` (alertmanager = #1; new source =
+  new module + registry entry, engine untouched).
+- Worker `workers/correlation_worker.py`: PG-poll for incident_id IS NULL (source of truth)
+  + Redis stream `atlas:alerts:in` wake-up. Dedup = increment prior row's dedup_count, drop dup row.
+- Config DB-backed (`correlation_config` single row, seeded 300s/900s/host,service,cluster),
+  admin-edited at `/settings` (UI) or PATCH `/api/v1/correlation-config`, audited.
+- Incidents: list/detail/ack/resolve (editor+, audited, resolved = terminal → 409).
+- Migration 0001 is pinned to its original table list (metadata grows); 0002+ = explicit ops.
+
 ## Already done (do not redo)
 
 All 12 spec phases implemented: models/migration, auth (local+OIDC)+RBAC, integrations,
-full REST API, sync worker, 11 frontend screens, 44 tests, k8s + GitLab CI + Flux.
+full REST API, sync worker, 11 frontend screens, k8s + GitLab CI + Flux. 81 backend tests.
 Headless-browser E2E verified the main flows (login / rule CRUD / emergency apply / audit log /
-dark mode / mobile).
+dark mode / mobile). Correlation engine (above) with 37 dedicated tests.

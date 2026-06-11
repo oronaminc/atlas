@@ -51,9 +51,7 @@ async def test_first_alert_creates_incident_with_timeline(db):
     kinds = [
         e.kind
         for e in (
-            await db.execute(
-                select(IncidentEvent).where(IncidentEvent.incident_id == incident.id)
-            )
+            await db.execute(select(IncidentEvent).where(IncidentEvent.incident_id == incident.id))
         ).scalars()
     ]
     assert "created" in kinds
@@ -134,9 +132,7 @@ async def test_resolved_incident_is_never_reattached(db):
     incident.status = IncidentStatus.resolved
     await db.commit()
 
-    second = await engine.process(
-        db, alert(name="B"), config, now=NOW + timedelta(minutes=1)
-    )
+    second = await engine.process(db, alert(name="B"), config, now=NOW + timedelta(minutes=1))
     await db.commit()
     assert second.incident_id != first.incident_id
 

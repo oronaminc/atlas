@@ -39,7 +39,8 @@
     "users": "사용자 관리",
     "audit": "감사 로그",
     "profile": "프로필",
-    "logout": "로그아웃"
+    "logout": "로그아웃",
+    "settings": "엔진 설정"
   },
   "auth": {
     "login": "로그인",
@@ -77,5 +78,16 @@
     "activeAlerts": "활성 알림",
     "recentAudit": "최근 감사 로그",
     "syncState": "동기화 상태"
+  },
+  "settings": {
+    "title": "엔진 설정",
+    "description": "알림 상관관계 엔진 설정 (admin 전용 수정)",
+    "correlation": "상관관계 엔진",
+    "correlationHelp": "변경 즉시 워커가 다음 처리부터 새 설정을 사용합니다.",
+    "dedupWindow": "중복 제거 윈도우",
+    "correlationWindow": "상관관계 윈도우",
+    "groupAttrs": "그룹핑 속성 (우선순위 순)",
+    "groupAttrsHelp": "쉼표로 구분, 앞쪽 속성이 우선",
+    "seconds": "초 단위"
   }
 }

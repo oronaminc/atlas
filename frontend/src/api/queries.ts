@@ -8,6 +8,7 @@ import {
 import { api } from "@/api/client";
 import type {
   ActiveAlert,
+  CorrelationConfig,
   AlertRule,
   AuditLog,
   Envelope,
@@ -90,6 +91,13 @@ export const useReceivers = (params?: Params) =>
 export const usePolicies = () =>
   useList<NotificationPolicy>(["notification-policies"], "/notification-policies");
 export const useSilences = () => useList<Silence>(["silences"], "/silences");
+
+// --- Correlation config ---
+export const useCorrelationConfig = () =>
+  useQuery({
+    queryKey: ["correlation-config"],
+    queryFn: () => api.get<CorrelationConfig>("/correlation-config"),
+  });
 
 // --- Sync / Audit / Alerts ---
 export const useSyncState = () =>

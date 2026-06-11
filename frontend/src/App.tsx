@@ -14,6 +14,7 @@ import { RuleGroupsPage } from "@/pages/rule-groups";
 import { RulesPage } from "@/pages/rules";
 import { ServerDetailPage } from "@/pages/server-detail";
 import { ServersPage } from "@/pages/servers";
+import { SettingsPage } from "@/pages/settings";
 import { UsersPage } from "@/pages/users";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -59,6 +60,14 @@ export default function App() {
           element={
             <RequireAdmin>
               <UsersPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <RequireAdmin>
+              <SettingsPage />
             </RequireAdmin>
           }
         />

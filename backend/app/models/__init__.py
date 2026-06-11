@@ -1,3 +1,4 @@
+from app.models.alerting import AlertEvent, CorrelationConfig, Incident, IncidentEvent
 from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.group import Group, UserGroup
@@ -8,10 +9,14 @@ from app.models.sync import SyncState
 from app.models.user import User
 
 __all__ = [
+    "AlertEvent",
     "AlertRule",
     "AuditLog",
     "Base",
+    "CorrelationConfig",
     "Group",
+    "Incident",
+    "IncidentEvent",
     "NotificationPolicy",
     "Receiver",
     "RuleGroup",

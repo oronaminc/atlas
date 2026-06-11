@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     SYNC_INTERVAL_SECONDS: int = 30
+    INGEST_API_KEY: str = ""
     LOGIN_RATE_LIMIT_ATTEMPTS: int = 5
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 300
 

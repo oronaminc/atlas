@@ -4,7 +4,10 @@ from app.api.v1 import (
     alerts,
     audit,
     auth,
+    correlation_config,
     groups,
+    incidents,
+    ingest,
     notifications,
     rule_groups,
     rules,
@@ -22,5 +25,8 @@ api_router.include_router(rules.router)
 api_router.include_router(rule_groups.router)
 api_router.include_router(notifications.router)
 api_router.include_router(alerts.router)
+api_router.include_router(ingest.router)
+api_router.include_router(incidents.router)
+api_router.include_router(correlation_config.router)
 api_router.include_router(sync.router)
 api_router.include_router(audit.router)
