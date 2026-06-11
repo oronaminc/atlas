@@ -38,7 +38,7 @@ kubectl -n atlas rollout status deploy/atlas-worker --timeout=120s
 
 echo
 echo "Done. Next steps:"
-echo "  # 최초 admin 생성"
+echo "  # create the first admin"
 echo "  kubectl -n atlas exec deploy/atlas-backend -- python scripts/create_admin.py admin@example.com admin <password>"
-echo "  # UI 접속 (http://localhost:8080)"
+echo "  # open the UI (http://localhost:8080)"
 echo "  kubectl -n atlas port-forward svc/atlas-frontend 8080:80"

@@ -1,13 +1,13 @@
-# 내부망 GitLab CI: test → build(kaniko) → 내부 레지스트리 push → manifest 검증
+# Internal GitLab CI: test → build (kaniko) → push to internal registry → manifest validation
 #
-# 내부 미러 주소는 GitLab CI/CD Variables 또는 아래 variables 에서 교체:
-#   PYTHON_IMAGE / NODE_IMAGE / KANIKO_IMAGE  → 내부 미러의 이미지 경로
-#   PIP_INDEX_URL / UV_DEFAULT_INDEX          → 내부 PyPI 미러
-#   NPM_REGISTRY                              → 내부 npm 미러
+# Replace internal mirror endpoints via GitLab CI/CD Variables or the variables block below:
+#   PYTHON_IMAGE / NODE_IMAGE / KANIKO_IMAGE  → image paths on the internal mirror
+#   PIP_INDEX_URL / UV_DEFAULT_INDEX          → internal PyPI mirror
+#   NPM_REGISTRY                              → internal npm mirror
 #
-# 이미지 태그 전략 (Flux image automation과 맞물림):
-#   main 브랜치:  main-<pipeline_iid>-<short_sha>   ← ImagePolicy가 iid 숫자 오름차순 추적
-#   git 태그:     <tag> (예: v0.1.0)
+# Image tag strategy (paired with Flux image automation):
+#   main branch:  main-<pipeline_iid>-<short_sha>   ← ImagePolicy tracks iid numerically ascending
+#   git tag:      <tag> (e.g. v0.1.0)
 
 stages:
   - test
@@ -59,7 +59,7 @@ test-frontend:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG
 
-# ---- 이미지 빌드 (kaniko: docker 데몬/privileged 불필요) ----
+# ---- Image builds (kaniko: no docker daemon / privileged mode needed) ----
 
 .build-image:
   stage: build
@@ -70,7 +70,7 @@ test-frontend:
     GIT_DEPTH: "1"
   before_script:
     - mkdir -p /kaniko/.docker
-    # GitLab 컨테이너 레지스트리 기본 자격증명 ($CI_REGISTRY_*는 GitLab이 자동 주입)
+    # Default GitLab container registry credentials ($CI_REGISTRY_* are auto-injected by GitLab)
     - >
       echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')\"}}}"
       > /kaniko/.docker/config.json
@@ -106,7 +106,7 @@ build-frontend:
       --cache=true
       --cache-repo "$CI_REGISTRY_IMAGE/frontend/cache"
 
-# ---- 매니페스트 렌더링 검증 (Flux가 적용할 내용 사전 확인) ----
+# ---- Manifest render validation (preview what Flux will apply) ----
 
 validate-manifests:
   stage: validate

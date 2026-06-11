@@ -5,7 +5,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m
-  url: https://gitlab.internal/platform/atlas   # 내부 GitLab repo 주소로 교체
+  url: https://gitlab.internal/platform/atlas   # replace with internal GitLab repo URL
   ref:
     branch: main
   secretRef:

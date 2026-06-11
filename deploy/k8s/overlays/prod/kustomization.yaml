@@ -4,8 +4,8 @@ kind: Kustomization
 resources:
   - ../../base
 
-# 내부 GitLab 컨테이너 레지스트리 경로로 교체.
-# newTag 의 마커 주석은 Flux ImageUpdateAutomation이 새 태그로 자동 커밋하는 지점.
+# Replace with the internal GitLab container registry path.
+# The newTag marker comments are where Flux ImageUpdateAutomation commits new tags.
 images:
   - name: ghcr.io/oronaminc/atlas/backend
     newName: registry.gitlab.internal/platform/atlas/backend
@@ -15,7 +15,7 @@ images:
     newTag: main-1-000000 # {"$imagepolicy": "flux-system:atlas-frontend:tag"}
 
 patches:
-  # 운영 호스트/주소로 교체
+  # replace with production host/origin
   - patch: |-
       - op: replace
         path: /spec/rules/0/host

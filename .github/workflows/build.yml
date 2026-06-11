@@ -44,7 +44,7 @@ jobs:
           pnpm build
 
   build-and-push:
-    # PR에서는 빌드만(push 없음), main/태그에서는 GHCR로 push.
+    # PRs: build only (no push); main/tags: push to GHCR.
     needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
     permissions:

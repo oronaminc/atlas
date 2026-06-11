@@ -1,11 +1,11 @@
 ---
 name: k8s-validate
-description: deploy/(k8s 매니페스트, kustomize 오버레이, Flux) 수정 후 렌더링+스키마 검증. deploy/ 아래 yaml을 수정했을 때 항상 사용.
+description: Render+schema-validate after modifying deploy/ (k8s manifests, kustomize overlays, Flux). Always use after changing yaml under deploy/.
 ---
 
-# K8s/Flux 매니페스트 검증
+# K8s/Flux manifest validation
 
-클러스터 없이 검증한다. kubectl/kubeconform 바이너리가 없으면 먼저 다운로드:
+Validates without a cluster. Download binaries first if missing:
 
 ```bash
 cd /tmp
@@ -13,7 +13,7 @@ cd /tmp
 [ -x ./kubeconform ] || curl -sL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
 ```
 
-렌더링 + 스키마 검증 (Flux CRD 포함):
+Render + schema validation (includes Flux CRDs):
 
 ```bash
 cd <repo-root>
@@ -27,13 +27,13 @@ cd <repo-root>
   /tmp/base.yaml /tmp/dev.yaml /tmp/prod.yaml /tmp/flux.yaml
 ```
 
-Invalid/Errors가 0이어야 통과.
+Pass = 0 Invalid / 0 Errors.
 
-## 주의
+## Gotchas
 
-- `deploy/flux/kustomization.yaml`은 kustomize 인덱스, Flux Kustomization CR은
-  `flux-kustomization.yaml` — 이름 바꾸지 말 것 (충돌 전례 있음).
-- prod overlay의 `newTag` 마커 주석(`# {"$imagepolicy": ...}`)은 Flux image automation
-  커밋 지점 — 삭제/이동 금지.
-- 이미지 경로 변경 시 base의 `images:` name과 overlay의 name이 일치해야 치환됨.
-- secret을 git에 평문으로 추가하지 말 것 (dev overlay의 secretGenerator는 dev 전용 예외).
+- `deploy/flux/kustomization.yaml` is the kustomize index; the Flux Kustomization CR lives in
+  `flux-kustomization.yaml` — do not rename (there was a collision before).
+- The `newTag` marker comments (`# {"$imagepolicy": ...}`) in the prod overlay are Flux image
+  automation commit points — never delete or move them.
+- When changing image paths, the `images:` name in base must match the name in overlays for substitution.
+- Never add plaintext secrets to git (the dev overlay secretGenerator is a dev-only exception).

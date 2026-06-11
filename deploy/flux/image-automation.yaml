@@ -1,13 +1,13 @@
-# CI가 push한 새 이미지 태그(main-<iid>-<sha>)를 자동으로 prod overlay에 커밋.
+# Auto-commits new image tags (main-<iid>-<sha>) pushed by CI into the prod overlay.
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageRepository
 metadata:
   name: atlas-backend
   namespace: flux-system
 spec:
-  image: registry.gitlab.internal/platform/atlas/backend   # 교체
+  image: registry.gitlab.internal/platform/atlas/backend   # replace
   interval: 1m
-  # 레지스트리 인증이 필요하면:
+  # if registry auth is required:
   # secretRef:
   #   name: atlas-registry-auth   # kubectl create secret docker-registry ...
 ---
@@ -17,7 +17,7 @@ metadata:
   name: atlas-frontend
   namespace: flux-system
 spec:
-  image: registry.gitlab.internal/platform/atlas/frontend  # 교체
+  image: registry.gitlab.internal/platform/atlas/frontend  # replace
   interval: 1m
 ---
 apiVersion: image.toolkit.fluxcd.io/v1beta2

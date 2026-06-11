@@ -1,37 +1,37 @@
-# Flux CD 구성
+# Flux CD setup
 
-이 디렉터리의 매니페스트는 **flux-system namespace에 적용**한다 (Flux v2가 이미
-부트스트랩되어 있다고 가정). 적용 전에 두 가지를 준비:
+The manifests in this directory are **applied to the flux-system namespace** (assumes
+Flux v2 is already bootstrapped). Prepare two things before applying:
 
 ```bash
-# 1) Flux가 이 repo를 읽을 자격증명 (GitLab deploy token 권장, read_repository)
+# 1) Credentials for Flux to read this repo (GitLab deploy token recommended, read_repository)
 flux create secret git atlas-repo-auth \
   --url=https://gitlab.internal/platform/atlas \
   --username=<deploy-token-user> --password=<deploy-token>
 
-# 2) 이미지 자동 업데이트가 커밋을 push할 자격증명 (write_repository)
-#    atlas-repo-auth 토큰에 write 권한을 주거나 별도 secret 사용
+# 2) Credentials for image automation to push commits (write_repository)
+#    Either grant write to the atlas-repo-auth token or use a separate secret
 
-# 적용
+# Apply
 kubectl apply -k deploy/flux
 ```
 
-흐름:
+Flow:
 
 ```
-GitLab CI (test → kaniko build → registry push, 태그 main-<iid>-<sha>)
+GitLab CI (test → kaniko build → registry push, tags main-<iid>-<sha>)
    ↓
-ImageRepository가 레지스트리 폴링 → ImagePolicy가 iid 최댓값 선택
+ImageRepository polls the registry → ImagePolicy picks the highest iid
    ↓
-ImageUpdateAutomation이 deploy/k8s/overlays/prod/kustomization.yaml 의
-마커(# {"$imagepolicy": ...}) 위치에 새 태그를 커밋
+ImageUpdateAutomation commits the new tag to the marker comments
+(# {"$imagepolicy": ...}) in deploy/k8s/overlays/prod/kustomization.yaml
    ↓
-GitRepository가 커밋 감지 → Kustomization이 prod 오버레이 reconcile
+GitRepository detects the commit → Kustomization reconciles the prod overlay
 ```
 
-이미지 자동 배포를 원하지 않으면 image-automation.yaml을 빼고
-prod overlay의 newTag를 수동으로 올리면 된다.
+If you don't want automatic image deployment, drop image-automation.yaml and
+bump newTag in the prod overlay manually.
 
-**secret 주의**: `atlas-secrets`는 git에 평문으로 두지 말 것. 운영에서는
-SOPS(+age) 또는 SealedSecrets로 암호화해 repo에 넣고 Flux가 복호화하게
-하거나, 최소한 클러스터에 수동 생성(`deploy/k8s/base/secret.example.yaml` 참고).
+**Secret warning**: never keep `atlas-secrets` in git as plaintext. In production,
+encrypt with SOPS(+age) or SealedSecrets and let Flux decrypt, or at minimum create
+it manually in-cluster (see `deploy/k8s/base/secret.example.yaml`).

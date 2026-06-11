@@ -1,11 +1,11 @@
 # Atlas — Observability Alert Management Platform
 
-Alloy + Mimir + Mimir Alertmanager + Loki + Tempo + Grafana 스택 위에서
-서버별/사용자별/그룹별 Alert 룰을 관리하는 웹사이트 + REST API.
+Web UI + REST API for managing alert rules (per server / user / group) on top of an
+existing Alloy + Mimir + Mimir Alertmanager + Loki + Tempo + Grafana stack.
 
-- **DB(PostgreSQL)가 룰의 source of truth** — 백그라운드 워커가 Mimir Ruler API로 동기화
-- 긴급 직접수정 모드(emergency apply) + 전면 audit log
-- 모든 Mimir/Alertmanager/Loki/Tempo 요청에 `X-Scope-OrgID: system` 헤더 자동 주입
+- **The DB (PostgreSQL) is the source of truth for rules** — a background worker syncs them to the Mimir Ruler API
+- Emergency direct-apply mode + full audit logging
+- Every Mimir/Alertmanager/Loki/Tempo request carries `X-Scope-OrgID: system` automatically
 
 ## Stack
 
@@ -14,18 +14,18 @@ Alloy + Mimir + Mimir Alertmanager + Loki + Tempo + Grafana 스택 위에서
 | Backend  | Python 3.12, FastAPI, SQLAlchemy 2.0 (async), Alembic, Pydantic v2 |
 | DB/Cache | PostgreSQL 16, Redis 7 |
 | Frontend | React 18 + TypeScript + Vite, TanStack Query, React Router v6, Tailwind, shadcn/ui |
-| Auth     | OIDC(SSO) + 로컬 ID/PW, JWT(access 15m / refresh 7d httpOnly cookie) |
+| Auth     | OIDC (SSO) + local ID/PW, JWT (access 15m / refresh 7d httpOnly cookie) |
 
 ## Quick start (docker)
 
 ```bash
-cp .env.example .env        # FERNET_KEY, SECRET_KEY 등 채우기
+cp .env.example .env        # fill in FERNET_KEY, SECRET_KEY, etc.
 docker compose up --build
 # backend:  http://localhost:8000  (OpenAPI: /docs)
 # frontend: http://localhost:5173
 ```
 
-최초 admin 계정 생성:
+Create the first admin account:
 
 ```bash
 cd backend
@@ -33,18 +33,18 @@ uv run python scripts/create_admin.py admin@example.com admin <password>
 # (docker: docker compose exec backend python scripts/create_admin.py ...)
 ```
 
-## Kubernetes 배포
+## Kubernetes deployment
 
-### 이미지 빌드 (CI)
+### Image builds (CI)
 
-`.github/workflows/build.yml` 이 main push / `v*` 태그마다:
-1. backend 테스트+린트, frontend 타입체크+빌드
-2. 두 이미지를 GHCR로 빌드/푸시:
-   - `ghcr.io/oronaminc/atlas/backend` (`latest`, `sha-...`, semver 태그)
+`.github/workflows/build.yml` runs on every main push / `v*` tag:
+1. backend tests+lint, frontend typecheck+build
+2. builds and pushes both images to GHCR:
+   - `ghcr.io/oronaminc/atlas/backend` (`latest`, `sha-...`, semver tags)
    - `ghcr.io/oronaminc/atlas/frontend`
-3. kustomize 매니페스트 렌더링 + kubeconform 스키마 검증
+3. renders kustomize manifests + validates with kubeconform
 
-수동 빌드:
+Manual build:
 
 ```bash
 docker build -t ghcr.io/oronaminc/atlas/backend:v0.1.0 ./backend
@@ -53,69 +53,70 @@ docker push ghcr.io/oronaminc/atlas/backend:v0.1.0
 docker push ghcr.io/oronaminc/atlas/frontend:v0.1.0
 ```
 
-### 내부망 배포 (GitLab CI + Flux CD)
+### Internal-network deployment (GitLab CI + Flux CD)
 
-내부망 k8s가 최종 타깃인 경우의 파이프라인:
+Pipeline when the final target is an internal k8s cluster:
 
 ```
 MR/main push → GitLab CI (.gitlab-ci.yml)
   test:  backend pytest+ruff+black / frontend lint+build
-  build: kaniko로 이미지 빌드 → GitLab 컨테이너 레지스트리 push
-         태그: main-<pipeline_iid>-<sha> (main) / vX.Y.Z (git tag)
-  validate: kustomize 렌더링 검증
+  build: kaniko image build → GitLab container registry
+         tags: main-<pipeline_iid>-<sha> (main) / vX.Y.Z (git tag)
+  validate: kustomize render check
       ↓
-Flux (deploy/flux/, flux-system에 적용)
-  ImageRepository/ImagePolicy: 레지스트리 폴링, iid 최신 태그 선택
-  ImageUpdateAutomation: deploy/k8s/overlays/prod 의 태그 마커에 자동 커밋
-  GitRepository + Kustomization: prod 오버레이 reconcile (prune + health check)
+Flux (deploy/flux/, applied to flux-system)
+  ImageRepository/ImagePolicy: poll registry, pick newest iid tag
+  ImageUpdateAutomation: commits new tags to markers in deploy/k8s/overlays/prod
+  GitRepository + Kustomization: reconciles the prod overlay (prune + health checks)
 ```
 
-설정 순서:
-1. `.gitlab-ci.yml` 상단 variables에서 내부 미러 주소(PYTHON_IMAGE 등, PyPI/npm) 교체
-2. `deploy/k8s/overlays/prod/kustomization.yaml` 의 레지스트리 경로·호스트 교체
-3. `deploy/flux/*.yaml` 의 repo URL·레지스트리 경로 교체 후 `kubectl apply -k deploy/flux`
-   (자세한 절차와 secret 준비: `deploy/flux/README.md`)
-4. `atlas-secrets`는 git 평문 금지 — SOPS/SealedSecrets 또는 클러스터에 수동 생성
+Setup order:
+1. Replace internal mirror endpoints in `.gitlab-ci.yml` variables (PYTHON_IMAGE etc., PyPI/npm)
+2. Replace registry path / host in `deploy/k8s/overlays/prod/kustomization.yaml`
+3. Replace repo URL / registry path in `deploy/flux/*.yaml`, then `kubectl apply -k deploy/flux`
+   (details and secret prep: `deploy/flux/README.md`)
+4. Never commit `atlas-secrets` in plaintext — use SOPS/SealedSecrets or create it manually in-cluster
 
-### 매니페스트 (kustomize)
+### Manifests (kustomize)
 
 ```
 deploy/k8s/
-  base/            # Namespace, ConfigMap, backend(+migrate initContainer),
+  base/            # Namespace, ConfigMap, backend (+migrate initContainer),
                    # worker, frontend, Service, Ingress
   overlays/dev/    # + in-cluster postgres/redis, dev secret, replicas=1
+  overlays/prod/   # internal registry images + Flux imagepolicy markers
 ```
 
-운영 배포:
+Production deploy:
 
 ```bash
-# 1) ConfigMap의 MIMIR_*_URL 을 기존 관측 스택 주소로 수정
-# 2) secret 생성 (deploy/k8s/base/secret.example.yaml 의 명령 참고)
+# 1) Point the ConfigMap MIMIR_*_URL values at the existing observability stack
+# 2) Create the secret (see deploy/k8s/base/secret.example.yaml)
 kubectl -n atlas create secret generic atlas-secrets --from-literal=SECRET_KEY=... ...
-# 3) 이미지 태그 고정 후 적용
+# 3) Pin image tags and apply
 cd deploy/k8s/base && kustomize edit set image \
   ghcr.io/oronaminc/atlas/backend=ghcr.io/oronaminc/atlas/backend:v0.1.0 \
   ghcr.io/oronaminc/atlas/frontend=ghcr.io/oronaminc/atlas/frontend:v0.1.0
 kubectl apply -k deploy/k8s/base
-# 4) 최초 admin
+# 4) First admin
 kubectl -n atlas exec deploy/atlas-backend -- python scripts/create_admin.py admin@example.com admin <pw>
 ```
 
-- DB 마이그레이션은 backend Pod의 `migrate` initContainer가 기동 시 자동 실행 (`alembic upgrade head`)
-- frontend nginx의 백엔드 주소는 `BACKEND_ORIGIN` 환경변수로 주입 (k8s: `http://atlas-backend:8000`)
-- Ingress: `/api` → backend, `/` → frontend (host는 환경에 맞게 수정)
+- DB migrations run automatically at pod start via the backend `migrate` initContainer (`alembic upgrade head`)
+- The frontend nginx upstream is injected via the `BACKEND_ORIGIN` env var (k8s: `http://atlas-backend:8000`)
+- Ingress: `/api` → backend, `/` → frontend (adjust host per environment)
 
-### 로컬에서 k8s 테스트 (kind)
+### Local k8s testing (kind)
 
 ```bash
-# 필요: docker, kind, kubectl
-./deploy/kind-up.sh     # 클러스터 생성 → 이미지 빌드/로드 → dev 오버레이 배포 → rollout 대기
+# requires: docker, kind, kubectl
+./deploy/kind-up.sh     # create cluster → build/load images → deploy dev overlay → wait for rollout
 kubectl -n atlas exec deploy/atlas-backend -- python scripts/create_admin.py admin@example.com admin <pw>
 kubectl -n atlas port-forward svc/atlas-frontend 8080:80
-# 크롬에서 http://localhost:8080
+# open http://localhost:8080 in Chrome
 ```
 
-클러스터 없이 매니페스트만 검증하려면:
+To validate manifests without a cluster:
 
 ```bash
 kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -
@@ -130,7 +131,7 @@ cd backend
 uv sync
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload          # API server
-uv run python -m app.workers.sync_worker      # sync worker (별도 터미널)
+uv run python -m app.workers.sync_worker      # sync worker (separate terminal)
 uv run pytest                                 # tests
 uv run ruff check . && uv run black --check . # lint
 ```
@@ -141,7 +142,7 @@ uv run ruff check . && uv run black --check . # lint
 cd frontend
 pnpm install
 pnpm dev      # http://localhost:5173
-pnpm build    # 타입체크 + 프로덕션 빌드
+pnpm build    # typecheck + production build
 pnpm lint
 ```
 
@@ -149,39 +150,44 @@ pnpm lint
 
 ```
 backend/app/
-  api/v1/        # 라우터
+  api/v1/        # routers
   core/          # config, security, deps
   models/        # SQLAlchemy
   schemas/       # Pydantic
-  services/      # 비즈니스 로직
+  services/      # business logic
   integrations/  # base.py, mimir_ruler.py, alertmanager.py, loki.py, oidc.py
   workers/       # sync worker
 frontend/src/
   {pages,components,features,lib,hooks,api,types}
+deploy/
+  k8s/{base,overlays/{dev,prod}}   # kustomize
+  flux/                            # Flux CD (GitOps)
 ```
 
-## Run log (단계별 실행/테스트 방법)
+## Run log (how each build phase was verified)
 
-1. **스캐폴딩**: `docker compose config` 로 compose 유효성 확인.
-2. **Frontend 베이스**: `cd frontend && pnpm install && pnpm build` — AppLayout(사이드바+상단바) 렌더 확인은 `pnpm dev`.
-3. **DB 모델 + 마이그레이션**: `cd backend && uv run alembic upgrade head`.
+1. **Scaffolding**: `docker compose config` validates the compose file.
+2. **Frontend base**: `cd frontend && pnpm install && pnpm build`; check AppLayout renders via `pnpm dev`.
+3. **DB models + migration**: `cd backend && uv run alembic upgrade head`.
 4. **Auth + RBAC**: `uv run pytest tests/test_auth.py`.
-5. **Integrations**: `uv run pytest tests/test_integrations.py` — X-Scope-OrgID 헤더 주입 검증.
+5. **Integrations**: `uv run pytest tests/test_integrations.py` — verifies X-Scope-OrgID injection.
 6. **Users/Groups/Servers CRUD**: `uv run pytest tests/test_users_groups.py tests/test_servers.py`.
 7. **Alert Rules CRUD + validate/test**: `uv run pytest tests/test_rules.py`.
 8. **Rule Groups + sync + emergency-apply**: `uv run pytest tests/test_sync.py`.
 9. **Notifications**: `uv run pytest tests/test_notifications.py`.
-10. **Alerts 프록시 + 대시보드**: `uv run pytest tests/test_alerts.py`.
-11. **Frontend 화면**: `cd frontend && pnpm build` (화면 추가마다 타입에러 0 유지) + `pnpm lint`.
-12. **마무리**: `curl localhost:8000/healthz`, `curl localhost:8000/readyz`, OpenAPI는 `/docs`.
+10. **Alerts proxy + dashboard**: `uv run pytest tests/test_alerts.py`.
+11. **Frontend screens**: `cd frontend && pnpm build` (keep type errors at 0) + `pnpm lint`.
+12. **Wrap-up**: `curl localhost:8000/healthz`, `curl localhost:8000/readyz`, OpenAPI at `/docs`.
 
-## 주요 설계 노트
+## Key design notes
 
-- **X-Scope-OrgID**: `backend/app/integrations/base.py`의 `make_client()`에서 단 한 번 주입.
-  모든 Mimir/Alertmanager/Loki 클라이언트가 이를 상속하며, 개별 호출에는 작성하지 않는다.
-- **동기화 흐름**: 룰/룰그룹 변경 → `sync_state(ruler)=pending` → 워커(30s)가 rule group을
-  Prometheus YAML로 직렬화 → checksum 비교 → 변경분만 Ruler PUT. Redis lock으로 중복 방지.
-- **긴급 적용**: `POST /api/v1/rules/emergency-apply` — 검증 → `emergency` namespace로 즉시
-  push → DB 반영 → audit(emergency=true). UI의 룰 목록 ⋮ 메뉴에서 사유 입력 후 실행.
-- **Receiver secret**: config의 url/api_key 등은 Fernet 암호화 저장, API 응답에서는 마스킹.
-- **RBAC**: 전역 role(admin/editor/viewer) + group manager. scope=user 룰은 본인/admin만.
+- **X-Scope-OrgID**: injected exactly once in `make_client()` in `backend/app/integrations/base.py`.
+  Every Mimir/Alertmanager/Loki client inherits it; never set it on individual calls.
+- **Sync flow**: rule/rule-group mutation → `sync_state(ruler)=pending` → worker (30s) serializes
+  rule groups to Prometheus YAML → checksum compare → PUT only changes to the Ruler. Redis lock
+  prevents duplicate syncs.
+- **Emergency apply**: `POST /api/v1/rules/emergency-apply` — validate → push immediately to the
+  `emergency` namespace → persist to DB → audit(emergency=true). In the UI: rule list ⋮ menu,
+  requires a reason.
+- **Receiver secrets**: url/api_key etc. in config are Fernet-encrypted at rest and masked in API responses.
+- **RBAC**: global roles (admin/editor/viewer) + group manager. scope=user rules: owner/admin only.

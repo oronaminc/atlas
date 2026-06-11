@@ -1,21 +1,21 @@
 ---
 name: frontend-check
-description: frontend 코드 수정 후 타입체크+빌드+린트 검증. frontend/ 아래 파일을 수정했을 때 항상 사용.
+description: Run typecheck+build+lint after frontend changes. Always use after modifying files under frontend/.
 ---
 
-# Frontend 검증
+# Frontend verification
 
 ```bash
 cd frontend
-pnpm build    # tsc -b + vite build — 타입에러 0이어야 함
-pnpm lint     # 에러 0 (use-toast.ts의 actionTypes 경고 1개는 기존 것, 무시)
+pnpm build    # tsc -b + vite build — must pass with 0 type errors
+pnpm lint     # 0 errors (1 pre-existing actionTypes warning in use-toast.ts is OK)
 ```
 
-## 주의
+## Gotchas
 
-- 새 화면은 기존 패턴 재사용: `PageHeader` + `DataTable`(cursor 페이지네이션) + 다이얼로그 폼(zod+react-hook-form+FormField).
-- API 호출은 `src/api/queries.ts`에 hook 추가 (`useList`/`useApiMutation` 헬퍼 사용), fetch 직접 호출 금지.
-- 색상/간격은 Tailwind 토큰만. 신규 라우트는 `App.tsx` + 사이드바 `app-layout.tsx` navItems에 등록.
-- 문자열은 `src/locales/{ko,en}.json`에 추가 (ko 기본).
-- Monaco 사용하는 컴포넌트는 반드시 `import "@/lib/monaco"` (CDN 차단 환경 대응).
-- auth 401 처리: `/auth/login`·`/auth/refresh`는 client.ts의 자동 refresh 로직에서 제외되어 있음 — 유지할 것.
+- New screens reuse existing patterns: `PageHeader` + `DataTable` (cursor pagination) + dialog forms (zod + react-hook-form + FormField).
+- API calls go through hooks in `src/api/queries.ts` (use the `useList`/`useApiMutation` helpers); never call fetch directly.
+- Colors/spacing via Tailwind tokens only. Register new routes in `App.tsx` + sidebar navItems in `app-layout.tsx`.
+- Add strings to `src/locales/{ko,en}.json` (ko is the default; UI strings stay Korean).
+- Any component using Monaco must `import "@/lib/monaco"` (local bundle; CDNs are blocked).
+- Auth 401 handling: `/auth/login` and `/auth/refresh` are excluded from the auto-refresh logic in client.ts — keep it that way.
