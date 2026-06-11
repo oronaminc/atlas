@@ -1,0 +1,12 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: atlas
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://gitlab.internal/platform/atlas   # 내부 GitLab repo 주소로 교체
+  ref:
+    branch: main
+  secretRef:
+    name: atlas-repo-auth

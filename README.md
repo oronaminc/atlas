@@ -53,6 +53,30 @@ docker push ghcr.io/oronaminc/atlas/backend:v0.1.0
 docker push ghcr.io/oronaminc/atlas/frontend:v0.1.0
 ```
 
+### 내부망 배포 (GitLab CI + Flux CD)
+
+내부망 k8s가 최종 타깃인 경우의 파이프라인:
+
+```
+MR/main push → GitLab CI (.gitlab-ci.yml)
+  test:  backend pytest+ruff+black / frontend lint+build
+  build: kaniko로 이미지 빌드 → GitLab 컨테이너 레지스트리 push
+         태그: main-<pipeline_iid>-<sha> (main) / vX.Y.Z (git tag)
+  validate: kustomize 렌더링 검증
+      ↓
+Flux (deploy/flux/, flux-system에 적용)
+  ImageRepository/ImagePolicy: 레지스트리 폴링, iid 최신 태그 선택
+  ImageUpdateAutomation: deploy/k8s/overlays/prod 의 태그 마커에 자동 커밋
+  GitRepository + Kustomization: prod 오버레이 reconcile (prune + health check)
+```
+
+설정 순서:
+1. `.gitlab-ci.yml` 상단 variables에서 내부 미러 주소(PYTHON_IMAGE 등, PyPI/npm) 교체
+2. `deploy/k8s/overlays/prod/kustomization.yaml` 의 레지스트리 경로·호스트 교체
+3. `deploy/flux/*.yaml` 의 repo URL·레지스트리 경로 교체 후 `kubectl apply -k deploy/flux`
+   (자세한 절차와 secret 준비: `deploy/flux/README.md`)
+4. `atlas-secrets`는 git 평문 금지 — SOPS/SealedSecrets 또는 클러스터에 수동 생성
+
 ### 매니페스트 (kustomize)
 
 ```

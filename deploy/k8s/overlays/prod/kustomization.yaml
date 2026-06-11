@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# 내부 GitLab 컨테이너 레지스트리 경로로 교체.
+# newTag 의 마커 주석은 Flux ImageUpdateAutomation이 새 태그로 자동 커밋하는 지점.
+images:
+  - name: ghcr.io/oronaminc/atlas/backend
+    newName: registry.gitlab.internal/platform/atlas/backend
+    newTag: main-1-000000 # {"$imagepolicy": "flux-system:atlas-backend:tag"}
+  - name: ghcr.io/oronaminc/atlas/frontend
+    newName: registry.gitlab.internal/platform/atlas/frontend
+    newTag: main-1-000000 # {"$imagepolicy": "flux-system:atlas-frontend:tag"}
+
+patches:
+  # 운영 호스트/주소로 교체
+  - patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: atlas.internal.example.com
+    target:
+      kind: Ingress
+      name: atlas
+  - patch: |-
+      - op: replace
+        path: /data/CORS_ORIGINS
+        value: https://atlas.internal.example.com
+      - op: replace
+        path: /data/FRONTEND_URL
+        value: https://atlas.internal.example.com
+    target:
+      kind: ConfigMap
+      name: atlas-config

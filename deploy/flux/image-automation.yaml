@@ -1,0 +1,76 @@
+# CI가 push한 새 이미지 태그(main-<iid>-<sha>)를 자동으로 prod overlay에 커밋.
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: atlas-backend
+  namespace: flux-system
+spec:
+  image: registry.gitlab.internal/platform/atlas/backend   # 교체
+  interval: 1m
+  # 레지스트리 인증이 필요하면:
+  # secretRef:
+  #   name: atlas-registry-auth   # kubectl create secret docker-registry ...
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: atlas-frontend
+  namespace: flux-system
+spec:
+  image: registry.gitlab.internal/platform/atlas/frontend  # 교체
+  interval: 1m
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: atlas-backend
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: atlas-backend
+  filterTags:
+    pattern: '^main-(?P<iid>\d+)-.+$'
+    extract: '$iid'
+  policy:
+    numerical:
+      order: asc
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: atlas-frontend
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: atlas-frontend
+  filterTags:
+    pattern: '^main-(?P<iid>\d+)-.+$'
+    extract: '$iid'
+  policy:
+    numerical:
+      order: asc
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageUpdateAutomation
+metadata:
+  name: atlas
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: atlas
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        name: fluxbot
+        email: flux@internal.example.com
+      messageTemplate: "chore: update images to {{range .Changed.Changes}}{{print .NewValue}} {{end}}"
+    push:
+      branch: main
+  update:
+    path: ./deploy/k8s/overlays/prod
+    strategy: Setters
