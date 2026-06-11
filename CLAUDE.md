@@ -65,9 +65,30 @@ Never commit atlas-secrets in plaintext (SOPS/SealedSecrets).
 - Incidents: list/detail/ack/resolve (editor+, audited, resolved = terminal → 409).
 - Migration 0001 is pinned to its original table list (metadata grows); 0002+ = explicit ops.
 
+## Notification delivery + HA (implemented)
+
+- Outbox pattern: `notifications` table = persisted intent; UNIQUE(incident, channel,
+  recipient) idempotency; at-least-once. Claim = CAS + 60s lease (`app/notifications/outbox.py`);
+  PG adds FOR UPDATE SKIP LOCKED; crashed pod's claims expire → another pod resumes.
+- Correlation worker now claims via same CAS+lease (`claim_events`); engine takes
+  `pg_advisory_xact_lock(group_key)` on PG to serialize find-or-create (no split-brain).
+- Channels in `app/notifications/channels/` (Telegram #1 httpx, Email #2 SMTP-env,
+  registry; token Fernet in `notification_settings`). New channel = module + registry entry.
+- `workers/notification_worker.py` (separate pod, prod replicas=2): fan-out
+  (incidents.notified_at CAS → route match min_severity → group member targets) then
+  deliver (quota check → TokenBucket throttle → send → mark). Quota breach = defer to
+  window reset. Backoff 30s×2^n cap 1h, dead at 5 attempts.
+- API: /notification-settings + /notification-routes + /notification-recipients (admin),
+  POST /incidents/{id}/notify (editor+), /notifications list. users PATCH accepts
+  telegram_chat_id. UI on /settings page.
+- Real-PG concurrency tests in `tests/pg/` (skip unless ATLAS_PG_TEST_URL; apt postgresql
+  works in this env — `service postgresql start`, user/db atlas/atlas).
+- `AwareDateTime` in models/base.py: use for new datetime columns compared in Python
+  (SQLite drops tzinfo).
+
 ## Already done (do not redo)
 
 All 12 spec phases implemented: models/migration, auth (local+OIDC)+RBAC, integrations,
 full REST API, sync worker, 11 frontend screens, k8s + GitLab CI + Flux. 81 backend tests.
-Headless-browser E2E verified the main flows (login / rule CRUD / emergency apply / audit log /
-dark mode / mobile). Correlation engine (above) with 37 dedicated tests.
+Headless-browser E2E verified the main flows. Correlation engine (37 tests) +
+notification delivery/HA (35 tests + 2 real-PG concurrency tests). 116 SQLite tests total.

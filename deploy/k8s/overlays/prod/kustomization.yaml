@@ -33,3 +33,10 @@ patches:
     target:
       kind: ConfigMap
       name: atlas-config
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: atlas-notification-worker

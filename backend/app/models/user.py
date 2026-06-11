@@ -28,6 +28,7 @@ class User(TimestampedBase):
         Enum(AuthProvider, name="auth_provider"), default=AuthProvider.local
     )
     oidc_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    telegram_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     role: Mapped[GlobalRole] = mapped_column(
         Enum(GlobalRole, name="global_role"), default=GlobalRole.viewer
     )

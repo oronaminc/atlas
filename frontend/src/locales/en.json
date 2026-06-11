@@ -89,5 +89,22 @@
     "groupAttrs": "Group attributes (priority order)",
     "groupAttrsHelp": "Comma-separated; earlier attrs win",
     "seconds": "in seconds"
+  },
+  "notify": {
+    "settings": "Notification Settings",
+    "settingsHelp": "Telegram bot token, send rate, quotas (admin only)",
+    "botToken": "Telegram bot token",
+    "tokenSet": "Token configured — enter only to change",
+    "tokenUnset": "No token — Telegram sends disabled",
+    "ratePerSecond": "Sends per second",
+    "groupQuota": "Per-group hourly quota",
+    "globalQuota": "Global daily quota",
+    "routes": "Per-group send routes",
+    "routesHelp": "One per group — incidents at/above severity notify members",
+    "minSeverity": "Min severity",
+    "channels": "Channels",
+    "selectGroup": "Select group...",
+    "recipients": "Recipients (read-only)",
+    "recipientsHelp": "chat_id is set via user management"
   }
 }

@@ -35,6 +35,12 @@ class Settings(BaseSettings):
 
     SYNC_INTERVAL_SECONDS: int = 30
     INGEST_API_KEY: str = ""
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 25
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "atlas@example.com"
+    SMTP_STARTTLS: bool = False
     LOGIN_RATE_LIMIT_ATTEMPTS: int = 5
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 300
 

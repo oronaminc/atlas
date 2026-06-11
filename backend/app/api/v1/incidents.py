@@ -9,9 +9,10 @@ from app.core.deps import client_ip, get_current_user, require_editor
 from app.core.envelope import envelope
 from app.core.pagination import decode_cursor, page_meta
 from app.db import get_db
-from app.models import Incident, User
+from app.models import Group, Incident, User
 from app.models.alerting import IncidentEvent, IncidentStatus
 from app.schemas.alerting import IncidentDetailOut, IncidentOut
+from app.schemas.delivery import NotifyRequest
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
@@ -65,6 +66,36 @@ async def get_incident(
 ):
     incident = await load_incident(db, incident_id)
     return envelope(IncidentDetailOut.model_validate(incident).model_dump(mode="json"))
+
+
+@router.post("/{incident_id}/notify")
+async def notify_incident(
+    incident_id: uuid.UUID,
+    body: NotifyRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_editor),
+):
+    """Manual group send (editor+): creates outbox rows; the notification
+    worker delivers them asynchronously."""
+    from app.notifications.fanout import fan_out_to_group
+
+    incident = await load_incident(db, incident_id)
+    group = await db.get(Group, body.group_id)
+    if group is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+    created = await fan_out_to_group(db, incident, group)
+    await record_audit(
+        db,
+        actor_id=user.id,
+        action="notify",
+        resource_type="incident",
+        resource_id=incident.id,
+        after={"group_id": str(group.id), "created": created},
+        ip=client_ip(request),
+    )
+    await db.commit()
+    return envelope({"created": created})
 
 
 @router.post("/{incident_id}/ack")

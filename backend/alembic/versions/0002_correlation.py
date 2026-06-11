@@ -19,6 +19,16 @@ depends_on: str | Sequence[str] | None = None
 
 JsonType = sa.JSON().with_variant(JSONB(), "postgresql")
 
+# 0001's metadata bootstrap already creates the PG enum type; create here with
+# checkfirst and stop create_table from emitting a second CREATE TYPE.
+from sqlalchemy.dialects import postgresql  # noqa: E402
+
+INCIDENT_STATUS_VALUES = ("open", "acknowledged", "resolved")
+incident_status = sa.Enum(*INCIDENT_STATUS_VALUES, name="incident_status").with_variant(
+    postgresql.ENUM(*INCIDENT_STATUS_VALUES, name="incident_status", create_type=False),
+    "postgresql",
+)
+
 COMMON = lambda: [  # noqa: E731  (shared audit columns per spec)
     sa.Column("id", sa.Uuid(), primary_key=True),
     sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
@@ -29,15 +39,12 @@ COMMON = lambda: [  # noqa: E731  (shared audit columns per spec)
 
 
 def upgrade() -> None:
+    sa.Enum(*INCIDENT_STATUS_VALUES, name="incident_status").create(op.get_bind(), checkfirst=True)
     op.create_table(
         "incidents",
         *COMMON(),
         sa.Column("title", sa.String(500), nullable=False),
-        sa.Column(
-            "status",
-            sa.Enum("open", "acknowledged", "resolved", name="incident_status"),
-            nullable=False,
-        ),
+        sa.Column("status", incident_status, nullable=False),
         sa.Column("severity", sa.String(20), nullable=False),
         sa.Column("group_key", sa.Text(), nullable=True),
         sa.Column("first_seen", sa.DateTime(timezone=True), nullable=False),

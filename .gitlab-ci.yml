@@ -59,6 +59,26 @@ test-frontend:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG
 
+test-pg-concurrency:
+  stage: test
+  image: $PYTHON_IMAGE
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+  variables:
+    POSTGRES_USER: atlas
+    POSTGRES_PASSWORD: atlas
+    POSTGRES_DB: atlas
+    ATLAS_PG_TEST_URL: "postgresql+asyncpg://atlas:atlas@postgres:5432/atlas"
+  script:
+    - pip install --quiet uv
+    - cd backend
+    - uv sync
+    - uv run pytest tests/pg -v
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
 # ---- Image builds (kaniko: no docker daemon / privileged mode needed) ----
 
 .build-image:

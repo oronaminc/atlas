@@ -8,7 +8,7 @@ persisted, so ingestion ack never waits on correlation.
 import logging
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alerting import AlertEvent, Incident, IncidentEvent, IncidentStatus
@@ -79,6 +79,11 @@ class CorrelationEngine:
 
         # Stage 2: grouping.
         group_key = compute_group_key(alert.labels, config.group_attrs)
+        # Serialize concurrent find-or-create per group_key across replicas.
+        # PG-only true-race guard; SQLite (tests) relies on CAS claims +
+        # sequential interleaving. Lock is released at tx end.
+        if group_key and db.bind.dialect.name == "postgresql":
+            await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:gk))"), {"gk": group_key})
         incident = None
         for strategy in self.strategies:
             incident = await strategy.find_incident(

@@ -159,3 +159,27 @@ export interface CorrelationConfig {
   correlation_window_seconds: number;
   group_attrs: string[];
 }
+
+export interface NotificationSettings {
+  telegram_bot_token: string | null;
+  telegram_rate_per_second: number;
+  quota_group_per_hour: number;
+  quota_global_per_day: number;
+}
+
+export interface NotificationRoute {
+  id: string;
+  group_id: string;
+  min_severity: Severity;
+  channels: string[];
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface Recipient {
+  user_id: string;
+  username: string;
+  email: string;
+  telegram_chat_id: string | null;
+  groups: string[];
+}

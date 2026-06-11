@@ -9,6 +9,9 @@ import { api } from "@/api/client";
 import type {
   ActiveAlert,
   CorrelationConfig,
+  NotificationRoute,
+  NotificationSettings,
+  Recipient,
   AlertRule,
   AuditLog,
   Envelope,
@@ -98,6 +101,16 @@ export const useCorrelationConfig = () =>
     queryKey: ["correlation-config"],
     queryFn: () => api.get<CorrelationConfig>("/correlation-config"),
   });
+
+export const useNotificationSettings = () =>
+  useQuery({
+    queryKey: ["notification-settings"],
+    queryFn: () => api.get<NotificationSettings>("/notification-settings"),
+  });
+export const useNotificationRoutes = () =>
+  useList<NotificationRoute>(["notification-routes"], "/notification-routes");
+export const useRecipients = () =>
+  useList<Recipient>(["notification-recipients"], "/notification-recipients");
 
 // --- Sync / Audit / Alerts ---
 export const useSyncState = () =>

@@ -145,6 +145,8 @@ async def update_user(
         user.role = body.role
     if body.is_active is not None:
         user.is_active = body.is_active
+    if body.telegram_chat_id is not None:
+        user.telegram_chat_id = body.telegram_chat_id
     user.updated_by = admin.id
     await record_audit(
         db,

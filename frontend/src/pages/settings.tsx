@@ -16,6 +16,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import {
+  NotificationRoutesCard,
+  NotificationSettingsCard,
+  RecipientsCard,
+} from "@/features/notifications/notification-admin";
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -116,6 +121,12 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="mt-6 space-y-6">
+        <NotificationSettingsCard />
+        <NotificationRoutesCard />
+        <RecipientsCard />
+      </div>
     </div>
   );
 }

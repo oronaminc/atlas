@@ -4,10 +4,23 @@ from datetime import UTC, datetime
 from sqlalchemy import DateTime, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.types import JSON
+from sqlalchemy.types import JSON, TypeDecorator
 
 # JSONB on PostgreSQL, plain JSON elsewhere (tests run on SQLite).
 JsonType = JSON().with_variant(JSONB(), "postgresql")
+
+
+class AwareDateTime(TypeDecorator):
+    """Always returns tz-aware (UTC) datetimes. SQLite drops tzinfo on the
+    round-trip; asyncpg already returns aware values unchanged."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_result_value(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
 
 
 def utcnow() -> datetime:

@@ -122,6 +122,47 @@ To validate manifests without a cluster:
 kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -
 ```
 
+## Notification flow — local test (no real Telegram bot)
+
+```bash
+docker compose up --build     # postgres, redis, backend, 3 workers, frontend
+# 1) bootstrap admin + login, then in the UI (/settings, admin):
+#    - set any value as the Telegram bot token (e.g. 123456:TEST)
+#    - create a route: group=<your group>, min_severity=warning, channels=[telegram]
+#    - set users' telegram_chat_id via PATCH /api/v1/users/{id} (admin)
+# 2) mock the Telegram API instead of a real bot:
+python3 - <<'PY' &
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import json
+class H(BaseHTTPRequestHandler):
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        print("TELEGRAM MOCK:", self.path, body.decode()[:200], flush=True)
+        self.send_response(200); self.end_headers(); self.wfile.write(b'{"ok":true}')
+    def log_message(self, *a): pass
+HTTPServer(("127.0.0.1", 18081), H).serve_forever()
+PY
+# point the channel at the mock: TelegramChannel api_base is
+# https://api.telegram.org by default — for a full end-to-end without
+# patching, run the unit/concurrency suites instead (mocked transport):
+cd backend && uv run pytest tests/notifications -q
+# 3) feed an alert -> incident -> outbox -> delivery:
+curl -X POST localhost:8000/api/v1/ingest/alertmanager \
+  -H "X-Atlas-Ingest-Key: $INGEST_API_KEY" -H "Content-Type: application/json" \
+  -d '{"alerts":[{"status":"firing","labels":{"alertname":"HighCPU","severity":"critical","host":"web-01"},"annotations":{},"startsAt":"2026-06-11T00:00:00Z"}]}'
+# correlation-worker correlates (<=5s) -> notification-worker fans out + sends
+# watch delivery status:  GET /api/v1/notifications   (status pending->sent/failed)
+```
+
+### Real-PostgreSQL concurrency tests (multi-replica safety)
+
+```bash
+cd backend && ./scripts/pg_concurrency_test.sh     # boots compose postgres, runs tests/pg
+# or with any PG:  ATLAS_PG_TEST_URL=postgresql+asyncpg://atlas:atlas@localhost:5432/atlas uv run pytest tests/pg -v
+```
+
+Also runs in GitLab CI (`test-pg-concurrency` job, postgres:16 service).
+
 ## Local development
 
 ### Backend (uv)

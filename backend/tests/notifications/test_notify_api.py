@@ -3,7 +3,7 @@
 from sqlalchemy import select
 
 from app.models.delivery import Notification
-from tests.notifications.helpers import seed_group, seed_incident, seed_route, seed_user
+from tests.notifications.helpers import seed_group, seed_incident, seed_user
 
 
 async def seed_basic(db):
@@ -36,9 +36,7 @@ async def test_editor_can_trigger_group_send_and_it_is_audited(
     assert all(n.status == "pending" for n in notifications)
     assert {n.channel for n in notifications} <= {"telegram", "email"}
 
-    logs = await client.get(
-        "/api/v1/audit-logs?resource_type=incident", headers=admin_headers
-    )
+    logs = await client.get("/api/v1/audit-logs?resource_type=incident", headers=admin_headers)
     actions = [e["action"] for e in logs.json()["data"]]
     assert "notify" in actions
 
@@ -106,7 +104,9 @@ async def test_settings_forbidden_for_non_admin(client, editor_headers):
     ).status_code == 403
     assert (
         await client.patch(
-            "/api/v1/notification-settings", json={"quota_group_per_hour": 1}, headers=editor_headers
+            "/api/v1/notification-settings",
+            json={"quota_group_per_hour": 1},
+            headers=editor_headers,
         )
     ).status_code == 403
 
@@ -150,9 +150,7 @@ async def test_route_crud_admin_only(client, db, admin_headers, editor_headers):
         )
     ).status_code == 403
 
-    deleted = await client.delete(
-        f"/api/v1/notification-routes/{route_id}", headers=admin_headers
-    )
+    deleted = await client.delete(f"/api/v1/notification-routes/{route_id}", headers=admin_headers)
     assert deleted.status_code == 200
 
 

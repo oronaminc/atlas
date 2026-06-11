@@ -39,9 +39,7 @@ async def file_db(tmp_path):
 
 async def seed_outbox(factory, n_users: int) -> None:
     async with factory() as db:
-        users = [
-            await seed_user(db, f"u{i}@example.com", chat_id=f"{i}00") for i in range(n_users)
-        ]
+        users = [await seed_user(db, f"u{i}@example.com", chat_id=f"{i}00") for i in range(n_users)]
         group = await seed_group(db, "oncall", users)
         await seed_route(db, group)
         await seed_incident(db)
@@ -135,9 +133,7 @@ async def test_two_correlation_workers_claim_exclusively_no_duplicate_incident(f
         await db_b.commit()
 
     async with file_db() as db:
-        n_incidents = (
-            await db.execute(select(func.count()).select_from(Incident))
-        ).scalar_one()
+        n_incidents = (await db.execute(select(func.count()).select_from(Incident))).scalar_one()
         assert n_incidents == 1
         events = list((await db.execute(select(AlertEvent))).scalars())
         assert all(e.incident_id is not None for e in events)

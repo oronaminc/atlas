@@ -39,6 +39,7 @@ class UserUpdate(BaseModel):
     username: str | None = Field(default=None, min_length=2, max_length=100)
     role: GlobalRole | None = None
     is_active: bool | None = None
+    telegram_chat_id: str | None = Field(default=None, max_length=64)
 
 
 class MeUpdate(BaseModel):

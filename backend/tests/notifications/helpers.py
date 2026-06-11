@@ -52,7 +52,9 @@ async def seed_route(
     return route
 
 
-async def seed_incident(db, severity: str = "critical", title: str = "HighCPU on web-01") -> Incident:
+async def seed_incident(
+    db, severity: str = "critical", title: str = "HighCPU on web-01"
+) -> Incident:
     incident = Incident(
         title=title,
         status=IncidentStatus.open,

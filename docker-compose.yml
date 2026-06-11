@@ -70,6 +70,19 @@ services:
         condition: service_healthy
     command: python -m app.workers.correlation_worker
 
+  notification-worker:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://atlas:atlas@postgres:5432/atlas
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m app.workers.notification_worker
+
   frontend:
     build: ./frontend
     ports:

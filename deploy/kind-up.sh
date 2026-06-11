@@ -36,6 +36,7 @@ kubectl -n atlas rollout status deploy/atlas-backend --timeout=300s
 kubectl -n atlas rollout status deploy/atlas-frontend --timeout=120s
 kubectl -n atlas rollout status deploy/atlas-worker --timeout=120s
 kubectl -n atlas rollout status deploy/atlas-correlation-worker --timeout=120s
+kubectl -n atlas rollout status deploy/atlas-notification-worker --timeout=120s
 
 echo
 echo "Done. Next steps:"

@@ -1,16 +1,18 @@
-"""Correlation worker: consumes ingested alert events off the queue and runs
-the 3-stage engine. Ingestion ack never waits on this.
-
-Wake-up: Redis stream atlas:alerts:in (best effort). Source of truth:
-PG poll for uncorrelated rows (incident_id IS NULL), so events survive
-Redis loss and worker downtime.
+"""Correlation worker: claims ingested alert events (CAS + lease, safe at
+replicas>1) and runs the 3-stage engine. PG is the source of truth; the
+Redis stream is only a wake-up. Crashed workers' claims expire after the
+lease and another pod resumes the work.
 """
 
 import asyncio
 import logging
+import os
+import uuid
+from datetime import datetime, timedelta
 
 import redis.asyncio as aioredis
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db import async_session_factory
@@ -28,6 +30,9 @@ ALERT_STREAM = "atlas:alerts:in"
 CONSUMER_GROUP = "correlation"
 POLL_INTERVAL_SECONDS = 5
 BATCH_SIZE = 100
+DEFAULT_LEASE_SECONDS = 60
+
+WORKER_ID = os.environ.get("HOSTNAME") or f"correlation-{uuid.uuid4().hex[:8]}"
 
 
 def to_normalized(event: AlertEvent) -> NormalizedAlert:
@@ -42,18 +47,57 @@ def to_normalized(event: AlertEvent) -> NormalizedAlert:
     )
 
 
+async def claim_events(
+    db: AsyncSession,
+    *,
+    worker_id: str,
+    now: datetime,
+    lease_seconds: int = DEFAULT_LEASE_SECONDS,
+    limit: int = BATCH_SIZE,
+) -> list[AlertEvent]:
+    """CAS+lease claim of uncorrelated events; exclusive across replicas."""
+    lease_cutoff = now - timedelta(seconds=lease_seconds)
+    guard = (
+        AlertEvent.incident_id.is_(None),
+        or_(AlertEvent.claimed_at.is_(None), AlertEvent.claimed_at < lease_cutoff),
+    )
+
+    candidates = (
+        select(AlertEvent.id).where(*guard).order_by(AlertEvent.received_at.asc()).limit(limit)
+    )
+    if db.bind.dialect.name == "postgresql":
+        candidates = candidates.with_for_update(skip_locked=True)
+    candidate_ids = list((await db.execute(candidates)).scalars())
+    if not candidate_ids:
+        return []
+
+    claimed_ids = []
+    for event_id in candidate_ids:
+        result = await db.execute(
+            update(AlertEvent)
+            .where(AlertEvent.id == event_id, *guard)
+            .values(claimed_at=now, claimed_by=worker_id)
+            .execution_options(synchronize_session=False)
+        )
+        if result.rowcount == 1:
+            claimed_ids.append(event_id)
+    if not claimed_ids:
+        return []
+
+    res = await db.execute(
+        select(AlertEvent)
+        .where(AlertEvent.id.in_(claimed_ids))
+        .order_by(AlertEvent.received_at.asc())
+        .execution_options(populate_existing=True)
+    )
+    return list(res.scalars())
+
+
 async def correlate_pending(engine: CorrelationEngine) -> int:
-    """Correlates all uncorrelated events, oldest first. Returns count."""
     processed = 0
     async with async_session_factory() as db:
         config = await get_config(db)
-        res = await db.execute(
-            select(AlertEvent)
-            .where(AlertEvent.incident_id.is_(None))
-            .order_by(AlertEvent.received_at.asc())
-            .limit(BATCH_SIZE)
-        )
-        for event in list(res.scalars()):
+        for event in await claim_events(db, worker_id=WORKER_ID, now=utcnow()):
             await engine.correlate(db, event, to_normalized(event), config, now=utcnow())
             processed += 1
         await db.commit()
@@ -80,7 +124,7 @@ async def main() -> None:
         dedup_store=dedup, strategies=[AttributeTimeStrategy(), LLMStrategy()]
     )
 
-    logger.info("correlation worker started")
+    logger.info("correlation worker %s started", WORKER_ID)
     while True:
         try:
             n = await correlate_pending(engine)
@@ -94,7 +138,7 @@ async def main() -> None:
             try:
                 entries = await redis.xreadgroup(
                     CONSUMER_GROUP,
-                    "worker-1",
+                    WORKER_ID,
                     {ALERT_STREAM: ">"},
                     count=BATCH_SIZE,
                     block=POLL_INTERVAL_SECONDS * 1000,

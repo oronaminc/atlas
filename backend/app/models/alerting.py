@@ -32,6 +32,8 @@ class AlertEvent(TimestampedBase):
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     dedup_count: Mapped[int] = mapped_column(Integer, default=1)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claimed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     incident_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -52,6 +54,7 @@ class Incident(TimestampedBase):
     first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     alert_count: Mapped[int] = mapped_column(Integer, default=0)
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     alerts: Mapped[list[AlertEvent]] = relationship(back_populates="incident")
     timeline: Mapped[list["IncidentEvent"]] = relationship(
