@@ -7,6 +7,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 os.environ.setdefault("SECRET_KEY", "test-secret")
 os.environ.setdefault("FERNET_KEY", Fernet.generate_key().decode())
 os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault("INGEST_API_KEY", "test-ingest-key")
 
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
