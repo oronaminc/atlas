@@ -42,7 +42,7 @@
     "logout": "로그아웃",
     "settings": "엔진 설정",
     "ops": "운영 대시보드",
-    "graph": "3D 그래프"
+    "graph": "인시던트 그래프"
   },
   "auth": {
     "login": "로그인",
@@ -134,12 +134,15 @@
     "timeline": "타임라인"
   },
   "graph": {
-    "title": "3D 관계 그래프",
+    "title": "인시던트 스윔레인",
     "refresh": "새로고침",
-    "layoutTime": "시간축",
-    "layoutForce": "포스",
     "truncated": "노드 수 제한으로 일부만 표시 중 (최근 항목 우선)",
-    "zAxis": "Z축 = 발생 시각",
-    "memberAlerts": "구성 알림"
+    "memberAlerts": "구성 알림",
+    "legendTemporal": "동시 발생 (시간 근접)",
+    "legendSameName": "동일 알림 이름",
+    "laneMore": "호스트 {{count}}개 더 보기",
+    "showLess": "호스트 접기",
+    "noHost": "(호스트 없음)",
+    "noData": "이 기간에 인시던트가 없습니다"
   }
 }

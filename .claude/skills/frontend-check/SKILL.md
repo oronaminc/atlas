@@ -1,6 +1,6 @@
 ---
 name: frontend-check
-description: Run typecheck+build+lint after frontend changes. Always use after modifying files under frontend/.
+description: Run typecheck+build+lint+tests after frontend changes. Always use after modifying files under frontend/.
 ---
 
 # Frontend verification
@@ -9,6 +9,7 @@ description: Run typecheck+build+lint after frontend changes. Always use after m
 cd frontend
 pnpm build    # tsc -b + vite build — must pass with 0 type errors
 pnpm lint     # 0 errors (1 pre-existing actionTypes warning in use-toast.ts is OK)
+pnpm test     # vitest — /graph swimlane layout logic (src/features/graph/swimlanes.test.ts)
 ```
 
 ## Gotchas

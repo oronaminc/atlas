@@ -116,6 +116,81 @@ async def main() -> None:
                     )
                 )
 
+        # correlated burst for the /graph swimlane view: three incidents within
+        # the 900s correlation window (temporal arcs), two sharing the exact
+        # alert name across hosts (same_name edge: PacketLoss web-01<->db-01)
+        burst_start = now - timedelta(hours=2)
+        burst_specs = [
+            ("PacketLoss on web-01", "host=web-01", "critical", "PacketLoss", 0),
+            ("PacketLoss on db-01", "host=db-01", "warning", "PacketLoss", 3),
+            ("ConnTimeout on cache-01", "host=cache-01", "warning", "ConnTimeout", 7),
+        ]
+        for i, (title, group_key, severity, alert_name, offset_min) in enumerate(burst_specs):
+            first = burst_start + timedelta(minutes=offset_min)
+            incident = Incident(
+                title=title,
+                status=IncidentStatus.open,
+                severity=severity,
+                group_key=group_key,
+                first_seen=first,
+                last_seen=first + timedelta(minutes=10),
+                alert_count=2,
+                notified_at=now,
+            )
+            db.add(incident)
+            await db.flush()
+            incidents.append(incident)
+            for j in range(2):
+                received = first + timedelta(minutes=5 * j)
+                db.add(
+                    AlertEvent(
+                        fingerprint=f"demo-burst-{i}-{j}",
+                        source="alertmanager",
+                        name=alert_name,
+                        severity=severity,
+                        status="firing",
+                        labels={"host": group_key.split("=", 1)[1]},
+                        annotations={"summary": title},
+                        starts_at=received,
+                        received_at=received,
+                        incident_id=incident.id,
+                        dedup_count=j + 1,
+                    )
+                )
+
+        # filler hosts so /graph exceeds GRAPH_MAX_VISIBLE_LANES and shows
+        # the "+N hosts" expander
+        for i in range(10):
+            first = now - timedelta(hours=18 - i)
+            incident = Incident(
+                title=f"DiskSlow on edge-{i + 1:02d}",
+                status=IncidentStatus.open,
+                severity="info",
+                group_key=f"host=edge-{i + 1:02d}",
+                first_seen=first,
+                last_seen=first + timedelta(minutes=15),
+                alert_count=1,
+                notified_at=now,
+            )
+            db.add(incident)
+            await db.flush()
+            incidents.append(incident)
+            db.add(
+                AlertEvent(
+                    fingerprint=f"demo-edge-{i}",
+                    source="alertmanager",
+                    name="DiskSlow",
+                    severity="info",
+                    status="firing",
+                    labels={"host": f"edge-{i + 1:02d}"},
+                    annotations={"summary": f"DiskSlow on edge-{i + 1:02d}"},
+                    starts_at=first,
+                    received_at=first,
+                    incident_id=incident.id,
+                    dedup_count=1,
+                )
+            )
+
         # notifications in every status against the first incident
         for user, (status, error) in zip(
             users,
@@ -153,7 +228,11 @@ async def main() -> None:
             )
         )
         await db.commit()
-    print(f"seeded: {len(specs)} incidents, {sum(s[4] for s in specs)} alerts, 4 notifications")
+    print(
+        f"seeded: {len(incidents)} incidents "
+        f"({len(specs)} base + {len(burst_specs)} burst + 10 edge hosts), "
+        "4 notifications"
+    )
 
 
 if __name__ == "__main__":

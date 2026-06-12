@@ -125,8 +125,11 @@ kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -
 ## UI pages
 
 - `/ops` — ops dashboard (incidents, delivery status, severity trend, per-host; 10s auto-refresh)
-- `/graph` — 3D alert-relationship explorer (lazy ~250KB gz chunk; three + @react-three/fiber@8 + d3-force-3d;
-  drei intentionally avoided: its Text fetches fonts remotely, breaking the air-gap).
+- `/graph` — 2D incident swimlanes (X = time, one lane per host, noisiest lane first; arcs =
+  temporal proximity — undirected on purpose: the data says "fired together", not causality;
+  same-name correlation highlights on hover/select; "+N hosts" expander past
+  `GRAPH_MAX_VISIBLE_LANES`). Hand-rolled SVG + d3-scale, system fonts only (air-gap safe),
+  lazy ~13KB gz chunk.
   **Manual refresh by design** — to enable polling, set `GRAPH_REFRESH_INTERVAL_MS` in
   `frontend/src/features/graph/config.ts` to a millisecond value (feeds TanStack Query
   `refetchInterval` in `frontend/src/features/graph/use-graph-data.ts`); nothing else changes.

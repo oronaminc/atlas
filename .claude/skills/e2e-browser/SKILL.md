@@ -41,15 +41,24 @@ PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node .claude/skills/e2e-browser/e2e.mj
 
 Success prints `E2E_OK` + 16 screenshots in `/tmp/shots/`. On failure check `99-failure.png`.
 
+For the /graph swimlane view (requires seed_demo data):
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node .claude/skills/e2e-browser/graph_e2e.mjs
+```
+
+Success prints `GRAPH_E2E_OK` + 4 screenshots (full view, same_name hover
+highlight, incident side panel, expanded lanes).
+
 ## 3. Header verification (X-Scope-OrgID)
 
 ```bash
 cat /tmp/fake_ruler_requests.jsonl   # x_scope_orgid must be "system"
 ```
 
-Seed richer demo data (ops dashboard / 3D graph) with
-`uv run python scripts/seed_demo.py` after create_admin.
-For /graph e2e, launch chromium with `--use-angle=swiftshader` (WebGL).
+Seed richer demo data (ops dashboard / swimlane graph) with
+`uv run python scripts/seed_demo.py` after create_admin (includes a correlated
+burst within the 900s window and 10+ hosts for the /graph lane expander).
 
 ## Pitfalls (all actually encountered)
 

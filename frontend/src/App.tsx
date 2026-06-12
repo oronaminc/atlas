@@ -12,7 +12,7 @@ import { LoginPage } from "@/pages/login";
 import { NotificationsPage } from "@/pages/notifications";
 import { OpsPage } from "@/pages/ops";
 
-// Lazy: three.js chunk (~600KB gz) loads only when /graph is visited.
+// Lazy: swimlane chart chunk loads only when /graph is visited.
 const GraphPage = lazy(() => import("@/pages/graph"));
 import { ProfilePage } from "@/pages/profile";
 import { RuleGroupsPage } from "@/pages/rule-groups";

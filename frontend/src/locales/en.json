@@ -42,7 +42,7 @@
     "logout": "Log out",
     "settings": "Engine Settings",
     "ops": "Ops Dashboard",
-    "graph": "3D Graph"
+    "graph": "Incident Graph"
   },
   "auth": {
     "login": "Log in",
@@ -134,12 +134,15 @@
     "timeline": "Timeline"
   },
   "graph": {
-    "title": "3D Relationship Graph",
+    "title": "Incident Swimlanes",
     "refresh": "Refresh",
-    "layoutTime": "Time axis",
-    "layoutForce": "Force",
     "truncated": "Showing a subset (node cap, most recent first)",
-    "zAxis": "Z axis = first seen",
-    "memberAlerts": "Member alerts"
+    "memberAlerts": "Member alerts",
+    "legendTemporal": "fired together (proximity)",
+    "legendSameName": "same alert name",
+    "laneMore": "+{{count}} more hosts",
+    "showLess": "Show fewer hosts",
+    "noHost": "(no host)",
+    "noData": "No incidents in this window"
   }
 }

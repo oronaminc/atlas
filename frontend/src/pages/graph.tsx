@@ -1,8 +1,10 @@
-/** 3D alert-relationship explorer (lazy route /graph).
+/** 2D incident swimlane view (lazy route /graph).
+ *  X = time, one lane per host, noisiest lane on top. Arcs = temporal
+ *  proximity (undirected — "fired together", not causality).
  *  Manual refresh by design — to enable polling, see
  *  src/features/graph/config.ts (GRAPH_REFRESH_INTERVAL_MS). */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -12,25 +14,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GRAPH_DEFAULT_WINDOW_HOURS } from "@/features/graph/config";
-import { computeLayout, type LayoutMode, type PositionedNode } from "@/features/graph/layout";
-import { GraphScene } from "@/features/graph/scene";
+import { SwimlaneChart } from "@/features/graph/swimlane-chart";
 import { useExpandIncident, useGraphData } from "@/features/graph/use-graph-data";
 import { formatDate } from "@/lib/utils";
+import type { GraphNode } from "@/types";
 
 export default function GraphPage() {
   const { t } = useTranslation();
   const [windowHours, setWindowHours] = useState(GRAPH_DEFAULT_WINDOW_HOURS);
-  const [mode, setMode] = useState<LayoutMode>("time");
-  const [selected, setSelected] = useState<PositionedNode | null>(null);
+  const [selected, setSelected] = useState<GraphNode | null>(null);
 
   const graph = useGraphData(windowHours);
   const expansion = useExpandIncident(
     selected?.kind === "incident" ? selected.id : null,
-  );
-
-  const positioned = useMemo(
-    () => (graph.data ? computeLayout(graph.data.data, mode) : []),
-    [graph.data, mode],
   );
 
   return (
@@ -50,24 +46,6 @@ export default function GraphPage() {
               {h === 24 ? "24h" : h === 72 ? "3d" : "7d"}
             </Button>
           ))}
-        </div>
-        <div className="flex gap-1">
-          <Button
-            size="sm"
-            variant={mode === "time" ? "default" : "outline"}
-            onClick={() => setMode("time")}
-            data-testid="layout-time"
-          >
-            {t("graph.layoutTime")}
-          </Button>
-          <Button
-            size="sm"
-            variant={mode === "force" ? "default" : "outline"}
-            onClick={() => setMode("force")}
-            data-testid="layout-force"
-          >
-            {t("graph.layoutForce")}
-          </Button>
         </div>
         {/* Manual refresh (no auto-poll): switch via config.ts if needed */}
         <Button
@@ -90,15 +68,14 @@ export default function GraphPage() {
         {graph.isLoading ? (
           <LoadingSpinner />
         ) : (
-          <GraphScene
-            nodes={positioned}
-            edges={graph.data?.data.edges ?? []}
+          <SwimlaneChart
+            data={graph.data?.data ?? { nodes: [], edges: [], meta: { truncated: false, total_incidents: 0 } }}
             selectedId={selected?.id ?? null}
             onSelect={setSelected}
           />
         )}
 
-        {/* legend */}
+        {/* legend — wording is deliberate: proximity/correlation, not cause */}
         <div className="absolute bottom-3 left-3 rounded-md bg-background/80 p-2 text-xs backdrop-blur">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
@@ -110,14 +87,10 @@ export default function GraphPage() {
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-blue-500" /> info
             </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 bg-slate-500" /> host
-            </span>
           </div>
           <div className="mt-1 flex items-center gap-3 text-muted-foreground">
-            <span className="text-cyan-400">— temporal</span>
-            <span className="text-violet-400">— same alert</span>
-            {mode === "time" && <span>{t("graph.zAxis")}</span>}
+            <span className="text-cyan-400">⌒ {t("graph.legendTemporal")}</span>
+            <span className="text-violet-400">┄ {t("graph.legendSameName")}</span>
           </div>
         </div>
 
