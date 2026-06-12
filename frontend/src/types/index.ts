@@ -184,7 +184,7 @@ export interface Recipient {
   groups: string[];
 }
 
-export type IncidentStatus = "open" | "acknowledged" | "resolved";
+export type IncidentStatus = "open" | "acknowledged" | "resolved" | "suppressed";
 
 export interface Incident {
   id: string;

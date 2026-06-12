@@ -50,6 +50,17 @@ PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node .claude/skills/e2e-browser/graph_
 Success prints `GRAPH_E2E_OK` + 4 screenshots (full view, same_name hover
 highlight, incident side panel, expanded lanes).
 
+For RBAC (3 roles) + incident suppression (requires seed_demo + editor/viewer
+users + one receiver + a freshly correlated incident — see the script header
+for the exact curl/python prep):
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node .claude/skills/e2e-browser/rbac_suppress_e2e.mjs
+```
+
+Success prints `RBAC_SUPPRESS_E2E_OK` + screenshots per role and per
+suppression step.
+
 ## 3. Header verification (X-Scope-OrgID)
 
 ```bash
@@ -67,4 +78,10 @@ burst within the 900s window and 10+ hosts for the /graph lane expander).
 - 5 failed logins trigger rate limiting (429) — restart the backend process to reset.
 - Playwright must be imported via absolute ESM path (`/opt/node22/lib/node_modules/playwright/index.mjs`).
 - Browsers live at `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers` (pre-installed; no install needed).
-- Clean up afterwards: `pkill -f uvicorn; pkill -f fake_ruler; pkill -f vite`.
+- Clean up afterwards: kill uvicorn/fake_ruler/vite — but NOT with bare
+  `pkill -f uvicorn` from this harness: the pattern matches the wrapping
+  bash -c snapshot line and kills your own shell (exit 144). Use
+  `pgrep -f "uvicorn[ ]app" | xargs -r kill` or kill by port.
+- The login rate limiter (5/300s per IP+email) also counts successful logins;
+  repeated e2e runs against the same backend will 429 — restart the backend
+  process between runs to reset it.

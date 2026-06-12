@@ -13,7 +13,8 @@ POST /api/v1/ingest/{provider}  (X-Atlas-Ingest-Key; durable insert → 202; Red
       → incident attach/create (pg_advisory_xact_lock(group_key) on PG — no split-brain)
   → notification_worker: fan_out_pending (incidents.notified_at CAS → routes → member targets)
       → deliver_once: claim (CAS+lease) → quota → TokenBucket throttle → channel.send → mark
-  → UI: /ops dashboard (10s poll) · /graph 2D swimlane view (manual refresh) · /settings admin config
+  → UI: /ops dashboard (10s poll; incident actions ack/resolve/suppress/notify = editor+)
+      · /graph 2D swimlane view (manual refresh) · /settings admin config
 ```
 
 ## Invariants — do not break
@@ -42,7 +43,7 @@ Lane cap before the "+N hosts" expander: `GRAPH_MAX_VISIBLE_LANES` (same file).
 
 ```bash
 # backend (from backend/)
-uv run pytest -q                                  # 125 SQLite tests
+uv run pytest -q                                  # 133 SQLite tests
 uv run ruff check . && uv run black --check .
 ATLAS_PG_TEST_URL=postgresql+asyncpg://atlas:atlas@127.0.0.1:5432/atlas uv run pytest tests/pg -q   # real-PG concurrency
 ./scripts/pg_concurrency_test.sh                  # same, boots compose postgres
@@ -88,6 +89,10 @@ image automation commits to prod overlay markers). Secrets never plaintext in gi
 
 All 12 original spec phases + correlation engine + notification delivery/HA + ops dashboard
 (`/ops`) + 2D swimlane graph (`/graph`, hand-rolled SVG + d3-scale, lazy chunk; replaced the
-former 3D view — three/r3f/d3-force-3d removed). 125 SQLite tests + 6 vitest layout tests,
+former 3D view — three/r3f/d3-force-3d removed) + incident suppression (status enum value
+`suppressed`, migration 0004: reversible mute, excluded from active lists/stats, still absorbs
+alerts without re-notifying; editor+ via /ops detail dialog) + RBAC UI alignment (nav/route
+guards admin pages; incident + receiver-test actions gated editor+). 133 SQLite tests + 6 vitest,
 2 real-PG concurrency tests, 9 stats/graph tests included. Browser e2e verified: rules flow,
-admin settings, ops dashboard, 2D swimlane graph (screenshots in session history).
+admin settings, ops dashboard, 2D swimlane graph, 3-role RBAC + suppression flow
+(screenshots in session history).

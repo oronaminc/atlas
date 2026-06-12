@@ -16,6 +16,9 @@ class IncidentStatus(enum.StrEnum):
     open = "open"
     acknowledged = "acknowledged"
     resolved = "resolved"
+    # explicit mute: hidden from active views, keeps absorbing matching
+    # alerts without re-notifying; reversible via unsuppress (-> open)
+    suppressed = "suppressed"
 
 
 class AlertEvent(TimestampedBase):

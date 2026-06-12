@@ -100,6 +100,25 @@ async def test_hosts_aggregation(client, db, viewer_headers):
     assert set(keys) == {"host=db-01", "host=web-01"}
 
 
+async def test_suppressed_excluded_from_active_stats(client, db, viewer_headers):
+    await seed_dashboard_data(db)
+    muted = await seed_incident(db, severity="critical", title="muted on db-01")
+    muted.group_key = "host=db-01"
+    muted.status = IncidentStatus.suppressed
+    await db.commit()
+
+    res = await client.get("/api/v1/stats/overview", headers=viewer_headers)
+    data = res.json()["data"]
+    assert data["incidents"]["suppressed"] == 1  # counted under its own key
+    assert data["incidents"]["open"] == 2  # unchanged
+    assert data["open_by_severity"]["critical"] == 1  # muted critical NOT counted
+
+    res = await client.get("/api/v1/stats/hosts", headers=viewer_headers)
+    rows = {r["group_key"]: r for r in res.json()["data"]}
+    assert rows["host=db-01"]["open"] == 1  # suppressed not "open"
+    assert rows["host=db-01"]["total"] == 2  # but still listed in totals
+
+
 async def test_stats_require_auth(client):
     for path in (
         "/api/v1/stats/overview",

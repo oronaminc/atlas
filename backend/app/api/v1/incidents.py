@@ -22,14 +22,19 @@ router = APIRouter(prefix="/incidents", tags=["incidents"])
 async def list_incidents(
     cursor: str | None = None,
     limit: int = Query(default=20, le=100),
-    status: IncidentStatus | None = None,
+    status: str | None = Query(default=None, description="comma-separated IncidentStatus values"),
     severity: str | None = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     stmt = select(Incident).order_by(Incident.created_at.desc(), Incident.id.desc())
     if status is not None:
-        stmt = stmt.where(Incident.status == status)
+        try:
+            statuses = [IncidentStatus(s.strip()) for s in status.split(",") if s.strip()]
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid status: {e}") from e
+        if statuses:
+            stmt = stmt.where(Incident.status.in_(statuses))
     if severity is not None:
         stmt = stmt.where(Incident.severity == severity)
     if cursor:
@@ -122,6 +127,28 @@ async def resolve_incident(
     return await _transition(db, request, user, incident_id, IncidentStatus.resolved, "resolve")
 
 
+@router.post("/{incident_id}/suppress")
+async def suppress_incident(
+    incident_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_editor),
+):
+    """Explicit mute (editor+): drops the incident out of active views.
+    It keeps absorbing matching alerts without re-notifying. Reversible."""
+    return await _transition(db, request, user, incident_id, IncidentStatus.suppressed, "suppress")
+
+
+@router.post("/{incident_id}/unsuppress")
+async def unsuppress_incident(
+    incident_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_editor),
+):
+    return await _transition(db, request, user, incident_id, IncidentStatus.open, "unsuppress")
+
+
 async def _transition(
     db: AsyncSession,
     request: Request,
@@ -133,6 +160,8 @@ async def _transition(
     incident = await load_incident(db, incident_id)
     if incident.status == IncidentStatus.resolved:
         raise HTTPException(status_code=409, detail="Incident already resolved")
+    if action == "unsuppress" and incident.status != IncidentStatus.suppressed:
+        raise HTTPException(status_code=409, detail="Incident is not suppressed")
     before = incident.status.value
     incident.status = to_status
     incident.updated_by = user.id

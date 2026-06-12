@@ -32,6 +32,19 @@ async def test_attaches_to_open_incident_with_same_group_key_in_window(db):
     assert found is not None and found.id == incident.id
 
 
+async def test_attaches_to_suppressed_incident_without_reopening(db):
+    # mute semantics: new alerts keep folding into a suppressed incident,
+    # and attaching never flips its status back to open
+    incident = await make_incident(
+        db, "host=web-01", status=IncidentStatus.suppressed, last_seen=NOW - timedelta(minutes=5)
+    )
+    found = await AttributeTimeStrategy().find_incident(
+        db, alert(), "host=web-01", now=NOW, window_seconds=900
+    )
+    assert found is not None and found.id == incident.id
+    assert found.status == IncidentStatus.suppressed
+
+
 async def test_ignores_incident_outside_window(db):
     await make_incident(db, "host=web-01", last_seen=NOW - timedelta(minutes=16))
     found = await AttributeTimeStrategy().find_incident(

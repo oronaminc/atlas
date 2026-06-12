@@ -131,7 +131,16 @@
     "host": "호스트",
     "openCol": "미해결",
     "totalCol": "전체",
-    "timeline": "타임라인"
+    "timeline": "타임라인",
+    "filterActive": "활성",
+    "ack": "확인",
+    "resolve": "해결",
+    "suppress": "숨김(뮤트)",
+    "unsuppress": "숨김 해제",
+    "notify": "그룹 알림",
+    "notifySend": "발송",
+    "selectGroup": "그룹 선택",
+    "actionFailed": "처리에 실패했습니다"
   },
   "graph": {
     "title": "인시던트 스윔레인",

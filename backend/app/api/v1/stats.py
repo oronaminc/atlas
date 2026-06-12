@@ -33,7 +33,7 @@ async def overview(
         (
             await db.execute(
                 select(Incident.severity, func.count())
-                .where(Incident.status != IncidentStatus.resolved)
+                .where(Incident.status.notin_([IncidentStatus.resolved, IncidentStatus.suppressed]))
                 .group_by(Incident.severity)
             )
         ).all()
@@ -137,7 +137,7 @@ async def hosts(
         )
         entry["total"] += 1
         entry["alerts"] += alert_count
-        if status != IncidentStatus.resolved:
+        if status not in (IncidentStatus.resolved, IncidentStatus.suppressed):
             entry["open"] += 1
             if SEVERITY_RANK.get(severity, 0) >= SEVERITY_RANK[entry["max_severity"]]:
                 entry["max_severity"] = severity

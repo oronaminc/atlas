@@ -124,7 +124,12 @@ kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -
 
 ## UI pages
 
-- `/ops` — ops dashboard (incidents, delivery status, severity trend, per-host; 10s auto-refresh)
+- `/ops` — ops dashboard (incidents, delivery status, severity trend, per-host; 10s auto-refresh).
+  Incident detail exposes ack / resolve / **suppress** (reversible mute) / notify — editor+ only,
+  mirroring backend RBAC. Default incident filter is "active" (open + acknowledged): incidents
+  never auto-disappear; they leave the active list only via explicit resolve or suppress.
+  Suppressed incidents keep absorbing matching alerts without re-notifying and are excluded
+  from active stats; un-suppress returns them to `open`.
 - `/graph` — 2D incident swimlanes (X = time, one lane per host, noisiest lane first; arcs =
   temporal proximity — undirected on purpose: the data says "fired together", not causality;
   same-name correlation highlights on hover/select; "+N hosts" expander past

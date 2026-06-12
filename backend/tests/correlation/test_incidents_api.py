@@ -94,3 +94,81 @@ async def test_resolve_is_terminal(client, incident, editor_headers):
     await client.post(f"/api/v1/incidents/{incident.id}/resolve", headers=editor_headers)
     res = await client.post(f"/api/v1/incidents/{incident.id}/ack", headers=editor_headers)
     assert res.status_code == 409
+
+
+async def test_editor_can_suppress_and_unsuppress_with_audit(client, incident, editor_headers):
+    res = await client.post(f"/api/v1/incidents/{incident.id}/suppress", headers=editor_headers)
+    assert res.status_code == 200
+    assert res.json()["data"]["status"] == "suppressed"
+
+    res = await client.post(f"/api/v1/incidents/{incident.id}/unsuppress", headers=editor_headers)
+    assert res.status_code == 200
+    assert res.json()["data"]["status"] == "open"
+
+    logs = await client.get(
+        f"/api/v1/audit-logs?resource_type=incident&resource_id={incident.id}",
+        headers=editor_headers,
+    )
+    actions = [e["action"] for e in logs.json()["data"]]
+    assert "suppress" in actions and "unsuppress" in actions
+
+    detail = await client.get(f"/api/v1/incidents/{incident.id}", headers=editor_headers)
+    kinds = [e["kind"] for e in detail.json()["data"]["timeline"]]
+    assert kinds.count("status_changed") == 2
+
+
+async def test_viewer_cannot_suppress_or_unsuppress(client, incident, viewer_headers):
+    res = await client.post(f"/api/v1/incidents/{incident.id}/suppress", headers=viewer_headers)
+    assert res.status_code == 403
+    res = await client.post(f"/api/v1/incidents/{incident.id}/unsuppress", headers=viewer_headers)
+    assert res.status_code == 403
+
+
+async def test_suppress_resolved_incident_409(client, incident, editor_headers):
+    await client.post(f"/api/v1/incidents/{incident.id}/resolve", headers=editor_headers)
+    res = await client.post(f"/api/v1/incidents/{incident.id}/suppress", headers=editor_headers)
+    assert res.status_code == 409
+
+
+async def test_unsuppress_requires_suppressed_state(client, incident, editor_headers):
+    res = await client.post(f"/api/v1/incidents/{incident.id}/unsuppress", headers=editor_headers)
+    assert res.status_code == 409
+
+
+async def test_suppressed_can_be_acked_back_into_work(client, incident, editor_headers):
+    # suppress is not terminal: ack/resolve still allowed afterwards
+    await client.post(f"/api/v1/incidents/{incident.id}/suppress", headers=editor_headers)
+    res = await client.post(f"/api/v1/incidents/{incident.id}/ack", headers=editor_headers)
+    assert res.status_code == 200
+    assert res.json()["data"]["status"] == "acknowledged"
+
+
+async def test_active_status_filter_excludes_suppressed(client, db, incident, editor_headers):
+    from app.models.alerting import Incident as IncidentModel
+
+    suppressed = IncidentModel(
+        title="Muted noise on cron-01",
+        status=IncidentStatus.suppressed,
+        severity="info",
+        group_key="host=cron-01",
+        first_seen=NOW,
+        last_seen=NOW,
+        alert_count=1,
+    )
+    db.add(suppressed)
+    await db.commit()
+
+    # multi-status "active" filter: open,acknowledged
+    res = await client.get("/api/v1/incidents?status=open,acknowledged", headers=editor_headers)
+    titles = [i["title"] for i in res.json()["data"]]
+    assert "HighCPU on web-01" in titles
+    assert "Muted noise on cron-01" not in titles
+
+    # explicit suppressed filter still reachable
+    res = await client.get("/api/v1/incidents?status=suppressed", headers=editor_headers)
+    titles = [i["title"] for i in res.json()["data"]]
+    assert titles == ["Muted noise on cron-01"]
+
+    # bad status value -> 422
+    res = await client.get("/api/v1/incidents?status=nonsense", headers=editor_headers)
+    assert res.status_code == 422

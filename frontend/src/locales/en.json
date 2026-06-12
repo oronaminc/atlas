@@ -131,7 +131,16 @@
     "host": "Host",
     "openCol": "Open",
     "totalCol": "Total",
-    "timeline": "Timeline"
+    "timeline": "Timeline",
+    "filterActive": "active",
+    "ack": "Acknowledge",
+    "resolve": "Resolve",
+    "suppress": "Suppress",
+    "unsuppress": "Unsuppress",
+    "notify": "Notify group",
+    "notifySend": "Send",
+    "selectGroup": "Select group",
+    "actionFailed": "Action failed"
   },
   "graph": {
     "title": "Incident Swimlanes",

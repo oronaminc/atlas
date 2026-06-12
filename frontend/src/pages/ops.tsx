@@ -3,6 +3,8 @@ import { Activity, BellRing, Flame, Server } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
+  useApiMutation,
+  useGroups,
   useIncident,
   useIncidents,
   useNotificationRows,
@@ -10,6 +12,9 @@ import {
   useStatsOverview,
   useStatsTrend,
 } from "@/api/queries";
+import { api } from "@/api/client";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import { SeverityBadge } from "@/components/common/status-badge";
 import { PageHeader } from "@/components/layout/page-header";
@@ -47,11 +52,17 @@ import { formatDate } from "@/lib/utils";
 import type { IncidentStatus } from "@/types";
 
 const ALL = "__all__";
+// "active" = needs attention: excludes resolved AND suppressed
+const ACTIVE = "open,acknowledged";
 
-const incidentStatusVariant: Record<IncidentStatus, "destructive" | "warning" | "success"> = {
+const incidentStatusVariant: Record<
+  IncidentStatus,
+  "destructive" | "warning" | "success" | "secondary"
+> = {
   open: "destructive",
   acknowledged: "warning",
   resolved: "success",
+  suppressed: "secondary",
 };
 
 const notificationStatusVariant: Record<string, "secondary" | "success" | "warning" | "destructive"> = {
@@ -87,7 +98,9 @@ function StatCard({
 
 export function OpsPage() {
   const { t } = useTranslation();
-  const [statusFilter, setStatusFilter] = useState(ALL);
+  const { hasRole } = useAuth();
+  const canEdit = hasRole("admin", "editor");
+  const [statusFilter, setStatusFilter] = useState(ACTIVE);
   const [trendHours, setTrendHours] = useState(24);
   const [detailId, setDetailId] = useState<string | null>(null);
 
@@ -100,6 +113,28 @@ export function OpsPage() {
   const trend = useStatsTrend(trendHours);
   const hostStats = useStatsHosts();
   const detail = useIncident(detailId);
+
+  const { toast } = useToast();
+  const groups = useGroups();
+  const [notifyGroupId, setNotifyGroupId] = useState("");
+  const action = useApiMutation(
+    ({ verb, body }: { verb: string; body?: Record<string, unknown> }) =>
+      api.post(`/incidents/${detailId}/${verb}`, body),
+    ["incidents", "stats"],
+    () => setNotifyGroupId(""),
+  );
+  const runAction = (verb: string, body?: Record<string, unknown>) =>
+    action.mutate(
+      { verb, body },
+      {
+        onError: (e) =>
+          toast({
+            title: t("ops.actionFailed"),
+            description: e instanceof Error ? e.message : String(e),
+            variant: "destructive",
+          }),
+      },
+    );
 
   const ov = overview.data?.data;
 
@@ -144,10 +179,12 @@ export function OpsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={ACTIVE}>{t("ops.filterActive")}</SelectItem>
                 <SelectItem value={ALL}>status: all</SelectItem>
                 <SelectItem value="open">open</SelectItem>
                 <SelectItem value="acknowledged">acknowledged</SelectItem>
                 <SelectItem value="resolved">resolved</SelectItem>
+                <SelectItem value="suppressed">suppressed</SelectItem>
               </SelectContent>
             </Select>
           </CardHeader>
@@ -343,6 +380,80 @@ export function OpsPage() {
                 </span>
               </div>
 
+              {/* actions: editor+ only (matches backend require_editor) */}
+              {canEdit && detail.data.data.status !== "resolved" && (
+                <div
+                  className="flex flex-wrap items-center gap-2 rounded-md border p-2"
+                  data-testid="incident-actions"
+                >
+                  {detail.data.data.status === "suppressed" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={action.isPending}
+                      onClick={() => runAction("unsuppress")}
+                      data-testid="action-unsuppress"
+                    >
+                      {t("ops.unsuppress")}
+                    </Button>
+                  ) : (
+                    <>
+                      {detail.data.data.status === "open" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={action.isPending}
+                          onClick={() => runAction("ack")}
+                          data-testid="action-ack"
+                        >
+                          {t("ops.ack")}
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={action.isPending}
+                        onClick={() => runAction("suppress")}
+                        data-testid="action-suppress"
+                      >
+                        {t("ops.suppress")}
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={action.isPending}
+                    onClick={() => runAction("resolve")}
+                    data-testid="action-resolve"
+                  >
+                    {t("ops.resolve")}
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Select value={notifyGroupId} onValueChange={setNotifyGroupId}>
+                      <SelectTrigger className="h-8 w-40" data-testid="notify-group">
+                        <SelectValue placeholder={t("ops.selectGroup")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(groups.data?.data ?? []).map((g) => (
+                          <SelectItem key={g.id} value={g.id}>
+                            {g.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      disabled={!notifyGroupId || action.isPending}
+                      onClick={() => runAction("notify", { group_id: notifyGroupId })}
+                      data-testid="action-notify"
+                    >
+                      {t("ops.notify")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <h3 className="mb-2 text-sm font-semibold">
                   {t("ops.alerts")} ({detail.data.data.alerts.length})
@@ -369,12 +480,12 @@ export function OpsPage() {
                 <h3 className="mb-2 text-sm font-semibold">{t("ops.timeline")}</h3>
                 <div className="space-y-1">
                   {detail.data.data.timeline.map((event) => (
-                    <div key={event.id} className="flex gap-2 text-xs">
+                    <div key={event.id} className="flex min-w-0 gap-2 text-xs">
                       <span className="w-36 shrink-0 text-muted-foreground">
                         {formatDate(event.created_at)}
                       </span>
                       <Badge variant="outline">{event.kind}</Badge>
-                      <span className="truncate text-muted-foreground">
+                      <span className="min-w-0 flex-1 truncate text-muted-foreground">
                         {JSON.stringify(event.payload)}
                       </span>
                     </div>

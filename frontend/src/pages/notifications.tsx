@@ -67,6 +67,7 @@ function ReceiversTab() {
   const { toast } = useToast();
   const { hasRole } = useAuth();
   const isAdmin = hasRole("admin");
+  const canTest = hasRole("admin", "editor"); // test-send is require_editor on the backend
   const receivers = useReceivers();
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -121,10 +122,12 @@ function ReceiversTab() {
       header: "",
       render: (r) => (
         <div className="flex justify-end gap-1">
-          <Button variant="ghost" size="sm" onClick={() => test.mutate(r)}>
-            <Send className="h-4 w-4" />
-            {t("common.test")}
-          </Button>
+          {canTest && (
+            <Button variant="ghost" size="sm" onClick={() => test.mutate(r)}>
+              <Send className="h-4 w-4" />
+              {t("common.test")}
+            </Button>
+          )}
           {isAdmin && (
             <Button variant="ghost" size="icon" onClick={() => setDeleting(r)}>
               <Trash2 className="h-4 w-4 text-destructive" />

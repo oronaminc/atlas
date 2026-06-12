@@ -99,17 +99,18 @@ try {
   await page.locator('[data-testid="swimlane-chart"]').click({ position: { x: 400, y: 700 } });
   await sleep(300);
 
-  // 7. lane overflow expander: +2 hosts -> 14 lanes -> collapse back
+  // 7. lane overflow expander: +N hosts -> 12+N lanes -> collapse back
   const expander = page.locator('[data-testid="lane-expander"]');
   await expander.scrollIntoViewIfNeeded();
   const expanderText = await expander.textContent();
-  assert(expanderText.includes("2"), `expander shows hidden count: "${expanderText}"`);
+  const hidden = parseInt(expanderText.match(/\d+/)?.[0] ?? "0", 10);
+  assert(hidden > 0, `expander shows hidden count: "${expanderText}"`);
   await expander.click();
   await page.waitForSelector('[data-testid="lane-collapse"]');
   const expandedLanes = await page.locator('g[data-testid^="lane-"]').count();
-  assert(expandedLanes === 14, `expected 14 lanes expanded, got ${expandedLanes}`);
+  assert(expandedLanes === 12 + hidden, `expected ${12 + hidden} lanes expanded, got ${expandedLanes}`);
   await page.screenshot({ path: SHOT("g4-lanes-expanded") });
-  log(`expander "+2 hosts" -> ${expandedLanes} lanes`);
+  log(`expander "+${hidden} hosts" -> ${expandedLanes} lanes`);
   await page.locator('[data-testid="lane-collapse"]').click();
   await sleep(300);
   assert(

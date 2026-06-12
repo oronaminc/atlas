@@ -75,8 +75,9 @@ export default function GraphPage() {
           />
         )}
 
-        {/* legend — wording is deliberate: proximity/correlation, not cause */}
-        <div className="absolute bottom-3 left-3 rounded-md bg-background/80 p-2 text-xs backdrop-blur">
+        {/* legend — wording is deliberate: proximity/correlation, not cause.
+            pointer-events-none: must never swallow clicks on pills/expander below */}
+        <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-background/80 p-2 text-xs backdrop-blur">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-red-500" /> critical
