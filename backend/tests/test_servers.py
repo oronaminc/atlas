@@ -12,9 +12,7 @@ async def test_server_crud(client, editor_headers):
     server_id = created.json()["data"]["id"]
     assert created.json()["data"]["labels"]["env"] == "prod"
 
-    dup = await client.post(
-        "/api/v1/servers", json={"name": "web-01"}, headers=editor_headers
-    )
+    dup = await client.post("/api/v1/servers", json={"name": "web-01"}, headers=editor_headers)
     assert dup.status_code == 409
 
     patched = await client.patch(
@@ -24,23 +22,17 @@ async def test_server_crud(client, editor_headers):
     )
     assert patched.json()["data"]["description"] == "updated"
 
-    deleted = await client.delete(
-        f"/api/v1/servers/{server_id}", headers=editor_headers
-    )
+    deleted = await client.delete(f"/api/v1/servers/{server_id}", headers=editor_headers)
     assert deleted.status_code == 200
 
 
 async def test_viewer_cannot_create_server(client, viewer_headers):
-    res = await client.post(
-        "/api/v1/servers", json={"name": "nope"}, headers=viewer_headers
-    )
+    res = await client.post("/api/v1/servers", json={"name": "nope"}, headers=viewer_headers)
     assert res.status_code == 403
 
 
 async def test_server_rules_includes_global(client, admin_headers, editor_headers):
-    server = await client.post(
-        "/api/v1/servers", json={"name": "db-01"}, headers=editor_headers
-    )
+    server = await client.post("/api/v1/servers", json={"name": "db-01"}, headers=editor_headers)
     server_id = server.json()["data"]["id"]
 
     await client.post(

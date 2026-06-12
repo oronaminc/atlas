@@ -9,6 +9,7 @@ import {
   Layers,
   LogOut,
   Menu,
+  Network,
   Server,
   Settings,
   ShieldAlert,
@@ -43,6 +44,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: "/", labelKey: "nav.dashboard", icon: LayoutDashboard },
   { to: "/ops", labelKey: "nav.ops", icon: Gauge },
+  { to: "/graph", labelKey: "nav.graph", icon: Network },
   { to: "/servers", labelKey: "nav.servers", icon: Server },
   { to: "/rules", labelKey: "nav.rules", icon: ShieldAlert },
   { to: "/rule-groups", labelKey: "nav.ruleGroups", icon: Layers },

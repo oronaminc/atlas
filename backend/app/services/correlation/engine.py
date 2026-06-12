@@ -69,9 +69,7 @@ class CorrelationEngine:
         now: datetime,
     ) -> AlertEvent:
         # Stage 1: dedup — collapse into the previous row, drop this one.
-        if await self.dedup_store.seen_within(
-            event.fingerprint, config.dedup_window_seconds
-        ):
+        if await self.dedup_store.seen_within(event.fingerprint, config.dedup_window_seconds):
             prior = await self._latest_other_event(db, event)
             if prior is not None:
                 prior.dedup_count += 1
@@ -85,9 +83,7 @@ class CorrelationEngine:
         # PG-only true-race guard; SQLite (tests) relies on CAS claims +
         # sequential interleaving. Lock is released at tx end.
         if group_key and db.bind.dialect.name == "postgresql":
-            await db.execute(
-                text("SELECT pg_advisory_xact_lock(hashtext(:gk))"), {"gk": group_key}
-            )
+            await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:gk))"), {"gk": group_key})
         incident = None
         for strategy in self.strategies:
             incident = await strategy.find_incident(
@@ -136,14 +132,10 @@ class CorrelationEngine:
         return alert.name
 
     @staticmethod
-    async def _latest_other_event(
-        db: AsyncSession, event: AlertEvent
-    ) -> AlertEvent | None:
+    async def _latest_other_event(db: AsyncSession, event: AlertEvent) -> AlertEvent | None:
         res = await db.execute(
             select(AlertEvent)
-            .where(
-                AlertEvent.fingerprint == event.fingerprint, AlertEvent.id != event.id
-            )
+            .where(AlertEvent.fingerprint == event.fingerprint, AlertEvent.id != event.id)
             .order_by(AlertEvent.received_at.desc())
             .limit(1)
         )

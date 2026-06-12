@@ -31,9 +31,7 @@ async def can_write_rule_scope(
         return True
     if user.role == GlobalRole.viewer:
         # group managers may manage group-scoped rules even with a viewer global role
-        if scope_type == ScopeType.group and scope_ref_id in user_managed_group_ids(
-            user
-        ):
+        if scope_type == ScopeType.group and scope_ref_id in user_managed_group_ids(user):
             return True
         return False
 

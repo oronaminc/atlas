@@ -39,10 +39,7 @@ async def file_db(tmp_path):
 
 async def seed_outbox(factory, n_users: int) -> None:
     async with factory() as db:
-        users = [
-            await seed_user(db, f"u{i}@example.com", chat_id=f"{i}00")
-            for i in range(n_users)
-        ]
+        users = [await seed_user(db, f"u{i}@example.com", chat_id=f"{i}00") for i in range(n_users)]
         group = await seed_group(db, "oncall", users)
         await seed_route(db, group)
         await seed_incident(db)
@@ -56,13 +53,9 @@ async def test_two_workers_never_double_send(file_db):
 
     # interleaved claim+deliver from two separate sessions (two pods)
     async with file_db() as db_a, file_db() as db_b:
-        await deliver_once(
-            db_a, channels={"telegram": channel_a}, worker_id="pod-a", now=NOW
-        )
+        await deliver_once(db_a, channels={"telegram": channel_a}, worker_id="pod-a", now=NOW)
         await db_a.commit()
-        await deliver_once(
-            db_b, channels={"telegram": channel_b}, worker_id="pod-b", now=NOW
-        )
+        await deliver_once(db_b, channels={"telegram": channel_b}, worker_id="pod-b", now=NOW)
         await db_b.commit()
 
     sent_addresses = [a for a, _ in channel_a.sent] + [a for a, _ in channel_b.sent]
@@ -146,9 +139,7 @@ async def test_two_correlation_workers_claim_exclusively_no_duplicate_incident(f
         await db_b.commit()
 
     async with file_db() as db:
-        n_incidents = (
-            await db.execute(select(func.count()).select_from(Incident))
-        ).scalar_one()
+        n_incidents = (await db.execute(select(func.count()).select_from(Incident))).scalar_one()
         assert n_incidents == 1
         events = list((await db.execute(select(AlertEvent))).scalars())
         assert all(e.incident_id is not None for e in events)
@@ -168,11 +159,6 @@ async def test_correlation_claim_lease_expires_for_crashed_worker(file_db):
         await db_a.commit()  # pod-a dies here
 
     async with file_db() as db_b:
-        assert (
-            await claim_events(db_b, worker_id="pod-b", now=NOW + timedelta(seconds=30))
-            == []
-        )
-        reclaimed = await claim_events(
-            db_b, worker_id="pod-b", now=NOW + timedelta(seconds=61)
-        )
+        assert await claim_events(db_b, worker_id="pod-b", now=NOW + timedelta(seconds=30)) == []
+        reclaimed = await claim_events(db_b, worker_id="pod-b", now=NOW + timedelta(seconds=61))
         assert len(reclaimed) == 1

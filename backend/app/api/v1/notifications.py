@@ -143,9 +143,7 @@ async def update_receiver(
         for k, v in body.config.items():
             if v == MASK:
                 continue
-            merged[k] = (
-                encrypt_secret(str(v)) if k in SECRET_KEYS and v is not None else v
-            )
+            merged[k] = encrypt_secret(str(v)) if k in SECRET_KEYS and v is not None else v
         receiver.config = merged
     receiver.updated_by = admin.id
     await record_audit(
@@ -203,15 +201,11 @@ async def test_receiver(
         if receiver.type.value in ("slack", "webhook"):
             url = config.get("url") or config.get("webhook_url")
             if not url:
-                raise HTTPException(
-                    status_code=400, detail="Receiver has no url configured"
-                )
+                raise HTTPException(status_code=400, detail="Receiver has no url configured")
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(
                     url,
-                    json={
-                        "text": f"[Atlas] test notification for receiver '{receiver.name}'"
-                    },
+                    json={"text": f"[Atlas] test notification for receiver '{receiver.name}'"},
                 )
                 response.raise_for_status()
         else:
@@ -240,10 +234,7 @@ async def list_policies(
         select(NotificationPolicy).order_by(NotificationPolicy.created_at.desc())
     )
     return envelope(
-        [
-            PolicyOut.model_validate(p).model_dump(mode="json")
-            for p in res.scalars().unique()
-        ]
+        [PolicyOut.model_validate(p).model_dump(mode="json") for p in res.scalars().unique()]
     )
 
 
@@ -341,10 +332,7 @@ async def list_silences(
 ):
     res = await db.execute(select(Silence).order_by(Silence.created_at.desc()))
     return envelope(
-        [
-            SilenceOut.model_validate(s).model_dump(mode="json")
-            for s in res.scalars().unique()
-        ]
+        [SilenceOut.model_validate(s).model_dump(mode="json") for s in res.scalars().unique()]
     )
 
 

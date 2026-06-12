@@ -109,9 +109,7 @@ async def ack_incident(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_editor),
 ):
-    return await _transition(
-        db, request, user, incident_id, IncidentStatus.acknowledged, "ack"
-    )
+    return await _transition(db, request, user, incident_id, IncidentStatus.acknowledged, "ack")
 
 
 @router.post("/{incident_id}/resolve")
@@ -121,9 +119,7 @@ async def resolve_incident(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_editor),
 ):
-    return await _transition(
-        db, request, user, incident_id, IncidentStatus.resolved, "resolve"
-    )
+    return await _transition(db, request, user, incident_id, IncidentStatus.resolved, "resolve")
 
 
 async def _transition(

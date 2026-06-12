@@ -27,11 +27,7 @@ async def overview(
     _: User = Depends(get_current_user),
 ):
     incident_counts = dict(
-        (
-            await db.execute(
-                select(Incident.status, func.count()).group_by(Incident.status)
-            )
-        ).all()
+        (await db.execute(select(Incident.status, func.count()).group_by(Incident.status))).all()
     )
     open_by_severity = dict(
         (
@@ -61,9 +57,7 @@ async def overview(
         {
             "incidents": {s.value: incident_counts.get(s, 0) for s in IncidentStatus},
             "open_by_severity": {s: open_by_severity.get(s, 0) for s in SEVERITIES},
-            "notifications": {
-                s: notification_counts.get(s, 0) for s in NOTIFICATION_STATUSES
-            },
+            "notifications": {s: notification_counts.get(s, 0) for s in NOTIFICATION_STATUSES},
             "alerts_24h": alerts_24h,
         }
     )

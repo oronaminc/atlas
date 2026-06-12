@@ -41,7 +41,8 @@
     "profile": "프로필",
     "logout": "로그아웃",
     "settings": "엔진 설정",
-    "ops": "운영 대시보드"
+    "ops": "운영 대시보드",
+    "graph": "3D 그래프"
   },
   "auth": {
     "login": "로그인",
@@ -131,5 +132,14 @@
     "openCol": "미해결",
     "totalCol": "전체",
     "timeline": "타임라인"
+  },
+  "graph": {
+    "title": "3D 관계 그래프",
+    "refresh": "새로고침",
+    "layoutTime": "시간축",
+    "layoutForce": "포스",
+    "truncated": "노드 수 제한으로 일부만 표시 중 (최근 항목 우선)",
+    "zAxis": "Z축 = 발생 시각",
+    "memberAlerts": "구성 알림"
   }
 }

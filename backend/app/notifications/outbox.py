@@ -79,9 +79,7 @@ async def mark_sent(db: AsyncSession, n: Notification, *, now: datetime) -> None
     await db.flush()
 
 
-async def mark_failed(
-    db: AsyncSession, n: Notification, error: str, *, now: datetime
-) -> None:
+async def mark_failed(db: AsyncSession, n: Notification, error: str, *, now: datetime) -> None:
     n.attempts += 1
     n.last_error = error[:2000]
     n.claimed_at = None
@@ -91,9 +89,7 @@ async def mark_failed(
         n.retry_at = None
     else:
         n.status = "failed"
-        backoff = min(
-            BACKOFF_BASE_SECONDS * (2 ** (n.attempts - 1)), BACKOFF_CAP_SECONDS
-        )
+        backoff = min(BACKOFF_BASE_SECONDS * (2 ** (n.attempts - 1)), BACKOFF_CAP_SECONDS)
         n.retry_at = now + timedelta(seconds=backoff)
     await db.flush()
 

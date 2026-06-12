@@ -10,9 +10,7 @@ INGEST_HEADERS = {"X-Atlas-Ingest-Key": "test-ingest-key"}
 
 
 async def test_ingest_persists_events_and_acks_202(client, db):
-    res = await client.post(
-        "/api/v1/ingest/alertmanager", json=AM_WEBHOOK, headers=INGEST_HEADERS
-    )
+    res = await client.post("/api/v1/ingest/alertmanager", json=AM_WEBHOOK, headers=INGEST_HEADERS)
     assert res.status_code == 202
     assert res.json()["data"]["accepted"] == 2
 
@@ -45,7 +43,5 @@ async def test_ingest_unknown_provider_404(client):
 
 async def test_ingest_does_not_require_user_jwt(client):
     """Machine endpoint: key only, no bearer token."""
-    res = await client.post(
-        "/api/v1/ingest/alertmanager", json=AM_WEBHOOK, headers=INGEST_HEADERS
-    )
+    res = await client.post("/api/v1/ingest/alertmanager", json=AM_WEBHOOK, headers=INGEST_HEADERS)
     assert res.status_code == 202

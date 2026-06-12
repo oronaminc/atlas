@@ -51,9 +51,7 @@ async def test_group_crud_and_members(client, admin, admin_headers, editor):
     )
     assert added.status_code == 201
 
-    members = await client.get(
-        f"/api/v1/groups/{group_id}/members", headers=admin_headers
-    )
+    members = await client.get(f"/api/v1/groups/{group_id}/members", headers=admin_headers)
     assert members.json()["data"][0]["username"] == "editor"
     assert members.json()["data"][0]["role_in_group"] == "manager"
 
@@ -68,9 +66,7 @@ async def test_group_crud_and_members(client, admin, admin_headers, editor):
 
 async def test_cursor_pagination(client, admin_headers):
     for i in range(5):
-        await client.post(
-            "/api/v1/groups", json={"name": f"team-{i}"}, headers=admin_headers
-        )
+        await client.post("/api/v1/groups", json={"name": f"team-{i}"}, headers=admin_headers)
     first = await client.get("/api/v1/groups?limit=2", headers=admin_headers)
     body = first.json()
     assert len(body["data"]) == 2
@@ -78,9 +74,7 @@ async def test_cursor_pagination(client, admin_headers):
     cursor = body["meta"]["next_cursor"]
     assert cursor
 
-    second = await client.get(
-        f"/api/v1/groups?limit=2&cursor={cursor}", headers=admin_headers
-    )
+    second = await client.get(f"/api/v1/groups?limit=2&cursor={cursor}", headers=admin_headers)
     names_1 = {g["name"] for g in body["data"]}
     names_2 = {g["name"] for g in second.json()["data"]}
     assert names_1.isdisjoint(names_2)

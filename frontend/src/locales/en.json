@@ -41,7 +41,8 @@
     "profile": "Profile",
     "logout": "Log out",
     "settings": "Engine Settings",
-    "ops": "Ops Dashboard"
+    "ops": "Ops Dashboard",
+    "graph": "3D Graph"
   },
   "auth": {
     "login": "Log in",
@@ -131,5 +132,14 @@
     "openCol": "Open",
     "totalCol": "Total",
     "timeline": "Timeline"
+  },
+  "graph": {
+    "title": "3D Relationship Graph",
+    "refresh": "Refresh",
+    "layoutTime": "Time axis",
+    "layoutForce": "Force",
+    "truncated": "Showing a subset (node cap, most recent first)",
+    "zAxis": "Z axis = first seen",
+    "memberAlerts": "Member alerts"
   }
 }

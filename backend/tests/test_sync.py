@@ -31,9 +31,7 @@ async def test_rule_group_crud_and_sync(client, admin_headers, fake_ruler):
     group_id = created.json()["data"]["id"]
     assert created.json()["data"]["rule_count"] == 1
 
-    synced = await client.post(
-        f"/api/v1/rule-groups/{group_id}/sync", headers=admin_headers
-    )
+    synced = await client.post(f"/api/v1/rule-groups/{group_id}/sync", headers=admin_headers)
     assert synced.status_code == 200
     assert len(fake_ruler.pushed) == 1
     namespace, payload = fake_ruler.pushed[0]
@@ -84,9 +82,7 @@ async def test_emergency_apply(client, admin_headers, fake_ruler):
 
 
 async def test_emergency_apply_invalid_expr_rejected(client, admin_headers, fake_ruler):
-    rule_id = await make_rule(
-        client, admin_headers, name="Broken", expr="sum(rate(x[1m])"
-    )
+    rule_id = await make_rule(client, admin_headers, name="Broken", expr="sum(rate(x[1m])")
     res = await client.post(
         "/api/v1/rules/emergency-apply",
         json={"rule_id": rule_id, "reason": "x"},
@@ -96,9 +92,7 @@ async def test_emergency_apply_invalid_expr_rejected(client, admin_headers, fake
     assert fake_ruler.pushed == []
 
 
-async def test_viewer_cannot_emergency_apply(
-    client, admin_headers, viewer_headers, fake_ruler
-):
+async def test_viewer_cannot_emergency_apply(client, admin_headers, viewer_headers, fake_ruler):
     rule_id = await make_rule(client, admin_headers)
     res = await client.post(
         "/api/v1/rules/emergency-apply",

@@ -52,15 +52,11 @@ class AlertmanagerClient(BaseIntegrationClient):
     # --- silences ---
 
     async def create_silence(self, silence: dict[str, Any]) -> str:
-        response = await self.request(
-            "POST", "/alertmanager/api/v2/silences", json=silence
-        )
+        response = await self.request("POST", "/alertmanager/api/v2/silences", json=silence)
         response.raise_for_status()
         return response.json().get("silenceID", "")
 
     async def delete_silence(self, silence_id: str) -> None:
-        response = await self.request(
-            "DELETE", f"/alertmanager/api/v2/silence/{silence_id}"
-        )
+        response = await self.request("DELETE", f"/alertmanager/api/v2/silence/{silence_id}")
         if response.status_code != 404:
             response.raise_for_status()

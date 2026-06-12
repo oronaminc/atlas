@@ -37,9 +37,7 @@ class UserGroup(TimestampedBase):
         Enum(GroupRole, name="group_role"), default=GroupRole.member
     )
 
-    user: Mapped["User"] = relationship(
-        back_populates="memberships", lazy="joined"
-    )  # noqa: F821
+    user: Mapped["User"] = relationship(back_populates="memberships", lazy="joined")  # noqa: F821
     group: Mapped[Group] = relationship(back_populates="memberships", lazy="joined")
 
 

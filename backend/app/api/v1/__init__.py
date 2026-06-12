@@ -5,6 +5,7 @@ from app.api.v1 import (
     audit,
     auth,
     correlation_config,
+    graph,
     groups,
     incidents,
     ingest,
@@ -32,5 +33,6 @@ api_router.include_router(incidents.router)
 api_router.include_router(correlation_config.router)
 api_router.include_router(notification_admin.router)
 api_router.include_router(stats.router)
+api_router.include_router(graph.router)
 api_router.include_router(sync.router)
 api_router.include_router(audit.router)

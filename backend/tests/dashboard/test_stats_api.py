@@ -75,9 +75,7 @@ async def test_trend_buckets(client, db, viewer_headers):
     data = res.json()["data"]
     assert data["bucket_seconds"] == 3600
     assert len(data["buckets"]) == 24
-    totals = {
-        s: sum(b[s] for b in data["buckets"]) for s in ("critical", "warning", "info")
-    }
+    totals = {s: sum(b[s] for b in data["buckets"]) for s in ("critical", "warning", "info")}
     assert totals == {"critical": 1, "warning": 1, "info": 0}
 
     # 7d window -> daily buckets, includes the 30h-old event

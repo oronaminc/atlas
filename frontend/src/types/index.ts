@@ -247,3 +247,32 @@ export interface HostStat {
   max_severity: Severity;
   last_seen: string | null;
 }
+
+export interface GraphNode {
+  id: string;
+  kind: "incident" | "host" | "alert";
+  label: string;
+  severity: string | null;
+  status: string | null;
+  alert_count?: number;
+  group_key?: string | null;
+  first_seen?: string;
+  last_seen?: string;
+  dominant_name?: string | null;
+  source?: string;
+  dedup_count?: number;
+  received_at?: string;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  kind: "host" | "temporal" | "same_name" | "member";
+  weight: number;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  meta: { truncated: boolean; total_incidents: number };
+}

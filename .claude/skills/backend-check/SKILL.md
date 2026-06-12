@@ -9,7 +9,7 @@ Run in order after any backend/ change. All must pass before committing.
 
 ```bash
 cd backend
-uv run pytest -q                  # 44+ tests, 0 failures required
+uv run pytest -q                  # 125+ tests, 0 failures required
 uv run ruff check . && uv run black --check .
 ```
 
@@ -27,3 +27,4 @@ rm -f /tmp/_mig.db && DATABASE_URL="sqlite+aiosqlite:////tmp/_mig.db" uv run ale
   when needed. (Precedent: `load_group()` in the rule_groups router.)
 - New external API calls go through `integrations/base.py` — never re-inject X-Scope-OrgID.
 - New write endpoints require record_audit + mark_ruler_pending (if rule-related).
+- Worker claim/queue logic changed? Run the real-PG tier too — see the tdd-discipline skill.

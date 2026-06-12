@@ -47,6 +47,10 @@ Success prints `E2E_OK` + 16 screenshots in `/tmp/shots/`. On failure check `99-
 cat /tmp/fake_ruler_requests.jsonl   # x_scope_orgid must be "system"
 ```
 
+Seed richer demo data (ops dashboard / 3D graph) with
+`uv run python scripts/seed_demo.py` after create_admin.
+For /graph e2e, launch chromium with `--use-angle=swiftshader` (WebGL).
+
 ## Pitfalls (all actually encountered)
 
 - **Always delete the DB before each run** — leftover web-01/HighCPUUsage from a previous run

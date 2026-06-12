@@ -26,9 +26,7 @@ class TelegramChannel:
             async with httpx.AsyncClient(
                 transport=self._transport, timeout=self._timeout
             ) as client:
-                response = await client.post(
-                    url, json={"chat_id": address, "text": text}
-                )
+                response = await client.post(url, json={"chat_id": address, "text": text})
             if response.status_code >= 400:
                 raise ChannelSendError(
                     f"telegram api {response.status_code}: {response.text[:200]}"

@@ -35,9 +35,7 @@ async def list_users(
         decoded = decode_cursor(cursor)
         if decoded:
             t, i = decoded
-            stmt = stmt.where(
-                or_(User.created_at < t, (User.created_at == t) & (User.id < i))
-            )
+            stmt = stmt.where(or_(User.created_at < t, (User.created_at == t) & (User.id < i)))
     res = await db.execute(stmt.limit(limit + 1))
     items, meta = page_meta(list(res.scalars().unique()), limit)
     return envelope([user_to_out(u).model_dump(mode="json") for u in items], meta=meta)
@@ -51,9 +49,7 @@ async def create_user(
     admin: User = Depends(require_admin),
 ):
     existing = await db.execute(
-        select(User).where(
-            or_(User.email == body.email, User.username == body.username)
-        )
+        select(User).where(or_(User.email == body.email, User.username == body.username))
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Email or username already exists")

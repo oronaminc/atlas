@@ -99,12 +99,8 @@ async def list_routes(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    res = await db.execute(
-        select(NotificationRoute).order_by(NotificationRoute.created_at)
-    )
-    return envelope(
-        [RouteOut.model_validate(r).model_dump(mode="json") for r in res.scalars()]
-    )
+    res = await db.execute(select(NotificationRoute).order_by(NotificationRoute.created_at))
+    return envelope([RouteOut.model_validate(r).model_dump(mode="json") for r in res.scalars()])
 
 
 @router.post("/notification-routes", status_code=201)
@@ -121,9 +117,7 @@ async def create_route(
         select(NotificationRoute).where(NotificationRoute.group_id == body.group_id)
     )
     if dup.scalar_one_or_none():
-        raise HTTPException(
-            status_code=409, detail="Route for this group already exists"
-        )
+        raise HTTPException(status_code=409, detail="Route for this group already exists")
     route = NotificationRoute(**body.model_dump(), created_by=admin.id)
     db.add(route)
     await db.flush()
@@ -199,9 +193,7 @@ async def list_recipients(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    res = await db.execute(
-        select(User).where(User.is_active.is_(True)).order_by(User.email)
-    )
+    res = await db.execute(select(User).where(User.is_active.is_(True)).order_by(User.email))
     rows = [
         RecipientOut(
             user_id=u.id,
@@ -233,8 +225,5 @@ async def list_notifications(
         stmt = stmt.where(Notification.status == status)
     res = await db.execute(stmt)
     return envelope(
-        [
-            NotificationOut.model_validate(n).model_dump(mode="json")
-            for n in res.scalars().unique()
-        ]
+        [NotificationOut.model_validate(n).model_dump(mode="json") for n in res.scalars().unique()]
     )

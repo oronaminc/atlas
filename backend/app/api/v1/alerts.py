@@ -18,9 +18,7 @@ async def active_alerts(
     try:
         alerts = await am.get_active_alerts()
     except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Alertmanager unreachable: {exc}"
-        ) from exc
+        raise HTTPException(status_code=502, detail=f"Alertmanager unreachable: {exc}") from exc
     return envelope(alerts)
 
 
@@ -35,7 +33,5 @@ async def alert_history(
     try:
         alerts = await am.get_active_alerts()
     except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Alertmanager unreachable: {exc}"
-        ) from exc
+        raise HTTPException(status_code=502, detail=f"Alertmanager unreachable: {exc}") from exc
     return envelope(alerts)

@@ -25,13 +25,9 @@ async def test_rule_crud(client, admin_headers):
     )
     assert patched.json()["data"]["severity"] == "warning"
 
-    disabled = await client.post(
-        f"/api/v1/rules/{rule_id}/disable", headers=admin_headers
-    )
+    disabled = await client.post(f"/api/v1/rules/{rule_id}/disable", headers=admin_headers)
     assert disabled.json()["data"]["enabled"] is False
-    enabled = await client.post(
-        f"/api/v1/rules/{rule_id}/enable", headers=admin_headers
-    )
+    enabled = await client.post(f"/api/v1/rules/{rule_id}/enable", headers=admin_headers)
     assert enabled.json()["data"]["enabled"] is True
 
     deleted = await client.delete(f"/api/v1/rules/{rule_id}", headers=admin_headers)

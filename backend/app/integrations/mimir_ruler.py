@@ -21,9 +21,7 @@ class MimirRulerClient(BaseIntegrationClient):
     def __init__(self, base_url: str | None = None) -> None:
         super().__init__(base_url or settings.MIMIR_RULER_URL)
 
-    async def set_rule_group(
-        self, namespace: str, group_payload: dict[str, Any]
-    ) -> None:
+    async def set_rule_group(self, namespace: str, group_payload: dict[str, Any]) -> None:
         """PUT(sync) one Prometheus rule group into the given namespace."""
         body = yaml.safe_dump(group_payload, sort_keys=False)
         response = await self.request(

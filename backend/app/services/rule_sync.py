@@ -66,10 +66,7 @@ async def sync_all_rule_groups(db: AsyncSession, ruler: Any) -> SyncState:
 
     payloads = {(g.namespace, g.name): serialize_rule_group(g) for g in groups}
     checksum = payload_checksum(
-        sorted(
-            (ns, name, json.dumps(p, sort_keys=True))
-            for (ns, name), p in payloads.items()
-        )
+        sorted((ns, name, json.dumps(p, sort_keys=True)) for (ns, name), p in payloads.items())
     )
 
     if state.checksum == checksum and state.status == SyncStatus.ok:
@@ -116,9 +113,7 @@ def emergency_group_payload(rule: AlertRule) -> tuple[str, dict[str, Any]]:
     return namespace, payload
 
 
-async def find_groups_containing_rule(
-    db: AsyncSession, rule_id: uuid.UUID
-) -> list[RuleGroup]:
+async def find_groups_containing_rule(db: AsyncSession, rule_id: uuid.UUID) -> list[RuleGroup]:
     from app.models import RuleGroupRule
 
     res = await db.execute(

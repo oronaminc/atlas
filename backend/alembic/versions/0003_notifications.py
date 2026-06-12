@@ -37,9 +37,7 @@ def _add_column_if_missing(table: str, column: sa.Column) -> None:
 
 
 def upgrade() -> None:
-    _add_column_if_missing(
-        "users", sa.Column("telegram_chat_id", sa.String(64), nullable=True)
-    )
+    _add_column_if_missing("users", sa.Column("telegram_chat_id", sa.String(64), nullable=True))
     _add_column_if_missing(
         "incidents", sa.Column("notified_at", sa.DateTime(timezone=True), nullable=True)
     )
@@ -47,9 +45,7 @@ def upgrade() -> None:
         "alert_events",
         sa.Column("claimed_at", sa.DateTime(timezone=True), nullable=True),
     )
-    _add_column_if_missing(
-        "alert_events", sa.Column("claimed_by", sa.String(100), nullable=True)
-    )
+    _add_column_if_missing("alert_events", sa.Column("claimed_by", sa.String(100), nullable=True))
 
     op.create_table(
         "notification_settings",
@@ -111,9 +107,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_notifications_incident_id", "notifications", ["incident_id"])
     op.create_index("ix_notifications_group_id", "notifications", ["group_id"])
-    op.create_index(
-        "ix_notifications_status_retry", "notifications", ["status", "retry_at"]
-    )
+    op.create_index("ix_notifications_status_retry", "notifications", ["status", "retry_at"])
 
 
 def downgrade() -> None:

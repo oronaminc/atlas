@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AppLayout } from "@/components/layout/app-layout";
@@ -10,6 +11,9 @@ import { GroupsPage } from "@/pages/groups";
 import { LoginPage } from "@/pages/login";
 import { NotificationsPage } from "@/pages/notifications";
 import { OpsPage } from "@/pages/ops";
+
+// Lazy: three.js chunk (~600KB gz) loads only when /graph is visited.
+const GraphPage = lazy(() => import("@/pages/graph"));
 import { ProfilePage } from "@/pages/profile";
 import { RuleGroupsPage } from "@/pages/rule-groups";
 import { RulesPage } from "@/pages/rules";
@@ -50,6 +54,14 @@ export default function App() {
       >
         <Route path="/" element={<DashboardPage />} />
         <Route path="/ops" element={<OpsPage />} />
+        <Route
+          path="/graph"
+          element={
+            <Suspense fallback={<LoadingSpinner />}>
+              <GraphPage />
+            </Suspense>
+          }
+        />
         <Route path="/servers" element={<ServersPage />} />
         <Route path="/servers/:id" element={<ServerDetailPage />} />
         <Route path="/rules" element={<RulesPage />} />

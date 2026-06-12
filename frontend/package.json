@@ -24,9 +24,11 @@
     "@radix-ui/react-tabs": "^1.1.0",
     "@radix-ui/react-toast": "^1.2.1",
     "@radix-ui/react-tooltip": "^1.1.2",
+    "@react-three/fiber": "^8.18.0",
     "@tanstack/react-query": "^5.51.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "d3-force-3d": "^3.0.6",
     "i18next": "^23.12.0",
     "lucide-react": "^0.424.0",
     "monaco-editor": "^0.55.1",
@@ -36,6 +38,7 @@
     "react-i18next": "^15.0.0",
     "react-router-dom": "^6.26.0",
     "tailwind-merge": "^2.4.0",
+    "three": "^0.184.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -43,6 +46,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.184.1",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitejs/plugin-react": "^4.3.1",

@@ -148,9 +148,7 @@ async def update_rule(
     new_scope_type = update_data.get("scope_type", rule.scope_type)
     new_scope_ref = update_data.get("scope_ref_id", rule.scope_ref_id)
     if not await can_write_rule_scope(db, user, new_scope_type, new_scope_ref):
-        raise HTTPException(
-            status_code=403, detail="No permission for the target scope"
-        )
+        raise HTTPException(status_code=403, detail="No permission for the target scope")
     for field, value in update_data.items():
         setattr(rule, field, value)
     rule.updated_by = user.id
@@ -301,9 +299,7 @@ async def emergency_apply(
     try:
         await ruler.set_rule_group(namespace, payload)
     except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Ruler push failed: {exc}"
-        ) from exc
+        raise HTTPException(status_code=502, detail=f"Ruler push failed: {exc}") from exc
 
     rule.enabled = True
     rule.updated_by = user.id

@@ -1,94 +1,91 @@
 # Atlas — Observability Alert Management Platform
 
-Alert rule management web app on top of Alloy+Mimir+Loki+Tempo+Grafana (FastAPI + React).
-**The DB (PostgreSQL) is the source of truth for rules** → sync worker pushes to Mimir Ruler.
+FastAPI + React app on top of Alloy+Mimir+Loki+Tempo+Grafana. Two subsystems:
+1. **Rule management**: DB (PostgreSQL) is the source of truth for alert rules → sync worker pushes to Mimir Ruler.
+2. **Incident pipeline**: ingestion → correlation → incidents → notification delivery → ops dashboard + 3D graph.
 
-## Hard rules (fixed by spec)
+## Architecture (data flow)
 
-- Every Mimir/Alertmanager/Loki call carries `X-Scope-OrgID: system`.
-  **Injected exactly once in `backend/app/integrations/base.py::make_client()`** — never set per-call.
-- Stack is fixed: Python 3.12/FastAPI/SQLAlchemy 2.0 async/Alembic, React 18/Vite/Tailwind v3/shadcn, uv + pnpm.
-- Responses use envelope `{data, error, meta}`; pagination is cursor-based.
-- Every write goes through `services/audit.py::record_audit`. Emergency apply sets `emergency=true`.
-- Secrets only via env. Receiver config secrets (url/api_key/...) are Fernet-encrypted at rest, masked in responses.
-- After any frontend change: `pnpm build` must pass with 0 type errors.
-- Monaco is bundled locally (`src/lib/monaco.ts`) — no CDN loading (air-gapped target).
-- UI strings stay Korean (ko is the default locale; en via i18n). Code comments/docs are English.
+```
+POST /api/v1/ingest/{provider}  (X-Atlas-Ingest-Key; durable insert → 202; Redis stream wake-up)
+  → correlation_worker: claim_events (CAS+lease) → engine: dedup (fingerprint+Redis window)
+      → group (AttributeTimeStrategy: group_key host>service>cluster + time window; LLMStrategy=stub)
+      → incident attach/create (pg_advisory_xact_lock(group_key) on PG — no split-brain)
+  → notification_worker: fan_out_pending (incidents.notified_at CAS → routes → member targets)
+      → deliver_once: claim (CAS+lease) → quota → TokenBucket throttle → channel.send → mark
+  → UI: /ops dashboard (10s poll) · /graph 3D explorer (manual refresh) · /settings admin config
+```
 
-## Structure (map)
+## Invariants — do not break
 
-- `backend/app/`: `api/v1/` (routers), `core/` (config/security/deps/pagination), `models/`, `schemas/`,
-  `services/` (permissions/rule_sync/rule_validate/audit), `integrations/`, `workers/sync_worker.py`
-- `frontend/src/`: `pages/`, `components/{ui,common,layout}`, `features/`, `api/` (client.ts/queries.ts), `hooks/`, `lib/`
-- `deploy/`: `k8s/{base,overlays/{dev,prod}}` (kustomize), `flux/` (CD), `kind-up.sh`
-- CI: `.gitlab-ci.yml` (internal mainline: kaniko → GitLab registry), `.github/workflows/build.yml` (GitHub)
+- **X-Scope-OrgID: system** injected exactly once in `backend/app/integrations/base.py::make_client()`; never per-call.
+- **At-least-once + idempotency**: outbox rows (`notifications`) created before side effects; `UNIQUE(incident_id, channel, recipient_user_id)`; duplicate send on crash-in-send-commit-gap is accepted, lost sends are not.
+- **Replica safety = PG CAS + 60s lease** (`app/notifications/outbox.py`, `correlation_worker.claim_events`): `UPDATE ... WHERE claimed_at IS NULL OR claimed_at < now-lease`; `FOR UPDATE SKIP LOCKED` is a PG-only optimization, the CAS is the correctness guard. `mark_*`/`defer` must clear `claimed_at`.
+- **Abstraction boundaries**: new alert source = module in `app/providers/` + registry entry; new channel = module in `app/notifications/channels/` + registry entry. The engine/worker never see provider/channel specifics. `llm_similar` edge kind + `LLMStrategy` are reserved stubs.
+- **RBAC reuse**: `require_admin`/`require_editor`/`get_current_user` from `core/deps.py`; group-manager logic in `services/permissions.py`. Don't invent new roles.
+- **Air-gap**: no CDN loads (Monaco bundled in `src/lib/monaco.ts`; drei banned — its Text fetches fonts remotely). npm deps must be pure tarballs (no install scripts). Internal mirrors via `.gitlab-ci.yml` variables.
+- Every write endpoint: `services/audit.py::record_audit`; rule mutations also `mark_ruler_pending`.
+- Responses: envelope `{data, error, meta}`; cursor pagination. Secrets: env only; DB-stored tokens Fernet-encrypted + masked (`********`) in responses.
+- Migrations: 0001 is metadata-based and pinned to its original table list — **it also pre-creates all enum types and current columns on fresh DBs**, so later migrations need `checkfirst`/inspector guards (see 0002/0003). New migrations = explicit ops.
+- `AwareDateTime` (models/base.py) for datetime columns compared in Python (SQLite drops tzinfo).
+- UI strings Korean (ko default locale); code comments/docs English. New screens: `pnpm build` must stay at 0 type errors.
 
-## RBAC summary
+## 3D graph refresh switch
 
-admin=everything / editor=rule CRUD within own group/server scope + emergency apply / viewer=read-only /
-group manager=group members + group-scoped rules / scope=user rules: owner+admin only / global rule writes: admin only.
+`/graph` is manual-refresh by design. To enable polling: set
+`GRAPH_REFRESH_INTERVAL_MS` in `frontend/src/features/graph/config.ts` to a
+millisecond number (it feeds TanStack Query `refetchInterval` in
+`use-graph-data.ts`). Nothing else changes.
 
-## Verify commands (always after changes)
+## Commands
 
-- backend: `cd backend && uv run pytest -q && uv run ruff check . && uv run black --check .`
-- frontend: `cd frontend && pnpm build && pnpm lint`
-- k8s manifests: `kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -`
-- Detailed procedures: skills in `.claude/skills/` (backend-check, frontend-check, e2e-browser, k8s-validate)
+```bash
+# backend (from backend/)
+uv run pytest -q                                  # 125 SQLite tests
+uv run ruff check . && uv run black --check .
+ATLAS_PG_TEST_URL=postgresql+asyncpg://atlas:atlas@127.0.0.1:5432/atlas uv run pytest tests/pg -q   # real-PG concurrency
+./scripts/pg_concurrency_test.sh                  # same, boots compose postgres
+uv run alembic upgrade head
+uv run python scripts/create_admin.py admin@example.com admin <pw>
+uv run python scripts/seed_demo.py                # demo incidents/notifications for /ops + /graph
 
-## Deployment pipeline (user's goal)
+# frontend (from frontend/)
+pnpm build && pnpm lint                           # typecheck + lint (1 pre-existing toast warning OK)
 
-Final target is an internal-network k8s cluster. GitLab CI (test → kaniko build → registry,
-tags `main-<iid>-<sha>`) → Flux CD (`deploy/flux/`, image automation commits new tags to prod
-overlay markers). Internal mirror endpoints are `.gitlab-ci.yml` variables.
-Never commit atlas-secrets in plaintext (SOPS/SealedSecrets).
+# full stack
+docker compose up --build                         # pg, redis, backend, sync/correlation/notification workers, frontend
 
-## Environment caveats (this cloud session)
+# k8s manifests
+kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -
+```
 
-- No Docker daemon → cannot build images or run kind. Tests run on SQLite (aiosqlite).
-- Playwright: browsers at `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`, library via
-  `import ... from "/opt/node22/lib/node_modules/playwright/index.mjs"`.
-- Some CDNs (jsdelivr) are blocked.
-- Working branch: `claude/epic-dijkstra-mgq4oa` (push only to this branch).
+## Structure map
 
-## Correlation engine (KeepHQ-style, implemented)
+- `backend/app/`: `api/v1/` (routers incl. ingest/incidents/correlation_config/notification_admin/stats/graph),
+  `core/`, `models/`, `schemas/`, `services/` (permissions/rule_sync/rule_validate/audit/correlation/),
+  `providers/`, `notifications/` (channels/, fanout, outbox, delivery, throttle, settings),
+  `workers/` (sync, correlation, notification)
+- `frontend/src/`: `pages/` (incl. ops.tsx, graph.tsx lazy), `features/` (rules/, notifications/, ops/, graph/),
+  `components/{ui,common,layout}`, `api/` (client.ts/queries.ts), `locales/{ko,en}.json`
+- `deploy/`: `k8s/{base,overlays/{dev,prod}}`, `flux/`, `kind-up.sh`
+- CI: `.gitlab-ci.yml` (internal: kaniko → GitLab registry + test-pg-concurrency job), `.github/workflows/build.yml`
 
-3 stages in `services/correlation/`: dedup (fingerprint + Redis window) → group
-(`AttributeTimeStrategy`: priority-first group_key host>service>cluster + time window;
-`LLMStrategy` = stub) → incident (attach/create, timeline, severity=max).
-- Ingest: `POST /api/v1/ingest/{provider}` (X-Atlas-Ingest-Key static auth, 202 after durable
-  insert; correlation async). Providers in `app/providers/` (alertmanager = #1; new source =
-  new module + registry entry, engine untouched).
-- Worker `workers/correlation_worker.py`: PG-poll for incident_id IS NULL (source of truth)
-  + Redis stream `atlas:alerts:in` wake-up. Dedup = increment prior row's dedup_count, drop dup row.
-- Config DB-backed (`correlation_config` single row, seeded 300s/900s/host,service,cluster),
-  admin-edited at `/settings` (UI) or PATCH `/api/v1/correlation-config`, audited.
-- Incidents: list/detail/ack/resolve (editor+, audited, resolved = terminal → 409).
-- Migration 0001 is pinned to its original table list (metadata grows); 0002+ = explicit ops.
+## Deployment (user's goal)
 
-## Notification delivery + HA (implemented)
+Internal k8s. GitLab CI (test → kaniko, tags `main-<iid>-<sha>`) → Flux CD (`deploy/flux/`,
+image automation commits to prod overlay markers). Secrets never plaintext in git (SOPS/SealedSecrets).
 
-- Outbox pattern: `notifications` table = persisted intent; UNIQUE(incident, channel,
-  recipient) idempotency; at-least-once. Claim = CAS + 60s lease (`app/notifications/outbox.py`);
-  PG adds FOR UPDATE SKIP LOCKED; crashed pod's claims expire → another pod resumes.
-- Correlation worker now claims via same CAS+lease (`claim_events`); engine takes
-  `pg_advisory_xact_lock(group_key)` on PG to serialize find-or-create (no split-brain).
-- Channels in `app/notifications/channels/` (Telegram #1 httpx, Email #2 SMTP-env,
-  registry; token Fernet in `notification_settings`). New channel = module + registry entry.
-- `workers/notification_worker.py` (separate pod, prod replicas=2): fan-out
-  (incidents.notified_at CAS → route match min_severity → group member targets) then
-  deliver (quota check → TokenBucket throttle → send → mark). Quota breach = defer to
-  window reset. Backoff 30s×2^n cap 1h, dead at 5 attempts.
-- API: /notification-settings + /notification-routes + /notification-recipients (admin),
-  POST /incidents/{id}/notify (editor+), /notifications list. users PATCH accepts
-  telegram_chat_id. UI on /settings page.
-- Real-PG concurrency tests in `tests/pg/` (skip unless ATLAS_PG_TEST_URL; apt postgresql
-  works in this env — `service postgresql start`, user/db atlas/atlas).
-- `AwareDateTime` in models/base.py: use for new datetime columns compared in Python
-  (SQLite drops tzinfo).
+## Environment caveats (cloud session)
 
-## Already done (do not redo)
+- No Docker daemon. Real PG available: `service postgresql start` (apt-installed; user/db atlas/atlas).
+- Playwright: `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`, import from
+  `/opt/node22/lib/node_modules/playwright/index.mjs`; r3f canvas needs `--use-angle=swiftshader`.
+- jsdelivr blocked. Working branch: `claude/epic-dijkstra-mgq4oa` (push only there).
+- r3f gotcha: dashed JSX props on three elements are PIERCED (`data-x-y` → `obj.data.x.y`) — never put data-attrs on `<mesh>`.
 
-All 12 spec phases implemented: models/migration, auth (local+OIDC)+RBAC, integrations,
-full REST API, sync worker, 11 frontend screens, k8s + GitLab CI + Flux. 81 backend tests.
-Headless-browser E2E verified the main flows. Correlation engine (37 tests) +
-notification delivery/HA (35 tests + 2 real-PG concurrency tests). 116 SQLite tests total.
+## Status (do not redo)
+
+All 12 original spec phases + correlation engine + notification delivery/HA + ops dashboard
+(`/ops`) + 3D graph (`/graph`, fiber 8 / three / d3-force-3d, lazy chunk). 125 SQLite tests,
+2 real-PG concurrency tests, 9 stats/graph tests included. Browser e2e verified: rules flow,
+admin settings, ops dashboard, 3D graph (screenshots in session history).

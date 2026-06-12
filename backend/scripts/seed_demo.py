@@ -136,9 +136,7 @@ async def main() -> None:
                     status=status,
                     attempts=1 if status == "failed" else 0,
                     sent_at=now - timedelta(minutes=5) if status == "sent" else None,
-                    retry_at=(
-                        now + timedelta(minutes=10) if status == "failed" else None
-                    ),
+                    retry_at=(now + timedelta(minutes=10) if status == "failed" else None),
                     last_error=error,
                 )
             )
@@ -155,9 +153,7 @@ async def main() -> None:
             )
         )
         await db.commit()
-    print(
-        f"seeded: {len(specs)} incidents, {sum(s[4] for s in specs)} alerts, 4 notifications"
-    )
+    print(f"seeded: {len(specs)} incidents, {sum(s[4] for s in specs)} alerts, 4 notifications")
 
 
 if __name__ == "__main__":

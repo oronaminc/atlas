@@ -51,9 +51,7 @@ async def test_first_alert_creates_incident_with_timeline(db):
     kinds = [
         e.kind
         for e in (
-            await db.execute(
-                select(IncidentEvent).where(IncidentEvent.incident_id == incident.id)
-            )
+            await db.execute(select(IncidentEvent).where(IncidentEvent.incident_id == incident.id))
         ).scalars()
     ]
     assert "created" in kinds
@@ -98,9 +96,7 @@ async def test_cross_source_alerts_sharing_host_group_into_one_incident(db):
     engine = make_engine()
     config = await get_config(db)
 
-    cpu = await engine.process(
-        db, alert(name="HighCPU", severity="warning"), config, now=NOW
-    )
+    cpu = await engine.process(db, alert(name="HighCPU", severity="warning"), config, now=NOW)
     disk = await engine.process(
         db,
         alert(name="DiskFull", source="datadog", severity="critical"),
@@ -120,9 +116,7 @@ async def test_alert_without_group_attrs_gets_solo_incident(db):
     engine = make_engine()
     config = await get_config(db)
 
-    a = await engine.process(
-        db, alert(name="A", labels={"env": "prod"}), config, now=NOW
-    )
+    a = await engine.process(db, alert(name="A", labels={"env": "prod"}), config, now=NOW)
     b = await engine.process(
         db,
         alert(name="B", labels={"env": "prod"}),
@@ -144,9 +138,7 @@ async def test_resolved_incident_is_never_reattached(db):
     incident.status = IncidentStatus.resolved
     await db.commit()
 
-    second = await engine.process(
-        db, alert(name="B"), config, now=NOW + timedelta(minutes=1)
-    )
+    second = await engine.process(db, alert(name="B"), config, now=NOW + timedelta(minutes=1))
     await db.commit()
     assert second.incident_id != first.incident_id
 

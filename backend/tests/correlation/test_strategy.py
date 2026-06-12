@@ -25,9 +25,7 @@ async def make_incident(db, group_key, status=IncidentStatus.open, last_seen=NOW
 
 
 async def test_attaches_to_open_incident_with_same_group_key_in_window(db):
-    incident = await make_incident(
-        db, "host=web-01", last_seen=NOW - timedelta(minutes=5)
-    )
+    incident = await make_incident(db, "host=web-01", last_seen=NOW - timedelta(minutes=5))
     found = await AttributeTimeStrategy().find_incident(
         db, alert(), "host=web-01", now=NOW, window_seconds=900
     )
@@ -43,9 +41,7 @@ async def test_ignores_incident_outside_window(db):
 
 
 async def test_never_reattaches_to_resolved_incident(db):
-    await make_incident(
-        db, "host=web-01", status=IncidentStatus.resolved, last_seen=NOW
-    )
+    await make_incident(db, "host=web-01", status=IncidentStatus.resolved, last_seen=NOW)
     found = await AttributeTimeStrategy().find_incident(
         db, alert(), "host=web-01", now=NOW, window_seconds=900
     )
