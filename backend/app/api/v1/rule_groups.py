@@ -13,7 +13,12 @@ from app.db import get_db
 from app.models import AlertRule, RuleGroup, RuleGroupRule, User
 from app.models.base import utcnow
 from app.models.sync import SyncStatus, SyncTarget
-from app.schemas.rule import AlertRuleOut, RuleGroupCreate, RuleGroupOut, RuleGroupUpdate
+from app.schemas.rule import (
+    AlertRuleOut,
+    RuleGroupCreate,
+    RuleGroupOut,
+    RuleGroupUpdate,
+)
 from app.services.audit import record_audit, snapshot
 from app.services.rule_sync import (
     get_or_create_sync_state,
@@ -40,17 +45,23 @@ def group_out(group: RuleGroup, include_rules: bool = False) -> dict:
     out = RuleGroupOut.model_validate(group)
     out.rule_count = len(group.rule_links)
     if include_rules:
-        out.rules = [AlertRuleOut.model_validate(link.rule) for link in group.rule_links]
+        out.rules = [
+            AlertRuleOut.model_validate(link.rule) for link in group.rule_links
+        ]
     return out.model_dump(mode="json")
 
 
-async def _set_group_rules(db: AsyncSession, group: RuleGroup, rule_ids: list[uuid.UUID]) -> None:
+async def _set_group_rules(
+    db: AsyncSession, group: RuleGroup, rule_ids: list[uuid.UUID]
+) -> None:
     res = await db.execute(select(AlertRule).where(AlertRule.id.in_(rule_ids)))
     found = {r.id for r in res.scalars()}
     missing = [str(rid) for rid in rule_ids if rid not in found]
     if missing:
         raise HTTPException(status_code=400, detail=f"Unknown rule ids: {missing}")
-    await db.execute(delete(RuleGroupRule).where(RuleGroupRule.rule_group_id == group.id))
+    await db.execute(
+        delete(RuleGroupRule).where(RuleGroupRule.rule_group_id == group.id)
+    )
     await db.flush()
     for order, rid in enumerate(rule_ids):
         db.add(RuleGroupRule(rule_group_id=group.id, alert_rule_id=rid, order=order))
@@ -67,7 +78,9 @@ async def list_rule_groups(
 ):
     stmt = select(RuleGroup).order_by(RuleGroup.created_at.desc(), RuleGroup.id.desc())
     if q:
-        stmt = stmt.where(or_(RuleGroup.name.ilike(f"%{q}%"), RuleGroup.namespace.ilike(f"%{q}%")))
+        stmt = stmt.where(
+            or_(RuleGroup.name.ilike(f"%{q}%"), RuleGroup.namespace.ilike(f"%{q}%"))
+        )
     if cursor:
         decoded = decode_cursor(cursor)
         if decoded:
@@ -91,10 +104,14 @@ async def create_rule_group(
     user: User = Depends(require_editor),
 ):
     dup = await db.execute(
-        select(RuleGroup).where(RuleGroup.namespace == body.namespace, RuleGroup.name == body.name)
+        select(RuleGroup).where(
+            RuleGroup.namespace == body.namespace, RuleGroup.name == body.name
+        )
     )
     if dup.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Rule group already exists in namespace")
+        raise HTTPException(
+            status_code=409, detail="Rule group already exists in namespace"
+        )
     group = RuleGroup(
         name=body.name,
         namespace=body.namespace,
@@ -222,7 +239,9 @@ async def sync_rule_group(
         state.status = SyncStatus.failed
         state.last_error = str(exc)[:2000]
         await db.commit()
-        raise HTTPException(status_code=502, detail=f"Ruler sync failed: {exc}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Ruler sync failed: {exc}"
+        ) from exc
     await record_audit(
         db,
         actor_id=user.id,

@@ -11,6 +11,8 @@ class LokiClient(BaseIntegrationClient):
         super().__init__(base_url or settings.LOKI_URL)
 
     async def instant_query(self, expr: str) -> dict[str, Any]:
-        response = await self.request("GET", "/loki/api/v1/query", params={"query": expr})
+        response = await self.request(
+            "GET", "/loki/api/v1/query", params={"query": expr}
+        )
         response.raise_for_status()
         return response.json()

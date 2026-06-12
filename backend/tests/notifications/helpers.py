@@ -11,7 +11,9 @@ from app.models.user import GlobalRole
 NOW = datetime(2026, 6, 11, 12, 0, 0, tzinfo=UTC)
 
 
-async def seed_user(db, email: str, chat_id: str | None = None, role=GlobalRole.viewer) -> User:
+async def seed_user(
+    db, email: str, chat_id: str | None = None, role=GlobalRole.viewer
+) -> User:
     user = User(
         email=email,
         username=email.split("@")[0],

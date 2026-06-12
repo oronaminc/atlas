@@ -37,7 +37,9 @@ class Notification(TimestampedBase):
     recipient_user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="CASCADE")
     )
-    recipient_address: Mapped[str] = mapped_column(String(255))  # chat_id / email snapshot
+    recipient_address: Mapped[str] = mapped_column(
+        String(255)
+    )  # chat_id / email snapshot
     group_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("groups.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -58,7 +60,9 @@ class NotificationRoute(TimestampedBase):
     __tablename__ = "notification_routes"
     __table_args__ = (UniqueConstraint("group_id", name="uq_notification_route_group"),)
 
-    group_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("groups.id", ondelete="CASCADE"))
+    group_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("groups.id", ondelete="CASCADE")
+    )
     min_severity: Mapped[str] = mapped_column(String(20), default="warning")
     channels: Mapped[list[str]] = mapped_column(JsonType, default=lambda: ["telegram"])
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)

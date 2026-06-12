@@ -36,7 +36,9 @@ async def test_editor_can_trigger_group_send_and_it_is_audited(
     assert all(n.status == "pending" for n in notifications)
     assert {n.channel for n in notifications} <= {"telegram", "email"}
 
-    logs = await client.get("/api/v1/audit-logs?resource_type=incident", headers=admin_headers)
+    logs = await client.get(
+        "/api/v1/audit-logs?resource_type=incident", headers=admin_headers
+    )
     actions = [e["action"] for e in logs.json()["data"]]
     assert "notify" in actions
 
@@ -74,7 +76,9 @@ async def test_settings_defaults_and_masked_token(client, admin_headers):
     assert data["telegram_bot_token"] is None  # not set yet
 
 
-async def test_admin_sets_token_stored_encrypted_response_masked(client, db, admin_headers):
+async def test_admin_sets_token_stored_encrypted_response_masked(
+    client, db, admin_headers
+):
     res = await client.patch(
         "/api/v1/notification-settings",
         json={"telegram_bot_token": "123456:SECRET", "quota_group_per_hour": 10},
@@ -119,7 +123,11 @@ async def test_route_crud_admin_only(client, db, admin_headers, editor_headers):
 
     created = await client.post(
         "/api/v1/notification-routes",
-        json={"group_id": str(group.id), "min_severity": "warning", "channels": ["telegram"]},
+        json={
+            "group_id": str(group.id),
+            "min_severity": "warning",
+            "channels": ["telegram"],
+        },
         headers=admin_headers,
     )
     assert created.status_code == 201
@@ -145,12 +153,18 @@ async def test_route_crud_admin_only(client, db, admin_headers, editor_headers):
     assert (
         await client.post(
             "/api/v1/notification-routes",
-            json={"group_id": str(group.id), "min_severity": "info", "channels": ["email"]},
+            json={
+                "group_id": str(group.id),
+                "min_severity": "info",
+                "channels": ["email"],
+            },
             headers=editor_headers,
         )
     ).status_code == 403
 
-    deleted = await client.delete(f"/api/v1/notification-routes/{route_id}", headers=admin_headers)
+    deleted = await client.delete(
+        f"/api/v1/notification-routes/{route_id}", headers=admin_headers
+    )
     assert deleted.status_code == 200
 
 
@@ -181,7 +195,9 @@ async def test_admin_sets_user_chat_id_via_users_patch(client, db, admin_headers
     await db.commit()
 
     res = await client.patch(
-        f"/api/v1/users/{user.id}", json={"telegram_chat_id": "999"}, headers=admin_headers
+        f"/api/v1/users/{user.id}",
+        json={"telegram_chat_id": "999"},
+        headers=admin_headers,
     )
     assert res.status_code == 200
     await db.refresh(user)

@@ -68,7 +68,11 @@ async def validate_expr(expr: str, datasource: Datasource) -> list[str]:
         try:
             response = await client.request(
                 "GET",
-                "/api/v1/query" if datasource == Datasource.metrics else "/loki/api/v1/query",
+                (
+                    "/api/v1/query"
+                    if datasource == Datasource.metrics
+                    else "/loki/api/v1/query"
+                ),
                 params={"query": expr},
                 retries=1,
             )

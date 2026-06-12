@@ -9,7 +9,13 @@ from app.notifications.outbox import (
     mark_failed,
     mark_sent,
 )
-from tests.notifications.helpers import NOW, seed_group, seed_incident, seed_route, seed_user
+from tests.notifications.helpers import (
+    NOW,
+    seed_group,
+    seed_incident,
+    seed_route,
+    seed_user,
+)
 
 
 async def seed_notifications(db, n: int = 3) -> list[Notification]:

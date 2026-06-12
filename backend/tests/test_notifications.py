@@ -7,7 +7,10 @@ async def test_receiver_secret_encrypted_and_masked(client, db, admin_headers):
         json={
             "name": "slack-infra",
             "type": "slack",
-            "config": {"url": "https://hooks.slack.com/services/SECRET", "channel": "#alerts"},
+            "config": {
+                "url": "https://hooks.slack.com/services/SECRET",
+                "channel": "#alerts",
+            },
         },
         headers=admin_headers,
     )
@@ -24,13 +27,20 @@ async def test_receiver_secret_encrypted_and_masked(client, db, admin_headers):
 
     receiver = (await db.execute(select(Receiver))).scalar_one()
     assert receiver.config["url"] != "https://hooks.slack.com/services/SECRET"
-    assert decrypt_secret(receiver.config["url"]) == "https://hooks.slack.com/services/SECRET"
+    assert (
+        decrypt_secret(receiver.config["url"])
+        == "https://hooks.slack.com/services/SECRET"
+    )
 
 
 async def test_receiver_update_keeps_masked_secret(client, db, admin_headers):
     created = await client.post(
         "/api/v1/receivers",
-        json={"name": "wh", "type": "webhook", "config": {"url": "https://example.com/hook"}},
+        json={
+            "name": "wh",
+            "type": "webhook",
+            "config": {"url": "https://example.com/hook"},
+        },
         headers=admin_headers,
     )
     receiver_id = created.json()["data"]["id"]
@@ -116,7 +126,9 @@ async def test_silence_crud(client, editor_headers):
         assert created.status_code == 201
         silence_id = created.json()["data"]["id"]
 
-        deleted = await client.delete(f"/api/v1/silences/{silence_id}", headers=editor_headers)
+        deleted = await client.delete(
+            f"/api/v1/silences/{silence_id}", headers=editor_headers
+        )
         assert deleted.status_code == 200
     finally:
         app.dependency_overrides.pop(get_alertmanager_client, None)

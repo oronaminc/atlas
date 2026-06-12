@@ -79,7 +79,8 @@ async def test_ruler_posts_yaml_rule_group():
     ruler._client._transport = httpx.MockTransport(handler)
 
     await ruler.set_rule_group(
-        "atlas", {"name": "g", "interval": "1m", "rules": [{"alert": "A", "expr": "up == 0"}]}
+        "atlas",
+        {"name": "g", "interval": "1m", "rules": [{"alert": "A", "expr": "up == 0"}]},
     )
     request = captured[0]
     assert request.headers["x-scope-orgid"] == "system"

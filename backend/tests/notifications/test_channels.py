@@ -29,7 +29,9 @@ async def test_telegram_posts_to_bot_api():
 
 async def test_telegram_api_error_raises_channel_error():
     async def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(429, json={"ok": False, "description": "Too Many Requests"})
+        return httpx.Response(
+            429, json={"ok": False, "description": "Too Many Requests"}
+        )
 
     channel = TelegramChannel(token="T", transport=httpx.MockTransport(handler))
     with pytest.raises(ChannelSendError):
@@ -43,7 +45,9 @@ async def test_email_sends_via_smtp(monkeypatch):
         sent.append((to, subject, body))
 
     monkeypatch.setattr("app.notifications.channels.email.smtp_send", fake_smtp_send)
-    await EmailChannel().send("ops@example.com", "[Atlas] HighCPU on web-01\ncritical alert")
+    await EmailChannel().send(
+        "ops@example.com", "[Atlas] HighCPU on web-01\ncritical alert"
+    )
 
     to, subject, body = sent[0]
     assert to == "ops@example.com"

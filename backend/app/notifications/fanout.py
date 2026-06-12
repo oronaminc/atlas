@@ -27,7 +27,9 @@ async def group_member_users(db: AsyncSession, group_id: uuid.UUID) -> list[User
     return list(res.scalars().unique())
 
 
-def build_targets(members: list[User], channels: list[str]) -> list[tuple[str, User, str]]:
+def build_targets(
+    members: list[User], channels: list[str]
+) -> list[tuple[str, User, str]]:
     """(channel, user, address) per deliverable target."""
     targets: list[tuple[str, User, str]] = []
     for channel in channels:
@@ -88,7 +90,9 @@ async def fan_out_pending(db: AsyncSession, *, now: datetime) -> int:
 
     routes = list(
         (
-            await db.execute(select(NotificationRoute).where(NotificationRoute.enabled.is_(True)))
+            await db.execute(
+                select(NotificationRoute).where(NotificationRoute.enabled.is_(True))
+            )
         ).scalars()
     )
 
@@ -110,7 +114,9 @@ async def fan_out_pending(db: AsyncSession, *, now: datetime) -> int:
                 continue
             members = await group_member_users(db, route.group_id)
             targets = build_targets(members, route.channels or [])
-            created_total += await create_notifications(db, incident, route.group_id, targets)
+            created_total += await create_notifications(
+                db, incident, route.group_id, targets
+            )
     await db.flush()
     return created_total
 

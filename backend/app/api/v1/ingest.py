@@ -56,7 +56,9 @@ async def ingest(
     try:
         provider = get_provider(provider_name)
     except KeyError as e:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_name}") from e
+        raise HTTPException(
+            status_code=404, detail=f"Unknown provider: {provider_name}"
+        ) from e
 
     alerts = provider.parse(payload)
     now = utcnow()

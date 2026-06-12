@@ -4,6 +4,7 @@ import {
   Activity,
   BellRing,
   ClipboardList,
+  Gauge,
   LayoutDashboard,
   Layers,
   LogOut,
@@ -41,6 +42,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: "/", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  { to: "/ops", labelKey: "nav.ops", icon: Gauge },
   { to: "/servers", labelKey: "nav.servers", icon: Server },
   { to: "/rules", labelKey: "nav.rules", icon: ShieldAlert },
   { to: "/rule-groups", labelKey: "nav.ruleGroups", icon: Layers },

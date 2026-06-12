@@ -55,7 +55,9 @@ async def pg_factory():
     # isolated schema per run
     schema = f"concurrency_{uuid.uuid4().hex[:8]}"
     engine = create_async_engine(
-        PG_URL, connect_args={"server_settings": {"search_path": schema}}, pool_size=N_WORKERS + 2
+        PG_URL,
+        connect_args={"server_settings": {"search_path": schema}},
+        pool_size=N_WORKERS + 2,
     )
     async with engine.begin() as conn:
         from sqlalchemy import text
@@ -74,7 +76,10 @@ async def pg_factory():
 async def test_pg_concurrent_workers_send_exactly_once(pg_factory):
     n_targets = 40
     async with pg_factory() as db:
-        users = [await seed_user(db, f"u{i}@example.com", chat_id=f"{i}") for i in range(n_targets)]
+        users = [
+            await seed_user(db, f"u{i}@example.com", chat_id=f"{i}")
+            for i in range(n_targets)
+        ]
         group = await seed_group(db, "oncall", users)
         await seed_route(db, group)
         await seed_incident(db)
@@ -107,7 +112,9 @@ async def test_pg_concurrent_workers_send_exactly_once(pg_factory):
 
     totals = await asyncio.gather(*[worker(f"pod-{i}") for i in range(N_WORKERS)])
 
-    assert len(sent_log) == n_targets, f"expected {n_targets} sends, got {len(sent_log)}"
+    assert (
+        len(sent_log) == n_targets
+    ), f"expected {n_targets} sends, got {len(sent_log)}"
     assert len(set(sent_log)) == n_targets, "DOUBLE SEND detected"
     assert sum(totals) == n_targets
 
@@ -143,7 +150,9 @@ async def test_pg_concurrent_correlation_single_incident(pg_factory):
                 if not events:
                     break
                 for event in events:
-                    await engine.correlate(db, event, to_normalized(event), config, now=NOW)
+                    await engine.correlate(
+                        db, event, to_normalized(event), config, now=NOW
+                    )
                     await asyncio.sleep(0)  # interleave mid-batch
                 await db.commit()
                 processed += len(events)
@@ -153,13 +162,17 @@ async def test_pg_concurrent_correlation_single_incident(pg_factory):
     assert sum(totals) == n_events  # every event processed exactly once
 
     async with pg_factory() as db:
-        n_incidents = (await db.execute(select(func.count()).select_from(Incident))).scalar_one()
+        n_incidents = (
+            await db.execute(select(func.count()).select_from(Incident))
+        ).scalar_one()
         assert n_incidents == 1, f"split-brain grouping: {n_incidents} incidents"
         incident = (await db.execute(select(Incident))).scalar_one()
         assert incident.alert_count == n_events
         uncorrelated = (
             await db.execute(
-                select(func.count()).select_from(AlertEvent).where(AlertEvent.incident_id.is_(None))
+                select(func.count())
+                .select_from(AlertEvent)
+                .where(AlertEvent.incident_id.is_(None))
             )
         ).scalar_one()
         assert uncorrelated == 0

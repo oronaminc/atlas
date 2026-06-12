@@ -25,9 +25,13 @@ async def test_rule_crud(client, admin_headers):
     )
     assert patched.json()["data"]["severity"] == "warning"
 
-    disabled = await client.post(f"/api/v1/rules/{rule_id}/disable", headers=admin_headers)
+    disabled = await client.post(
+        f"/api/v1/rules/{rule_id}/disable", headers=admin_headers
+    )
     assert disabled.json()["data"]["enabled"] is False
-    enabled = await client.post(f"/api/v1/rules/{rule_id}/enable", headers=admin_headers)
+    enabled = await client.post(
+        f"/api/v1/rules/{rule_id}/enable", headers=admin_headers
+    )
     assert enabled.json()["data"]["enabled"] is True
 
     deleted = await client.delete(f"/api/v1/rules/{rule_id}", headers=admin_headers)
@@ -86,7 +90,9 @@ async def test_user_rule_protected_from_other_editor(client, db, editor_headers,
     assert res.status_code == 403
 
     res = await client.patch(
-        f"/api/v1/rules/{rule_id}", json={"name": "AdminEdit"}, headers=auth_headers(admin)
+        f"/api/v1/rules/{rule_id}",
+        json={"name": "AdminEdit"},
+        headers=auth_headers(admin),
     )
     assert res.status_code == 200
 

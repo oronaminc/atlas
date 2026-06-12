@@ -5,7 +5,9 @@ from app.notifications.channels.email import EmailChannel
 from app.notifications.channels.telegram import TelegramChannel
 
 
-def build_channels(settings_row: NotificationSettings) -> dict[str, NotificationChannel]:
+def build_channels(
+    settings_row: NotificationSettings,
+) -> dict[str, NotificationChannel]:
     """Channels available given current admin settings. Telegram only appears
     once a bot token is configured."""
     channels: dict[str, NotificationChannel] = {"email": EmailChannel()}

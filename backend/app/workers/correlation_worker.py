@@ -63,7 +63,10 @@ async def claim_events(
     )
 
     candidates = (
-        select(AlertEvent.id).where(*guard).order_by(AlertEvent.received_at.asc()).limit(limit)
+        select(AlertEvent.id)
+        .where(*guard)
+        .order_by(AlertEvent.received_at.asc())
+        .limit(limit)
     )
     if db.bind.dialect.name == "postgresql":
         candidates = candidates.with_for_update(skip_locked=True)
@@ -98,7 +101,9 @@ async def correlate_pending(engine: CorrelationEngine) -> int:
     async with async_session_factory() as db:
         config = await get_config(db)
         for event in await claim_events(db, worker_id=WORKER_ID, now=utcnow()):
-            await engine.correlate(db, event, to_normalized(event), config, now=utcnow())
+            await engine.correlate(
+                db, event, to_normalized(event), config, now=utcnow()
+            )
             processed += 1
         await db.commit()
     return processed
@@ -112,7 +117,9 @@ async def main() -> None:
         redis = aioredis.from_url(settings.REDIS_URL)
         await redis.ping()
         try:
-            await redis.xgroup_create(ALERT_STREAM, CONSUMER_GROUP, id="0", mkstream=True)
+            await redis.xgroup_create(
+                ALERT_STREAM, CONSUMER_GROUP, id="0", mkstream=True
+            )
         except aioredis.ResponseError:
             pass  # group already exists
     except Exception:
@@ -145,7 +152,9 @@ async def main() -> None:
                 )
                 for _stream, messages in entries or []:
                     if messages:
-                        await redis.xack(ALERT_STREAM, CONSUMER_GROUP, *[m[0] for m in messages])
+                        await redis.xack(
+                            ALERT_STREAM, CONSUMER_GROUP, *[m[0] for m in messages]
+                        )
             except Exception:
                 await asyncio.sleep(POLL_INTERVAL_SECONDS)
         else:

@@ -39,7 +39,9 @@ COMMON = lambda: [  # noqa: E731  (shared audit columns per spec)
 
 
 def upgrade() -> None:
-    sa.Enum(*INCIDENT_STATUS_VALUES, name="incident_status").create(op.get_bind(), checkfirst=True)
+    sa.Enum(*INCIDENT_STATUS_VALUES, name="incident_status").create(
+        op.get_bind(), checkfirst=True
+    )
     op.create_table(
         "incidents",
         *COMMON(),
@@ -52,7 +54,9 @@ def upgrade() -> None:
         sa.Column("alert_count", sa.Integer(), nullable=False),
     )
     op.create_index("ix_incidents_status", "incidents", ["status"])
-    op.create_index("ix_incidents_group_key_last_seen", "incidents", ["group_key", "last_seen"])
+    op.create_index(
+        "ix_incidents_group_key_last_seen", "incidents", ["group_key", "last_seen"]
+    )
 
     op.create_table(
         "alert_events",
@@ -78,7 +82,9 @@ def upgrade() -> None:
     op.create_index("ix_alert_events_source", "alert_events", ["source"])
     op.create_index("ix_alert_events_received_at", "alert_events", ["received_at"])
     op.create_index("ix_alert_events_incident_id", "alert_events", ["incident_id"])
-    op.create_index("ix_alert_events_fp_received", "alert_events", ["fingerprint", "received_at"])
+    op.create_index(
+        "ix_alert_events_fp_received", "alert_events", ["fingerprint", "received_at"]
+    )
 
     op.create_table(
         "incident_events",
@@ -92,7 +98,9 @@ def upgrade() -> None:
         sa.Column("kind", sa.String(50), nullable=False),
         sa.Column("payload", JsonType, nullable=False),
     )
-    op.create_index("ix_incident_events_incident_id", "incident_events", ["incident_id"])
+    op.create_index(
+        "ix_incident_events_incident_id", "incident_events", ["incident_id"]
+    )
 
     op.create_table(
         "correlation_config",

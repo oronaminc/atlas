@@ -82,7 +82,10 @@ async def list_receivers(
         if decoded:
             t, i = decoded
             stmt = stmt.where(
-                or_(Receiver.created_at < t, (Receiver.created_at == t) & (Receiver.id < i))
+                or_(
+                    Receiver.created_at < t,
+                    (Receiver.created_at == t) & (Receiver.id < i),
+                )
             )
     res = await db.execute(stmt.limit(limit + 1))
     items, meta = page_meta(list(res.scalars().unique()), limit)
@@ -140,7 +143,9 @@ async def update_receiver(
         for k, v in body.config.items():
             if v == MASK:
                 continue
-            merged[k] = encrypt_secret(str(v)) if k in SECRET_KEYS and v is not None else v
+            merged[k] = (
+                encrypt_secret(str(v)) if k in SECRET_KEYS and v is not None else v
+            )
         receiver.config = merged
     receiver.updated_by = admin.id
     await record_audit(
@@ -198,17 +203,23 @@ async def test_receiver(
         if receiver.type.value in ("slack", "webhook"):
             url = config.get("url") or config.get("webhook_url")
             if not url:
-                raise HTTPException(status_code=400, detail="Receiver has no url configured")
+                raise HTTPException(
+                    status_code=400, detail="Receiver has no url configured"
+                )
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(
-                    url, json={"text": f"[Atlas] test notification for receiver '{receiver.name}'"}
+                    url,
+                    json={
+                        "text": f"[Atlas] test notification for receiver '{receiver.name}'"
+                    },
                 )
                 response.raise_for_status()
         else:
             # TODO: email/pagerduty test delivery — requires SMTP / PD events API
             # credentials; wire up when those integrations are configured.
             raise HTTPException(
-                status_code=501, detail=f"Test not implemented for type {receiver.type.value}"
+                status_code=501,
+                detail=f"Test not implemented for type {receiver.type.value}",
             )
     except HTTPException:
         raise
@@ -229,7 +240,10 @@ async def list_policies(
         select(NotificationPolicy).order_by(NotificationPolicy.created_at.desc())
     )
     return envelope(
-        [PolicyOut.model_validate(p).model_dump(mode="json") for p in res.scalars().unique()]
+        [
+            PolicyOut.model_validate(p).model_dump(mode="json")
+            for p in res.scalars().unique()
+        ]
     )
 
 
@@ -327,7 +341,10 @@ async def list_silences(
 ):
     res = await db.execute(select(Silence).order_by(Silence.created_at.desc()))
     return envelope(
-        [SilenceOut.model_validate(s).model_dump(mode="json") for s in res.scalars().unique()]
+        [
+            SilenceOut.model_validate(s).model_dump(mode="json")
+            for s in res.scalars().unique()
+        ]
     )
 
 

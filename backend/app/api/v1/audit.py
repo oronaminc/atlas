@@ -39,10 +39,14 @@ async def list_audit_logs(
         if decoded:
             t, i = decoded
             stmt = stmt.where(
-                or_(AuditLog.created_at < t, (AuditLog.created_at == t) & (AuditLog.id < i))
+                or_(
+                    AuditLog.created_at < t,
+                    (AuditLog.created_at == t) & (AuditLog.id < i),
+                )
             )
     res = await db.execute(stmt.limit(limit + 1))
     items, meta = page_meta(list(res.scalars()), limit)
     return envelope(
-        [AuditLogOut.model_validate(a).model_dump(mode="json") for a in items], meta=meta
+        [AuditLogOut.model_validate(a).model_dump(mode="json") for a in items],
+        meta=meta,
     )

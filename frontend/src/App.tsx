@@ -9,6 +9,7 @@ import { DashboardPage } from "@/pages/dashboard";
 import { GroupsPage } from "@/pages/groups";
 import { LoginPage } from "@/pages/login";
 import { NotificationsPage } from "@/pages/notifications";
+import { OpsPage } from "@/pages/ops";
 import { ProfilePage } from "@/pages/profile";
 import { RuleGroupsPage } from "@/pages/rule-groups";
 import { RulesPage } from "@/pages/rules";
@@ -48,6 +49,7 @@ export default function App() {
         }
       >
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/ops" element={<OpsPage />} />
         <Route path="/servers" element={<ServersPage />} />
         <Route path="/servers/:id" element={<ServerDetailPage />} />
         <Route path="/rules" element={<RulesPage />} />

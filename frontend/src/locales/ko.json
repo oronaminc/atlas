@@ -40,7 +40,8 @@
     "audit": "감사 로그",
     "profile": "프로필",
     "logout": "로그아웃",
-    "settings": "엔진 설정"
+    "settings": "엔진 설정",
+    "ops": "운영 대시보드"
   },
   "auth": {
     "login": "로그인",
@@ -106,5 +107,29 @@
     "selectGroup": "그룹 선택...",
     "recipients": "수신자 목록 (읽기 전용)",
     "recipientsHelp": "chat_id는 사용자 관리에서 설정"
+  },
+  "ops": {
+    "title": "운영 대시보드",
+    "description": "인시던트 · 알림 발송 · 서버별 현황 (10초 자동 갱신)",
+    "openIncidents": "미해결 인시던트",
+    "criticalOpen": "Critical 미해결",
+    "alerts24h": "알림 (24h)",
+    "failedNotifications": "발송 실패/중단",
+    "incidents": "인시던트",
+    "incident": "인시던트",
+    "status": "상태",
+    "alerts": "알림 수",
+    "lastSeen": "마지막 발생",
+    "deliveryStatus": "알림 발송 현황",
+    "channel": "채널",
+    "recipient": "수신자",
+    "attempts": "시도",
+    "detailCol": "상세",
+    "trend": "심각도 추이",
+    "byHost": "서버별 현황",
+    "host": "호스트",
+    "openCol": "미해결",
+    "totalCol": "전체",
+    "timeline": "타임라인"
   }
 }

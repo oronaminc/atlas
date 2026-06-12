@@ -183,3 +183,67 @@ export interface Recipient {
   telegram_chat_id: string | null;
   groups: string[];
 }
+
+export type IncidentStatus = "open" | "acknowledged" | "resolved";
+
+export interface Incident {
+  id: string;
+  title: string;
+  status: IncidentStatus;
+  severity: Severity;
+  group_key: string | null;
+  first_seen: string;
+  last_seen: string;
+  alert_count: number;
+  created_at: string;
+}
+
+export interface IncidentDetail extends Incident {
+  alerts: {
+    id: string;
+    name: string;
+    source: string;
+    severity: string;
+    status: string;
+    labels: Record<string, string>;
+    received_at: string;
+    dedup_count: number;
+  }[];
+  timeline: { id: string; kind: string; payload: Record<string, unknown>; created_at: string }[];
+}
+
+export interface NotificationRow {
+  id: string;
+  incident_id: string;
+  channel: string;
+  recipient_address: string;
+  status: string;
+  attempts: number;
+  retry_at: string | null;
+  sent_at: string | null;
+  last_error: string | null;
+  created_at: string;
+}
+
+export interface StatsOverview {
+  incidents: Record<IncidentStatus, number>;
+  open_by_severity: Record<Severity, number>;
+  notifications: Record<"pending" | "sent" | "failed" | "dead", number>;
+  alerts_24h: number;
+}
+
+export interface TrendBucket {
+  bucket: string;
+  critical: number;
+  warning: number;
+  info: number;
+}
+
+export interface HostStat {
+  group_key: string;
+  open: number;
+  total: number;
+  alerts: number;
+  max_severity: Severity;
+  last_seen: string | null;
+}

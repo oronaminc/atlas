@@ -17,4 +17,6 @@ async def sync_state(
     _: User = Depends(get_current_user),
 ):
     res = await db.execute(select(SyncState))
-    return envelope([SyncStateOut.model_validate(s).model_dump(mode="json") for s in res.scalars()])
+    return envelope(
+        [SyncStateOut.model_validate(s).model_dump(mode="json") for s in res.scalars()]
+    )

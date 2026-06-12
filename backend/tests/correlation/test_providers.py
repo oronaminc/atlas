@@ -13,7 +13,11 @@ AM_WEBHOOK = {
     "alerts": [
         {
             "status": "firing",
-            "labels": {"alertname": "HighCPU", "severity": "critical", "host": "web-01"},
+            "labels": {
+                "alertname": "HighCPU",
+                "severity": "critical",
+                "host": "web-01",
+            },
             "annotations": {"summary": "CPU > 90%"},
             "startsAt": "2026-06-10T00:00:00Z",
             "endsAt": "0001-01-01T00:00:00Z",

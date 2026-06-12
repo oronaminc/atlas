@@ -20,7 +20,9 @@ class IncidentStatus(enum.StrEnum):
 
 class AlertEvent(TimestampedBase):
     __tablename__ = "alert_events"
-    __table_args__ = (Index("ix_alert_events_fp_received", "fingerprint", "received_at"),)
+    __table_args__ = (
+        Index("ix_alert_events_fp_received", "fingerprint", "received_at"),
+    )
 
     fingerprint: Mapped[str] = mapped_column(String(64), index=True)
     source: Mapped[str] = mapped_column(String(100), index=True)
@@ -32,7 +34,9 @@ class AlertEvent(TimestampedBase):
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     dedup_count: Mapped[int] = mapped_column(Integer, default=1)
-    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     claimed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     incident_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True, index=True
@@ -43,18 +47,24 @@ class AlertEvent(TimestampedBase):
 
 class Incident(TimestampedBase):
     __tablename__ = "incidents"
-    __table_args__ = (Index("ix_incidents_group_key_last_seen", "group_key", "last_seen"),)
+    __table_args__ = (
+        Index("ix_incidents_group_key_last_seen", "group_key", "last_seen"),
+    )
 
     title: Mapped[str] = mapped_column(String(500))
     status: Mapped[IncidentStatus] = mapped_column(
-        Enum(IncidentStatus, name="incident_status"), default=IncidentStatus.open, index=True
+        Enum(IncidentStatus, name="incident_status"),
+        default=IncidentStatus.open,
+        index=True,
     )
     severity: Mapped[str] = mapped_column(String(20), default="info")
     group_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     alert_count: Mapped[int] = mapped_column(Integer, default=0)
-    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     alerts: Mapped[list[AlertEvent]] = relationship(back_populates="incident")
     timeline: Mapped[list["IncidentEvent"]] = relationship(

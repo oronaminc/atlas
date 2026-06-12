@@ -9,6 +9,12 @@ import { api } from "@/api/client";
 import type {
   ActiveAlert,
   CorrelationConfig,
+  HostStat,
+  Incident,
+  IncidentDetail,
+  NotificationRow,
+  StatsOverview,
+  TrendBucket,
   NotificationRoute,
   NotificationSettings,
   Recipient,
@@ -111,6 +117,49 @@ export const useNotificationRoutes = () =>
   useList<NotificationRoute>(["notification-routes"], "/notification-routes");
 export const useRecipients = () =>
   useList<Recipient>(["notification-recipients"], "/notification-recipients");
+
+// --- Ops dashboard (auto-refresh) ---
+const OPS_REFRESH_MS = 10_000;
+
+export const useIncidents = (params?: Params) =>
+  useQuery({
+    queryKey: ["incidents", params],
+    queryFn: () => api.get<Incident[]>("/incidents", params),
+    refetchInterval: OPS_REFRESH_MS,
+  });
+export const useIncident = (id: string | null) =>
+  useQuery({
+    queryKey: ["incidents", id],
+    queryFn: () => api.get<IncidentDetail>(`/incidents/${id}`),
+    enabled: !!id,
+  });
+export const useNotificationRows = (params?: Params) =>
+  useQuery({
+    queryKey: ["notifications", params],
+    queryFn: () => api.get<NotificationRow[]>("/notifications", params),
+    refetchInterval: OPS_REFRESH_MS,
+  });
+export const useStatsOverview = () =>
+  useQuery({
+    queryKey: ["stats", "overview"],
+    queryFn: () => api.get<StatsOverview>("/stats/overview"),
+    refetchInterval: OPS_REFRESH_MS,
+  });
+export const useStatsTrend = (hours: number) =>
+  useQuery({
+    queryKey: ["stats", "trend", hours],
+    queryFn: () =>
+      api.get<{ bucket_seconds: number; buckets: TrendBucket[] }>("/stats/trend", {
+        hours: String(hours),
+      }),
+    refetchInterval: OPS_REFRESH_MS,
+  });
+export const useStatsHosts = () =>
+  useQuery({
+    queryKey: ["stats", "hosts"],
+    queryFn: () => api.get<HostStat[]>("/stats/hosts"),
+    refetchInterval: OPS_REFRESH_MS,
+  });
 
 // --- Sync / Audit / Alerts ---
 export const useSyncState = () =>

@@ -63,7 +63,9 @@ async def client(db_factory):
     app.dependency_overrides.clear()
 
 
-async def make_user(db, email: str, role: GlobalRole, password: str = "password123") -> User:
+async def make_user(
+    db, email: str, role: GlobalRole, password: str = "password123"
+) -> User:
     user = User(
         email=email,
         username=email.split("@")[0],

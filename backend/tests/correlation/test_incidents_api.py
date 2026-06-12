@@ -52,7 +52,9 @@ async def test_list_incidents_with_status_filter(client, incident, viewer_header
     assert res.json()["data"] == []
 
 
-async def test_incident_detail_includes_alerts_and_timeline(client, incident, viewer_headers):
+async def test_incident_detail_includes_alerts_and_timeline(
+    client, incident, viewer_headers
+):
     res = await client.get(f"/api/v1/incidents/{incident.id}", headers=viewer_headers)
     assert res.status_code == 200
     data = res.json()["data"]
@@ -63,11 +65,15 @@ async def test_incident_detail_includes_alerts_and_timeline(client, incident, vi
 
 
 async def test_editor_can_ack_then_resolve_with_audit(client, incident, editor_headers):
-    res = await client.post(f"/api/v1/incidents/{incident.id}/ack", headers=editor_headers)
+    res = await client.post(
+        f"/api/v1/incidents/{incident.id}/ack", headers=editor_headers
+    )
     assert res.status_code == 200
     assert res.json()["data"]["status"] == "acknowledged"
 
-    res = await client.post(f"/api/v1/incidents/{incident.id}/resolve", headers=editor_headers)
+    res = await client.post(
+        f"/api/v1/incidents/{incident.id}/resolve", headers=editor_headers
+    )
     assert res.status_code == 200
     assert res.json()["data"]["status"] == "resolved"
 
@@ -78,19 +84,29 @@ async def test_editor_can_ack_then_resolve_with_audit(client, incident, editor_h
     actions = [e["action"] for e in logs.json()["data"]]
     assert "ack" in actions and "resolve" in actions
 
-    detail = await client.get(f"/api/v1/incidents/{incident.id}", headers=editor_headers)
+    detail = await client.get(
+        f"/api/v1/incidents/{incident.id}", headers=editor_headers
+    )
     kinds = [e["kind"] for e in detail.json()["data"]["timeline"]]
     assert kinds.count("status_changed") == 2
 
 
 async def test_viewer_cannot_change_status(client, incident, viewer_headers):
-    res = await client.post(f"/api/v1/incidents/{incident.id}/ack", headers=viewer_headers)
+    res = await client.post(
+        f"/api/v1/incidents/{incident.id}/ack", headers=viewer_headers
+    )
     assert res.status_code == 403
-    res = await client.post(f"/api/v1/incidents/{incident.id}/resolve", headers=viewer_headers)
+    res = await client.post(
+        f"/api/v1/incidents/{incident.id}/resolve", headers=viewer_headers
+    )
     assert res.status_code == 403
 
 
 async def test_resolve_is_terminal(client, incident, editor_headers):
-    await client.post(f"/api/v1/incidents/{incident.id}/resolve", headers=editor_headers)
-    res = await client.post(f"/api/v1/incidents/{incident.id}/ack", headers=editor_headers)
+    await client.post(
+        f"/api/v1/incidents/{incident.id}/resolve", headers=editor_headers
+    )
+    res = await client.post(
+        f"/api/v1/incidents/{incident.id}/ack", headers=editor_headers
+    )
     assert res.status_code == 409

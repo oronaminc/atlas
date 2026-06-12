@@ -33,7 +33,9 @@ class User(TimestampedBase):
         Enum(GlobalRole, name="global_role"), default=GlobalRole.viewer
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     memberships: Mapped[list["UserGroup"]] = relationship(  # noqa: F821
         back_populates="user", lazy="selectin", cascade="all, delete-orphan"

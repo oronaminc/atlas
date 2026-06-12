@@ -40,7 +40,8 @@
     "audit": "Audit Log",
     "profile": "Profile",
     "logout": "Log out",
-    "settings": "Engine Settings"
+    "settings": "Engine Settings",
+    "ops": "Ops Dashboard"
   },
   "auth": {
     "login": "Log in",
@@ -106,5 +107,29 @@
     "selectGroup": "Select group...",
     "recipients": "Recipients (read-only)",
     "recipientsHelp": "chat_id is set via user management"
+  },
+  "ops": {
+    "title": "Ops Dashboard",
+    "description": "Incidents · delivery · per-host status (auto-refresh 10s)",
+    "openIncidents": "Open incidents",
+    "criticalOpen": "Critical open",
+    "alerts24h": "Alerts (24h)",
+    "failedNotifications": "Failed/dead sends",
+    "incidents": "Incidents",
+    "incident": "Incident",
+    "status": "Status",
+    "alerts": "Alerts",
+    "lastSeen": "Last seen",
+    "deliveryStatus": "Notification delivery",
+    "channel": "Channel",
+    "recipient": "Recipient",
+    "attempts": "Attempts",
+    "detailCol": "Detail",
+    "trend": "Severity trend",
+    "byHost": "By host",
+    "host": "Host",
+    "openCol": "Open",
+    "totalCol": "Total",
+    "timeline": "Timeline"
   }
 }

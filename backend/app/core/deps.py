@@ -62,7 +62,9 @@ def user_group_ids(user: User) -> set[uuid.UUID]:
 
 
 def user_managed_group_ids(user: User) -> set[uuid.UUID]:
-    return {m.group_id for m in user.memberships if m.role_in_group == GroupRole.manager}
+    return {
+        m.group_id for m in user.memberships if m.role_in_group == GroupRole.manager
+    }
 
 
 async def is_group_manager(user: User, group_id: uuid.UUID) -> bool:

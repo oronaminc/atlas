@@ -5,7 +5,13 @@ from sqlalchemy import select
 from app.models.alerting import Incident
 from app.models.delivery import Notification
 from app.notifications.fanout import fan_out_pending
-from tests.notifications.helpers import NOW, seed_group, seed_incident, seed_route, seed_user
+from tests.notifications.helpers import (
+    NOW,
+    seed_group,
+    seed_incident,
+    seed_route,
+    seed_user,
+)
 
 
 async def rows(db) -> list[Notification]:

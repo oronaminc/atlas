@@ -39,7 +39,9 @@ async def list_servers(
             )
     res = await db.execute(stmt.limit(limit + 1))
     items, meta = page_meta(list(res.scalars().unique()), limit)
-    return envelope([ServerOut.model_validate(s).model_dump(mode="json") for s in items], meta=meta)
+    return envelope(
+        [ServerOut.model_validate(s).model_dump(mode="json") for s in items], meta=meta
+    )
 
 
 @router.post("", status_code=201)
@@ -157,11 +159,15 @@ async def server_rules(
         select(AlertRule)
         .where(
             or_(
-                (AlertRule.scope_type == ScopeType.server) & (AlertRule.scope_ref_id == server_id),
+                (AlertRule.scope_type == ScopeType.server)
+                & (AlertRule.scope_ref_id == server_id),
                 AlertRule.scope_type == ScopeType.global_,
             )
         )
         .order_by(AlertRule.created_at.desc())
     )
-    rules = [AlertRuleOut.model_validate(r).model_dump(mode="json") for r in res.scalars().unique()]
+    rules = [
+        AlertRuleOut.model_validate(r).model_dump(mode="json")
+        for r in res.scalars().unique()
+    ]
     return envelope(rules)

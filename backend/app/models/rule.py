@@ -48,10 +48,14 @@ class AlertRule(TimestampedBase):
         ),
         index=True,
     )
-    scope_ref_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
+    scope_ref_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, nullable=True, index=True
+    )
     expr: Mapped[str] = mapped_column(Text)
     for_duration: Mapped[str] = mapped_column(String(20), default="5m")
-    severity: Mapped[Severity] = mapped_column(Enum(Severity, name="severity"), index=True)
+    severity: Mapped[Severity] = mapped_column(
+        Enum(Severity, name="severity"), index=True
+    )
     labels: Mapped[dict[str, Any]] = mapped_column(JsonType, default=dict)
     annotations: Mapped[dict[str, Any]] = mapped_column(JsonType, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
@@ -66,7 +70,9 @@ class AlertRule(TimestampedBase):
 
 class RuleGroup(TimestampedBase):
     __tablename__ = "rule_groups"
-    __table_args__ = (UniqueConstraint("namespace", "name", name="uq_rule_group_ns_name"),)
+    __table_args__ = (
+        UniqueConstraint("namespace", "name", name="uq_rule_group_ns_name"),
+    )
 
     name: Mapped[str] = mapped_column(String(255), index=True)
     namespace: Mapped[str] = mapped_column(String(255), index=True)

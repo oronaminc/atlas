@@ -53,5 +53,7 @@ async def test_invalid_values_rejected(client, admin_headers):
         {"correlation_window_seconds": 0},
         {"group_attrs": []},
     ):
-        res = await client.patch("/api/v1/correlation-config", json=payload, headers=admin_headers)
+        res = await client.patch(
+            "/api/v1/correlation-config", json=payload, headers=admin_headers
+        )
         assert res.status_code == 422, payload

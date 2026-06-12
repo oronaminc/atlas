@@ -20,7 +20,10 @@ from tests.notifications.helpers import (
 
 
 async def seed_pending(db, n_users: int = 1, channels: list[str] | None = None):
-    users = [await seed_user(db, f"u{i}@example.com", chat_id=f"{i}00") for i in range(n_users)]
+    users = [
+        await seed_user(db, f"u{i}@example.com", chat_id=f"{i}00")
+        for i in range(n_users)
+    ]
     group = await seed_group(db, "oncall", users)
     await seed_route(db, group, channels=channels or ["telegram"])
     incident = await seed_incident(db)
@@ -37,7 +40,9 @@ async def test_successful_delivery_marks_sent_and_renders_incident(db):
     incident, _ = await seed_pending(db)
     channel = FakeChannel()
 
-    sent = await deliver_once(db, channels={"telegram": channel}, worker_id="w", now=NOW)
+    sent = await deliver_once(
+        db, channels={"telegram": channel}, worker_id="w", now=NOW
+    )
     await db.commit()
 
     assert sent == 1
@@ -61,7 +66,9 @@ async def test_channel_failure_schedules_retry_then_succeeds(db):
     assert channel.sent == []
 
     # retry after backoff succeeds
-    await deliver_once(db, channels={"telegram": channel}, worker_id="w", now=row.retry_at)
+    await deliver_once(
+        db, channels={"telegram": channel}, worker_id="w", now=row.retry_at
+    )
     await db.commit()
     assert row.status == "sent"
     assert len(channel.sent) == 1
@@ -74,7 +81,9 @@ async def test_group_hourly_quota_defers_excess(db):
     await db.commit()
 
     channel = FakeChannel()
-    sent = await deliver_once(db, channels={"telegram": channel}, worker_id="w", now=NOW)
+    sent = await deliver_once(
+        db, channels={"telegram": channel}, worker_id="w", now=NOW
+    )
     await db.commit()
 
     assert sent == 2
@@ -83,7 +92,10 @@ async def test_group_hourly_quota_defers_excess(db):
     assert deferred[0].retry_at is not None and deferred[0].retry_at > NOW
     # after the window resets, the deferred one goes out
     sent_later = await deliver_once(
-        db, channels={"telegram": channel}, worker_id="w", now=NOW + timedelta(hours=1, minutes=1)
+        db,
+        channels={"telegram": channel},
+        worker_id="w",
+        now=NOW + timedelta(hours=1, minutes=1),
     )
     assert sent_later == 1
 
@@ -95,7 +107,9 @@ async def test_global_daily_quota_defers(db):
     await db.commit()
 
     channel = FakeChannel()
-    sent = await deliver_once(db, channels={"telegram": channel}, worker_id="w", now=NOW)
+    sent = await deliver_once(
+        db, channels={"telegram": channel}, worker_id="w", now=NOW
+    )
     await db.commit()
 
     assert sent == 1
@@ -136,7 +150,9 @@ def test_token_bucket_throttles_at_rate():
         sleeps.append(seconds)
         clock["t"] += seconds
 
-    bucket = TokenBucket(rate_per_second=2, clock=lambda: clock["t"], sleeper=fake_sleep)
+    bucket = TokenBucket(
+        rate_per_second=2, clock=lambda: clock["t"], sleeper=fake_sleep
+    )
 
     async def run():
         await bucket.acquire("x")  # burst capacity

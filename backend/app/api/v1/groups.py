@@ -45,7 +45,9 @@ async def list_groups(
         decoded = decode_cursor(cursor)
         if decoded:
             t, i = decoded
-            stmt = stmt.where(or_(Group.created_at < t, (Group.created_at == t) & (Group.id < i)))
+            stmt = stmt.where(
+                or_(Group.created_at < t, (Group.created_at == t) & (Group.id < i))
+            )
     res = await db.execute(stmt.limit(limit + 1))
     items, meta = page_meta(list(res.scalars().unique()), limit)
     return envelope([group_to_out(g) for g in items], meta=meta)
@@ -187,7 +189,9 @@ async def add_member(
     if target is None:
         raise HTTPException(status_code=404, detail="User not found")
     dup = await db.execute(
-        select(UserGroup).where(UserGroup.group_id == group_id, UserGroup.user_id == body.user_id)
+        select(UserGroup).where(
+            UserGroup.group_id == group_id, UserGroup.user_id == body.user_id
+        )
     )
     existing = dup.scalar_one_or_none()
     if existing:
@@ -225,7 +229,9 @@ async def remove_member(
     if not can_manage_group(user, group_id):
         raise HTTPException(status_code=403, detail="Not a manager of this group")
     res = await db.execute(
-        select(UserGroup).where(UserGroup.group_id == group_id, UserGroup.user_id == user_id)
+        select(UserGroup).where(
+            UserGroup.group_id == group_id, UserGroup.user_id == user_id
+        )
     )
     membership = res.scalar_one_or_none()
     if membership is None:

@@ -37,12 +37,16 @@ async def list_incidents(
         if decoded:
             t, i = decoded
             stmt = stmt.where(
-                or_(Incident.created_at < t, (Incident.created_at == t) & (Incident.id < i))
+                or_(
+                    Incident.created_at < t,
+                    (Incident.created_at == t) & (Incident.id < i),
+                )
             )
     res = await db.execute(stmt.limit(limit + 1))
     items, meta = page_meta(list(res.scalars().unique()), limit)
     return envelope(
-        [IncidentOut.model_validate(i).model_dump(mode="json") for i in items], meta=meta
+        [IncidentOut.model_validate(i).model_dump(mode="json") for i in items],
+        meta=meta,
     )
 
 
@@ -105,7 +109,9 @@ async def ack_incident(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_editor),
 ):
-    return await _transition(db, request, user, incident_id, IncidentStatus.acknowledged, "ack")
+    return await _transition(
+        db, request, user, incident_id, IncidentStatus.acknowledged, "ack"
+    )
 
 
 @router.post("/{incident_id}/resolve")
@@ -115,7 +121,9 @@ async def resolve_incident(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_editor),
 ):
-    return await _transition(db, request, user, incident_id, IncidentStatus.resolved, "resolve")
+    return await _transition(
+        db, request, user, incident_id, IncidentStatus.resolved, "resolve"
+    )
 
 
 async def _transition(
