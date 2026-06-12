@@ -85,6 +85,43 @@ image automation commits to prod overlay markers). Secrets never plaintext in gi
   `/opt/node22/lib/node_modules/playwright/index.mjs`.
 - jsdelivr blocked. Working branch: `claude/epic-dijkstra-mgq4oa` (push only there).
 
+## Load-test findings (Phase 1, 2026-06-12 — drives Phases 2-5)
+
+Harness: `backend/loadtest/` + load-test skill (zero new deps; raw-socket asyncio client).
+Box: 4 vCPU / 16GB container, PG 16 + Redis local — treat as relative numbers.
+
+- **Ingest ceiling**: ~225 rps/uvicorn-worker (p95 20ms), ~480 rps @ 4 workers.
+  Overload degrades throughput (226→131 rps as concurrency rises) — no shedding/backpressure.
+  `_enqueue` opens a NEW Redis conn per request ≈ 10% tax (253 vs 226 rps without).
+  Insert path flat at 10M rows. 10k-alert storm: 0 errors, all 202 (durable-insert design holds).
+- **Correlation worker**: keeps up at 200/s ingest (lag ≤ ~2s) — but only on the warm
+  dedup-collapse path. Full path (new fingerprint: advisory lock + window scan + commit)
+  ≈ 50ms/event ⇒ ~20-25 events/s/worker. WORST BUG: once the Redis stream is empty,
+  the loop blocks 5s per ≤100-event batch → PG backlog drains at ≤20/s (measured 10/s);
+  a 48k cold backlog took >40min. Worker restart during a storm = the storm.
+- **DB growth (alert_events 1M/5M/10M, 464MB/2.3GB/4.6GB)**: indexed point queries flat
+  at 0.2ms (fingerprint, claim-scan, strategy-window all fine). Degrade: `stats/trend`
+  fetches the whole 24h slice into Python — 810ms p50 @ 357k rows/24h, and /ops polls it
+  every 10s per viewer; `alerts_24h` count 160ms. These two, not the correlation queries,
+  are the row-count casualties.
+- **Notification fan-out**: routes are GLOBAL — every enabled route matches every
+  un-notified incident (no group/host scoping): 5k leftover incidents × 300-member route
+  = 1.5M outbox rows in minutes. `claim_batch` at 1.3M pending = seq scan + 51MB disk
+  sort = **754ms per 50-row claim**. Send pipeline is serial: ~92ms/send (2 quota COUNTs
+  + 50ms RTT + mark) ⇒ **10.8 sends/s** even with throttle at 25/s and no sleep; prod
+  worker's unconditional sleep(5) caps it at ~5/s ⇒ 3,000-recipient storm ≈ 10min.
+  Default quota (30/group/h) silently freezes storms at 30 sends, rest defer.
+
+**Priority for later phases (measured, not guessed):**
+1. (Phase 4) Notification path: per-incident batching/dedup before outbox, route scoping,
+   index for claim (status,created_at partial), pipelined sends, drop sleep(5) when busy.
+2. (Phase 3/perf) Correlation drain mode: loop immediately while a full batch was claimed;
+   full-path cost 50ms/event needs batching of commits/locks. Trend/24h-count queries →
+   pre-aggregation or partition pruning (alert_events partitioning).
+3. (Phase 5) The 30/group/h quota freeze and stream-empty drain mode are silent — metrics
+   for queue depth/lag/defer-rate are not optional.
+4. (Phase 2) Tenancy adds a tenant key to every hot query above — do it before partitioning.
+
 ## Status (do not redo)
 
 All 12 original spec phases + correlation engine + notification delivery/HA + ops dashboard
