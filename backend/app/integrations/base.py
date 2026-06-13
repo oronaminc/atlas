@@ -12,12 +12,14 @@ MAX_RETRIES = 3
 BACKOFF_BASE_SECONDS = 0.5
 
 
-def make_client(base_url: str) -> httpx.AsyncClient:
+def make_client(base_url: str, org: str | None = None) -> httpx.AsyncClient:
     """All observability-stack clients are created here so the tenant header
-    is injected exactly once. Individual calls must NOT set it again."""
+    is injected exactly once. Individual calls must NOT set it again.
+    `org` = the Mimir org (X-Scope-OrgID) this client talks to — resolved
+    from the tenant by the caller; defaults to the legacy/system org."""
     return httpx.AsyncClient(
         base_url=base_url,
-        headers={"X-Scope-OrgID": settings.MIMIR_TENANT_ID},  # = "system"
+        headers={"X-Scope-OrgID": org or settings.MIMIR_TENANT_ID},
         timeout=10.0,
     )
 
@@ -25,8 +27,9 @@ def make_client(base_url: str) -> httpx.AsyncClient:
 class BaseIntegrationClient:
     """Shared retry/backoff wrapper around httpx for external calls."""
 
-    def __init__(self, base_url: str) -> None:
-        self._client = make_client(base_url)
+    def __init__(self, base_url: str, org: str | None = None) -> None:
+        self.org = org or settings.MIMIR_TENANT_ID
+        self._client = make_client(base_url, org)
 
     async def request(
         self,

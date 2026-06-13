@@ -13,8 +13,13 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://atlas:atlas@localhost:5432/atlas"
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # Multi-tenancy: always sent as X-Scope-OrgID on every Mimir/Loki/Tempo call.
+    # Default/legacy Mimir org (X-Scope-OrgID) used when no tenant org is
+    # resolved. Per-tenant orgs come from mimir_org_map (core/tenancy.py).
     MIMIR_TENANT_ID: str = "system"
+    # AM webhook provisioning: push per-org Alertmanager configs pointing
+    # back at {ATLAS_PUBLIC_URL}/api/v1/ingest/alertmanager/{org}.
+    AM_PROVISION_ENABLED: bool = False
+    ATLAS_PUBLIC_URL: str = ""
     MIMIR_RULER_URL: str = "http://mimir:8080/prometheus/config/v1/rules"
     MIMIR_ALERTMANAGER_URL: str = "http://mimir-alertmanager:8080"
     MIMIR_QUERY_URL: str = "http://mimir:8080/prometheus"

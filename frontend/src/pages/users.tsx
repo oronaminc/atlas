@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { z } from "zod";
 
 import { api } from "@/api/client";
-import { useApiMutation, useUsers } from "@/api/queries";
+import { useApiMutation, useTenants, useUsers } from "@/api/queries";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { DataTable, type Column } from "@/components/common/data-table";
 import { FormField } from "@/components/common/form-field";
@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/hooks/use-auth";
 import { formatDate } from "@/lib/utils";
 import type { User } from "@/types";
 
@@ -48,6 +49,15 @@ export function UsersPage() {
   const [deleting, setDeleting] = useState<User | null>(null);
 
   const users = useUsers({ q: search || undefined, cursor, limit: "20" });
+  const { user: me } = useAuth();
+  const isHq = me?.tenant_id == null;
+  const tenants = useTenants();
+
+  const setTenant = useApiMutation(
+    ({ user, tenant_id }: { user: User; tenant_id: string | null }) =>
+      api.patch(`/users/${user.id}`, { tenant_id }),
+    ["users"],
+  );
 
   const setRole = useApiMutation(
     ({ user, role }: { user: User; role: string }) =>
@@ -100,6 +110,39 @@ export function UsersPage() {
       key: "provider",
       header: "Auth",
       render: (u) => <Badge variant="outline">{u.auth_provider}</Badge>,
+    },
+    {
+      key: "tenant",
+      header: t("tenants.tenant"),
+      render: (u) =>
+        isHq ? (
+          <Select
+            value={u.tenant_id ?? "__hq__"}
+            onValueChange={(v) =>
+              setTenant.mutate({ user: u, tenant_id: v === "__hq__" ? null : v })
+            }
+          >
+            <SelectTrigger
+              className="h-8 w-36"
+              onClick={(e) => e.stopPropagation()}
+              data-testid={`tenant-select-${u.username}`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__hq__">HQ</SelectItem>
+              {(tenants.data?.data ?? []).map((tenant) => (
+                <SelectItem key={tenant.id} value={tenant.id}>
+                  {tenant.slug}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Badge variant="secondary">
+            {(tenants.data?.data ?? []).find((x) => x.id === u.tenant_id)?.slug ?? "-"}
+          </Badge>
+        ),
     },
     {
       key: "active",

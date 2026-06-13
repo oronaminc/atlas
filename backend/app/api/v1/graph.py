@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import apply_tenant_param, get_current_user
 from app.core.envelope import envelope
 from app.db import get_db
 from app.models import User
@@ -37,7 +37,7 @@ async def graph(
     status: str = Query(default="open,acknowledged"),
     max_nodes: int = Query(default=2000, ge=2, le=5000),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(apply_tenant_param),
 ):
     statuses = [IncidentStatus(s.strip()) for s in status.split(",") if s.strip()]
     since = utcnow() - timedelta(hours=window_hours)

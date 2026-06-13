@@ -13,7 +13,9 @@ import redis.asyncio as aioredis
 
 from app.core.config import settings
 from app.db import async_session_factory
+from app.integrations.alertmanager import AlertmanagerClient
 from app.integrations.mimir_ruler import MimirRulerClient
+from app.services.am_provision import provision_am_configs
 from app.services.rule_sync import sync_all_rule_groups
 
 logger = logging.getLogger(__name__)
@@ -30,9 +32,16 @@ async def run_sync_once(ruler: MimirRulerClient, redis: aioredis.Redis | None) -
             return
     try:
         async with async_session_factory() as db:
-            state = await sync_all_rule_groups(db, ruler)
+            state = await sync_all_rule_groups(
+                db, ruler, ruler_factory=lambda org: MimirRulerClient(org=org)
+            )
+            provisioned = await provision_am_configs(
+                db, am_factory=lambda org: AlertmanagerClient(org=org)
+            )
             await db.commit()
-            logger.info("ruler sync: status=%s", state.status.value)
+            logger.info(
+                "ruler sync: status=%s, am orgs provisioned=%d", state.status.value, provisioned
+            )
     finally:
         if redis is not None:
             try:

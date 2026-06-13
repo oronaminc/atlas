@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import client_ip, get_current_user, require_admin
 from app.core.envelope import envelope
 from app.core.security import encrypt_secret
+from app.core.tenancy import resolve_tenant_slug
 from app.db import get_db
 from app.models import Group, User
 from app.models.delivery import Notification, NotificationRoute
@@ -35,6 +36,23 @@ SETTINGS_AUDIT_FIELDS = [
 ]
 
 
+async def settings_tenant_id(
+    tenant: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> uuid.UUID | None:
+    """Which tenant's notification settings row to read/write. Tenant-admins
+    always get their own; HQ picks via ?tenant=<slug> (none = legacy row)."""
+    if admin.tenant_id is not None:
+        return admin.tenant_id
+    if tenant:
+        target = await resolve_tenant_slug(db, tenant)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Unknown tenant")
+        return target.id
+    return None
+
+
 def settings_out(row) -> dict:
     return NotificationSettingsOut(
         telegram_bot_token=MASKED if row.telegram_bot_token else None,
@@ -54,8 +72,9 @@ def _settings_snapshot(row) -> dict:
 async def read_settings(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
+    tenant_id: uuid.UUID | None = Depends(settings_tenant_id),
 ):
-    row = await get_notification_settings(db)
+    row = await get_notification_settings(db, tenant_id)
     await db.commit()
     return envelope(settings_out(row))
 
@@ -66,8 +85,9 @@ async def update_settings(
     request: Request,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
+    tenant_id: uuid.UUID | None = Depends(settings_tenant_id),
 ):
-    row = await get_notification_settings(db)
+    row = await get_notification_settings(db, tenant_id)
     before = _settings_snapshot(row)
     data = body.model_dump(exclude_unset=True)
     token = data.pop("telegram_bot_token", MASKED)
@@ -118,7 +138,8 @@ async def create_route(
     )
     if dup.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Route for this group already exists")
-    route = NotificationRoute(**body.model_dump(), created_by=admin.id)
+    # route belongs to the target group's tenant (fanout matches on it)
+    route = NotificationRoute(**body.model_dump(), tenant_id=group.tenant_id, created_by=admin.id)
     db.add(route)
     await db.flush()
     await record_audit(

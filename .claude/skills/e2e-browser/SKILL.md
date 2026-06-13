@@ -61,6 +61,16 @@ PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node .claude/skills/e2e-browser/rbac_s
 Success prints `RBAC_SUPPRESS_E2E_OK` + screenshots per role and per
 suppression step.
 
+For multi-tenancy (HQ vs subsidiary isolation, tenant filter, tenant CRUD +
+user reassignment — see the script header for the curl prep that creates
+tenants/users and ingests via org-qualified routes):
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node .claude/skills/e2e-browser/tenancy_e2e.mjs
+```
+
+Success prints `TENANCY_E2E_OK`.
+
 ## 3. Header verification (X-Scope-OrgID)
 
 ```bash
@@ -85,3 +95,9 @@ burst within the 900s window and 10+ hosts for the /graph lane expander).
 - The login rate limiter (5/300s per IP+email) also counts successful logins;
   repeated e2e runs against the same backend will 429 — restart the backend
   process between runs to reset it.
+- Self-match trap, general form: ANY pgrep/pkill pattern that appears literally
+  in the same shell command line matches the wrapping bash -c itself (exit 144
+  kills your own shell, or a `|| start` guard never starts the process). Kill
+  and start in SEPARATE tool calls.
+- e2e.mjs's audit-log step expects `emergency_apply` on page 1 — it requires a
+  truly fresh DB; a session's accumulated audit rows push it off the first page.

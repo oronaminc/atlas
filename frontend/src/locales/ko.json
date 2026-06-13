@@ -153,5 +153,17 @@
     "showLess": "호스트 접기",
     "noHost": "(호스트 없음)",
     "noData": "이 기간에 인시던트가 없습니다"
+  },
+  "tenants": {
+    "title": "테넌트 (자회사)",
+    "help": "각 테넌트는 하나 이상의 Mimir 조직(Alloy가 설정하는 X-Scope-OrgID)에 매핑됩니다",
+    "tenant": "테넌트",
+    "slug": "슬러그",
+    "orgs": "Mimir 조직",
+    "orgsHelp": "Mimir 조직 (쉼표로 구분된 X-Scope-OrgID 값)",
+    "createTitle": "테넌트 생성",
+    "keyOnce": "수집 키 — 한 번만 표시됩니다. 지금 복사하세요:",
+    "filterLabel": "테넌트",
+    "allTenants": "전체 테넌트"
   }
 }

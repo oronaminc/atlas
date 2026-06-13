@@ -153,5 +153,17 @@
     "showLess": "Show fewer hosts",
     "noHost": "(no host)",
     "noData": "No incidents in this window"
+  },
+  "tenants": {
+    "title": "Tenants (subsidiaries)",
+    "help": "Each tenant maps one or more Mimir orgs (X-Scope-OrgID set by Alloy)",
+    "tenant": "Tenant",
+    "slug": "Slug",
+    "orgs": "Mimir orgs",
+    "orgsHelp": "Mimir orgs (comma-separated X-Scope-OrgID values)",
+    "createTitle": "Create tenant",
+    "keyOnce": "Ingest key — shown only once, copy it now:",
+    "filterLabel": "Tenant",
+    "allTenants": "All tenants"
   }
 }

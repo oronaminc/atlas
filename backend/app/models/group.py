@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy import Enum, ForeignKey, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import TimestampedBase
+from app.models.base import TenantScoped, TimestampedBase
 
 
 class GroupRole(enum.StrEnum):
@@ -12,7 +12,7 @@ class GroupRole(enum.StrEnum):
     manager = "manager"
 
 
-class Group(TimestampedBase):
+class Group(TenantScoped, TimestampedBase):
     __tablename__ = "groups"
 
     name: Mapped[str] = mapped_column(String(100), unique=True, index=True)

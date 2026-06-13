@@ -9,11 +9,8 @@ import uuid
 
 from app.db import async_session_factory
 from app.models.base import utcnow
-from app.notifications.channels.registry import build_channels
 from app.notifications.delivery import deliver_once
 from app.notifications.fanout import fan_out_pending
-from app.notifications.settings import get_notification_settings
-from app.notifications.throttle import TokenBucket
 
 logger = logging.getLogger(__name__)
 
@@ -21,25 +18,19 @@ POLL_INTERVAL_SECONDS = 5
 WORKER_ID = os.environ.get("HOSTNAME") or f"notify-{uuid.uuid4().hex[:8]}"
 
 
-async def run_once(throttle_cache: dict) -> tuple[int, int]:
+async def run_once(throttles: dict) -> tuple[int, int]:
     async with async_session_factory() as db:
         now = utcnow()
         created = await fan_out_pending(db, now=now)
         await db.commit()
 
-        settings_row = await get_notification_settings(db)
-        rate = settings_row.telegram_rate_per_second
-        if throttle_cache.get("rate") != rate:
-            throttle_cache["rate"] = rate
-            throttle_cache["bucket"] = TokenBucket(rate_per_second=rate)
-
-        channels = build_channels(settings_row)
+        # settings/channels/throttle resolve PER TENANT inside deliver_once;
+        # `throttles` (tenant_id -> TokenBucket) persists across passes.
         sent = await deliver_once(
             db,
-            channels=channels,
             worker_id=WORKER_ID,
             now=utcnow(),
-            throttle=throttle_cache["bucket"],
+            throttles=throttles,
         )
         await db.commit()
         return created, sent

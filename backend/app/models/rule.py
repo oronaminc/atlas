@@ -14,7 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import JsonType, TimestampedBase
+from app.models.base import JsonType, TenantScoped, TimestampedBase
 
 
 class ScopeType(enum.StrEnum):
@@ -35,7 +35,7 @@ class Datasource(enum.StrEnum):
     logs = "logs"
 
 
-class AlertRule(TimestampedBase):
+class AlertRule(TenantScoped, TimestampedBase):
     __tablename__ = "alert_rules"
 
     name: Mapped[str] = mapped_column(String(255), index=True)
@@ -64,7 +64,7 @@ class AlertRule(TimestampedBase):
     )
 
 
-class RuleGroup(TimestampedBase):
+class RuleGroup(TenantScoped, TimestampedBase):
     __tablename__ = "rule_groups"
     __table_args__ = (UniqueConstraint("namespace", "name", name="uq_rule_group_ns_name"),)
 

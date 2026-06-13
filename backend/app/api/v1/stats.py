@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import apply_tenant_param
 from app.core.envelope import envelope
 from app.db import get_db
 from app.models import User
@@ -24,7 +24,7 @@ SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2}
 @router.get("/overview")
 async def overview(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(apply_tenant_param),
 ):
     incident_counts = dict(
         (await db.execute(select(Incident.status, func.count()).group_by(Incident.status))).all()
@@ -67,7 +67,7 @@ async def overview(
 async def trend(
     hours: int = Query(default=24, ge=1, le=24 * 7),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(apply_tenant_param),
 ):
     """Alert volume by severity: hourly buckets up to 48h, daily beyond.
     Bucketing in Python for SQLite/PG portability; windows are small."""
@@ -106,7 +106,7 @@ async def trend(
 async def hosts(
     limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(apply_tenant_param),
 ):
     """Incidents grouped by group_key (host=...) — which servers are noisy.
     Folded in Python for SQLite/PG portability."""

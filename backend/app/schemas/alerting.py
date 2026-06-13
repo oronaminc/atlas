@@ -56,6 +56,7 @@ class IncidentOut(BaseModel):
     title: str
     status: IncidentStatus
     severity: str
+    tenant_id: uuid.UUID | None = None
     group_key: str | None
     first_seen: datetime
     last_seen: datetime

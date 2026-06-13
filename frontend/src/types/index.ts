@@ -32,7 +32,18 @@ export interface User {
   is_active: boolean;
   last_login_at: string | null;
   created_at: string;
+  tenant_id: string | null;
   groups: GroupMembership[];
+}
+
+export interface Tenant {
+  id: string;
+  slug: string;
+  name: string;
+  is_active: boolean;
+  mimir_orgs: string[];
+  created_at: string;
+  ingest_key?: string; // present only in the create response
 }
 
 export interface GroupMembership {
@@ -191,6 +202,7 @@ export interface Incident {
   title: string;
   status: IncidentStatus;
   severity: Severity;
+  tenant_id: string | null;
   group_key: string | null;
   first_seen: string;
   last_seen: string;

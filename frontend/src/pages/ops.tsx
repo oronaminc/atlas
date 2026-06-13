@@ -11,6 +11,7 @@ import {
   useStatsHosts,
   useStatsOverview,
   useStatsTrend,
+  useTenants,
 } from "@/api/queries";
 import { api } from "@/api/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -98,20 +99,26 @@ function StatCard({
 
 export function OpsPage() {
   const { t } = useTranslation();
-  const { hasRole } = useAuth();
+  const { hasRole, user: me } = useAuth();
   const canEdit = hasRole("admin", "editor");
+  const isHq = me?.tenant_id == null;
   const [statusFilter, setStatusFilter] = useState(ACTIVE);
+  const [tenantFilter, setTenantFilter] = useState(ALL);
+  const tenants = useTenants();
+  const tenantParam = isHq && tenantFilter !== ALL ? tenantFilter : undefined;
+  const tenantSlugById = new Map((tenants.data?.data ?? []).map((x) => [x.id, x.slug]));
   const [trendHours, setTrendHours] = useState(24);
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const overview = useStatsOverview();
+  const overview = useStatsOverview(tenantParam);
   const incidents = useIncidents({
     limit: "20",
     status: statusFilter === ALL ? undefined : statusFilter,
+    tenant: tenantParam,
   });
   const notifications = useNotificationRows({ limit: "20" });
-  const trend = useStatsTrend(trendHours);
-  const hostStats = useStatsHosts();
+  const trend = useStatsTrend(trendHours, tenantParam);
+  const hostStats = useStatsHosts(tenantParam);
   const detail = useIncident(detailId);
 
   const { toast } = useToast();
@@ -141,6 +148,25 @@ export function OpsPage() {
   return (
     <div data-testid="ops-page">
       <PageHeader title={t("ops.title")} description={t("ops.description")} />
+
+      {isHq && (
+        <div className="mb-4 flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{t("tenants.filterLabel")}</span>
+          <Select value={tenantFilter} onValueChange={setTenantFilter}>
+            <SelectTrigger className="h-8 w-44" data-testid="tenant-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>{t("tenants.allTenants")}</SelectItem>
+              {(tenants.data?.data ?? []).map((tenant) => (
+                <SelectItem key={tenant.slug} value={tenant.slug}>
+                  {tenant.slug}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -196,6 +222,7 @@ export function OpsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("ops.incident")}</TableHead>
+                    {isHq && <TableHead>{t("tenants.tenant")}</TableHead>}
                     <TableHead>{t("rules.severity")}</TableHead>
                     <TableHead>{t("ops.status")}</TableHead>
                     <TableHead className="text-right">{t("ops.alerts")}</TableHead>
@@ -215,6 +242,13 @@ export function OpsPage() {
                           {incident.group_key ?? "-"}
                         </div>
                       </TableCell>
+                      {isHq && (
+                        <TableCell>
+                          <Badge variant="outline">
+                            {(incident.tenant_id && tenantSlugById.get(incident.tenant_id)) || "-"}
+                          </Badge>
+                        </TableCell>
+                      )}
                       <TableCell>
                         <SeverityBadge severity={incident.severity} />
                       </TableCell>

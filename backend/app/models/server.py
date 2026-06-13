@@ -4,10 +4,10 @@ from typing import Any
 from sqlalchemy import ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import JsonType, TimestampedBase
+from app.models.base import JsonType, TenantScoped, TimestampedBase
 
 
-class Server(TimestampedBase):
+class Server(TenantScoped, TimestampedBase):
     __tablename__ = "servers"
 
     name: Mapped[str] = mapped_column(String(255), unique=True, index=True)

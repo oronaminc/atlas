@@ -65,6 +65,7 @@ async def create_notifications(
         db.add(
             Notification(
                 incident_id=incident.id,
+                tenant_id=incident.tenant_id,
                 channel=channel,
                 recipient_user_id=user.id,
                 recipient_address=address,
@@ -86,12 +87,6 @@ async def fan_out_pending(db: AsyncSession, *, now: datetime) -> int:
         stmt = stmt.with_for_update(skip_locked=True)
     candidate_ids = list((await db.execute(stmt)).scalars())
 
-    routes = list(
-        (
-            await db.execute(select(NotificationRoute).where(NotificationRoute.enabled.is_(True)))
-        ).scalars()
-    )
-
     created_total = 0
     for incident_id in candidate_ids:
         claimed = await db.execute(
@@ -105,6 +100,18 @@ async def fan_out_pending(db: AsyncSession, *, now: datetime) -> int:
         incident = await db.get(Incident, incident_id)
         await db.refresh(incident)
         severity_rank = SEVERITY_RANK.get(incident.severity, 0)
+        # routes are tenant-scoped: only the incident's own tenant's routes
+        # match (NULL-tenant incidents -> NULL-tenant/legacy routes)
+        routes = list(
+            (
+                await db.execute(
+                    select(NotificationRoute).where(
+                        NotificationRoute.enabled.is_(True),
+                        NotificationRoute.tenant_id == incident.tenant_id,
+                    )
+                )
+            ).scalars()
+        )
         for route in routes:
             if severity_rank < SEVERITY_RANK.get(route.min_severity, 0):
                 continue

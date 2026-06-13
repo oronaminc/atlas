@@ -7,6 +7,7 @@ from app.models.notification import NotificationPolicy, Receiver, Silence
 from app.models.rule import AlertRule, RuleGroup, RuleGroupRule
 from app.models.server import Server
 from app.models.sync import SyncState
+from app.models.tenant import MimirOrgMap, Tenant
 from app.models.user import User
 
 __all__ = [
@@ -27,7 +28,9 @@ __all__ = [
     "RuleGroupRule",
     "Server",
     "Silence",
+    "MimirOrgMap",
     "SyncState",
+    "Tenant",
     "User",
     "UserGroup",
 ]

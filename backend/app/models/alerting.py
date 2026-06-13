@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import JsonType, TimestampedBase
+from app.models.base import JsonType, TenantScoped, TimestampedBase
 
 
 class IncidentStatus(enum.StrEnum):
@@ -21,9 +21,12 @@ class IncidentStatus(enum.StrEnum):
     suppressed = "suppressed"
 
 
-class AlertEvent(TimestampedBase):
+class AlertEvent(TenantScoped, TimestampedBase):
     __tablename__ = "alert_events"
-    __table_args__ = (Index("ix_alert_events_fp_received", "fingerprint", "received_at"),)
+    __table_args__ = (
+        Index("ix_alert_events_fp_received", "fingerprint", "received_at"),
+        Index("ix_alert_events_tenant_received", "tenant_id", "received_at"),
+    )
 
     fingerprint: Mapped[str] = mapped_column(String(64), index=True)
     source: Mapped[str] = mapped_column(String(100), index=True)
@@ -44,9 +47,12 @@ class AlertEvent(TimestampedBase):
     incident: Mapped["Incident | None"] = relationship(back_populates="alerts")
 
 
-class Incident(TimestampedBase):
+class Incident(TenantScoped, TimestampedBase):
     __tablename__ = "incidents"
-    __table_args__ = (Index("ix_incidents_group_key_last_seen", "group_key", "last_seen"),)
+    __table_args__ = (
+        Index("ix_incidents_group_key_last_seen", "group_key", "last_seen"),
+        Index("ix_incidents_tenant_last_seen", "tenant_id", "last_seen"),
+    )
 
     title: Mapped[str] = mapped_column(String(500))
     status: Mapped[IncidentStatus] = mapped_column(
@@ -69,7 +75,7 @@ class Incident(TimestampedBase):
     )
 
 
-class IncidentEvent(TimestampedBase):
+class IncidentEvent(TenantScoped, TimestampedBase):
     """Timeline entry: created / alert_attached / status_changed / comment."""
 
     __tablename__ = "incident_events"

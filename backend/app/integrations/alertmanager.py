@@ -15,8 +15,8 @@ from app.integrations.base import BaseIntegrationClient
 
 
 class AlertmanagerClient(BaseIntegrationClient):
-    def __init__(self, base_url: str | None = None) -> None:
-        super().__init__(base_url or settings.MIMIR_ALERTMANAGER_URL)
+    def __init__(self, base_url: str | None = None, org: str | None = None) -> None:
+        super().__init__(base_url or settings.MIMIR_ALERTMANAGER_URL, org=org)
 
     # --- config (routing / receivers) ---
 

@@ -6,6 +6,7 @@ persisted, so ingestion ack never waits on correlation.
 """
 
 import logging
+import uuid
 from datetime import datetime
 
 from sqlalchemy import select, text
@@ -27,8 +28,13 @@ def max_severity(a: str, b: str) -> str:
     return a if _SEVERITY_RANK.get(a, 0) >= _SEVERITY_RANK.get(b, 0) else b
 
 
-def build_event(alert: NormalizedAlert, received_at: datetime) -> AlertEvent:
+def build_event(
+    alert: NormalizedAlert,
+    received_at: datetime,
+    tenant_id: uuid.UUID | None = None,
+) -> AlertEvent:
     return AlertEvent(
+        tenant_id=tenant_id,
         fingerprint=compute_fingerprint(alert.source, alert.name, alert.labels),
         source=alert.source,
         name=alert.name,
@@ -69,7 +75,8 @@ class CorrelationEngine:
         now: datetime,
     ) -> AlertEvent:
         # Stage 1: dedup — collapse into the previous row, drop this one.
-        if await self.dedup_store.seen_within(event.fingerprint, config.dedup_window_seconds):
+        dedup_key = f"{event.tenant_id}:{event.fingerprint}"
+        if await self.dedup_store.seen_within(dedup_key, config.dedup_window_seconds):
             prior = await self._latest_other_event(db, event)
             if prior is not None:
                 prior.dedup_count += 1
@@ -83,7 +90,10 @@ class CorrelationEngine:
         # PG-only true-race guard; SQLite (tests) relies on CAS claims +
         # sequential interleaving. Lock is released at tx end.
         if group_key and db.bind.dialect.name == "postgresql":
-            await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:gk))"), {"gk": group_key})
+            await db.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:gk))"),
+                {"gk": f"{event.tenant_id}:{group_key}"},
+            )
         incident = None
         for strategy in self.strategies:
             incident = await strategy.find_incident(
@@ -92,6 +102,7 @@ class CorrelationEngine:
                 group_key,
                 now=now,
                 window_seconds=config.correlation_window_seconds,
+                tenant_id=event.tenant_id,
             )
             if incident is not None:
                 break
@@ -99,6 +110,7 @@ class CorrelationEngine:
         # Stage 3: incident attach / create.
         if incident is None:
             incident = Incident(
+                tenant_id=event.tenant_id,
                 title=self._title(alert, group_key),
                 status=IncidentStatus.open,
                 severity=alert.severity,
@@ -109,7 +121,14 @@ class CorrelationEngine:
             )
             db.add(incident)
             await db.flush()
-            db.add(IncidentEvent(incident_id=incident.id, kind="created", payload={}))
+            db.add(
+                IncidentEvent(
+                    incident_id=incident.id,
+                    tenant_id=incident.tenant_id,
+                    kind="created",
+                    payload={},
+                )
+            )
 
         event.incident_id = incident.id
         incident.alert_count += 1
@@ -118,6 +137,7 @@ class CorrelationEngine:
         db.add(
             IncidentEvent(
                 incident_id=incident.id,
+                tenant_id=incident.tenant_id,
                 kind="alert_attached",
                 payload={"alert_event_id": str(event.id), "name": alert.name},
             )
@@ -135,7 +155,11 @@ class CorrelationEngine:
     async def _latest_other_event(db: AsyncSession, event: AlertEvent) -> AlertEvent | None:
         res = await db.execute(
             select(AlertEvent)
-            .where(AlertEvent.fingerprint == event.fingerprint, AlertEvent.id != event.id)
+            .where(
+                AlertEvent.fingerprint == event.fingerprint,
+                AlertEvent.id != event.id,
+                AlertEvent.tenant_id == event.tenant_id,
+            )
             .order_by(AlertEvent.received_at.desc())
             .limit(1)
         )

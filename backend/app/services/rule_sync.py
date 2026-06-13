@@ -57,13 +57,32 @@ async def get_or_create_sync_state(db: AsyncSession, target: SyncTarget) -> Sync
     return state
 
 
-async def sync_all_rule_groups(db: AsyncSession, ruler: Any) -> SyncState:
-    """Pushes every rule group to the ruler. `ruler` is a MimirRulerClient
-    (typed as Any so tests can pass fakes)."""
+async def org_for_tenant(db: AsyncSession, tenant_id) -> str | None:
+    """First mapped Mimir org for a tenant (rule groups push under it)."""
+    if tenant_id is None:
+        return None
+    from app.models.tenant import MimirOrgMap
+
+    return (
+        await db.execute(
+            select(MimirOrgMap.mimir_org)
+            .where(MimirOrgMap.tenant_id == tenant_id)
+            .order_by(MimirOrgMap.mimir_org)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
+async def sync_all_rule_groups(db: AsyncSession, ruler: Any, ruler_factory=None) -> SyncState:
+    """Pushes every rule group to the ruler under its tenant's Mimir org.
+    `ruler` is the default-org MimirRulerClient (typed as Any so tests can
+    pass fakes); `ruler_factory(org)` builds per-org clients — when None,
+    everything goes through `ruler` (legacy/single-org behavior)."""
     state = await get_or_create_sync_state(db, SyncTarget.ruler)
     res = await db.execute(select(RuleGroup))
     groups = list(res.scalars().unique())
 
+    orgs = {(g.namespace, g.name): await org_for_tenant(db, g.tenant_id) for g in groups}
     payloads = {(g.namespace, g.name): serialize_rule_group(g) for g in groups}
     checksum = payload_checksum(
         sorted((ns, name, json.dumps(p, sort_keys=True)) for (ns, name), p in payloads.items())
@@ -73,8 +92,15 @@ async def sync_all_rule_groups(db: AsyncSession, ruler: Any) -> SyncState:
         return state
 
     try:
-        for (namespace, _name), payload in payloads.items():
-            await ruler.set_rule_group(namespace, payload)
+        clients: dict[str, Any] = {}
+        for (namespace, name), payload in payloads.items():
+            org = orgs.get((namespace, name))
+            client = ruler
+            if ruler_factory is not None and org and org != getattr(ruler, "org", None):
+                if org not in clients:
+                    clients[org] = ruler_factory(org)
+                client = clients[org]
+            await client.set_rule_group(namespace, payload)
         state.status = SyncStatus.ok
         state.last_error = None
         state.last_synced_at = utcnow()
@@ -87,8 +113,13 @@ async def sync_all_rule_groups(db: AsyncSession, ruler: Any) -> SyncState:
     return state
 
 
-async def sync_one_rule_group(db: AsyncSession, ruler: Any, group: RuleGroup) -> None:
+async def sync_one_rule_group(
+    db: AsyncSession, ruler: Any, group: RuleGroup, ruler_factory=None
+) -> None:
     payload = serialize_rule_group(group)
+    org = await org_for_tenant(db, group.tenant_id)
+    if ruler_factory is not None and org and org != getattr(ruler, "org", None):
+        ruler = ruler_factory(org)
     await ruler.set_rule_group(group.namespace, payload)
 
 

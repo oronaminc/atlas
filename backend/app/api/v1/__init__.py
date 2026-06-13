@@ -16,6 +16,7 @@ from app.api.v1 import (
     servers,
     stats,
     sync,
+    tenants,
     users,
 )
 
@@ -36,3 +37,4 @@ api_router.include_router(stats.router)
 api_router.include_router(graph.router)
 api_router.include_router(sync.router)
 api_router.include_router(audit.router)
+api_router.include_router(tenants.router)

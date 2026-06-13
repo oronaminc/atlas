@@ -7,7 +7,8 @@ FastAPI + React app on top of Alloy+Mimir+Loki+Tempo+Grafana. Two subsystems:
 ## Architecture (data flow)
 
 ```
-POST /api/v1/ingest/{provider}  (X-Atlas-Ingest-Key; durable insert → 202; Redis stream wake-up)
+Alloy (per subsidiary, sets X-Scope-OrgID) → Mimir org → AM webhook → POST /api/v1/ingest/{provider}/{org}
+  (mimir_org_map: org → tenant_id, stamped on alert_events; un-orged legacy route = default tenant/key)
   → correlation_worker: claim_events (CAS+lease) → engine: dedup (fingerprint+Redis window)
       → group (AttributeTimeStrategy: group_key host>service>cluster + time window; LLMStrategy=stub)
       → incident attach/create (pg_advisory_xact_lock(group_key) on PG — no split-brain)
@@ -19,7 +20,14 @@ POST /api/v1/ingest/{provider}  (X-Atlas-Ingest-Key; durable insert → 202; Red
 
 ## Invariants — do not break
 
-- **X-Scope-OrgID: system** injected exactly once in `backend/app/integrations/base.py::make_client()`; never per-call.
+- **X-Scope-OrgID** injected exactly once in `backend/app/integrations/base.py::make_client(base_url, org)`;
+  never per-call. `org` resolves from the tenant (`mimir_org_map`); default = `MIMIR_TENANT_ID` ("system").
+- **Tenancy choke point** (`core/tenancy.py`): `get_current_user` sets `session.info["tenant_scope"]`;
+  a global `do_orm_execute` listener auto-filters every SELECT on `TenantScoped` models and
+  `before_flush` stamps new rows. Endpoints NEVER write tenant filters by hand. `tenant_id` is
+  nullable: NULL = legacy/system rows, visible only to HQ (users.tenant_id NULL). Workers run
+  unscoped and stamp per-row from the event/incident. Correlation dedup/window/advisory-lock and
+  fanout route-match are keyed by tenant — same host on two tenants must NEVER merge (tested).
 - **At-least-once + idempotency**: outbox rows (`notifications`) created before side effects; `UNIQUE(incident_id, channel, recipient_user_id)`; duplicate send on crash-in-send-commit-gap is accepted, lost sends are not.
 - **Replica safety = PG CAS + 60s lease** (`app/notifications/outbox.py`, `correlation_worker.claim_events`): `UPDATE ... WHERE claimed_at IS NULL OR claimed_at < now-lease`; `FOR UPDATE SKIP LOCKED` is a PG-only optimization, the CAS is the correctness guard. `mark_*`/`defer` must clear `claimed_at`.
 - **Abstraction boundaries**: new alert source = module in `app/providers/` + registry entry; new channel = module in `app/notifications/channels/` + registry entry. The engine/worker never see provider/channel specifics. `llm_similar` edge kind + `LLMStrategy` are reserved stubs.
@@ -43,7 +51,7 @@ Lane cap before the "+N hosts" expander: `GRAPH_MAX_VISIBLE_LANES` (same file).
 
 ```bash
 # backend (from backend/)
-uv run pytest -q                                  # 133 SQLite tests
+uv run pytest -q                                  # 155 SQLite tests
 uv run ruff check . && uv run black --check .
 ATLAS_PG_TEST_URL=postgresql+asyncpg://atlas:atlas@127.0.0.1:5432/atlas uv run pytest tests/pg -q   # real-PG concurrency
 ./scripts/pg_concurrency_test.sh                  # same, boots compose postgres
@@ -124,12 +132,19 @@ Box: 4 vCPU / 16GB container, PG 16 + Redis local — treat as relative numbers.
 
 ## Status (do not redo)
 
+Phase 2 multi-tenancy: hierarchical row-level tenancy (HQ = tenant_id NULL sees all; tenant users
+locked to their tenant), Mimir-org-driven attribution (`tenants` + `mimir_org_map` + org-qualified
+ingest webhooks provisioned by `services/am_provision.py` behind AM_PROVISION_ENABLED), per-tenant
+notification settings/bot token/quotas/throttle + tenant-scoped routes (kills the Phase 1 global-route
+explosion), per-org rule sync + HQ alerts-proxy fan-out, tenants admin UI (/settings, HQ) + user
+reassignment (/users, HQ) + /ops tenant filter+column, migration 0005 (batched backfill to default
+"system" tenant; create_admin bootstraps HQ). 22 tenancy tests (isolation/pipeline/RBAC matrix).
 All 12 original spec phases + correlation engine + notification delivery/HA + ops dashboard
 (`/ops`) + 2D swimlane graph (`/graph`, hand-rolled SVG + d3-scale, lazy chunk; replaced the
 former 3D view — three/r3f/d3-force-3d removed) + incident suppression (status enum value
 `suppressed`, migration 0004: reversible mute, excluded from active lists/stats, still absorbs
 alerts without re-notifying; editor+ via /ops detail dialog) + RBAC UI alignment (nav/route
-guards admin pages; incident + receiver-test actions gated editor+). 133 SQLite tests + 6 vitest,
+guards admin pages; incident + receiver-test actions gated editor+). 155 SQLite tests + 6 vitest,
 2 real-PG concurrency tests, 9 stats/graph tests included. Browser e2e verified: rules flow,
-admin settings, ops dashboard, 2D swimlane graph, 3-role RBAC + suppression flow
-(screenshots in session history).
+admin settings, ops dashboard, 2D swimlane graph, 3-role RBAC + suppression flow, multi-tenant
+HQ/subsidiary isolation (screenshots in session history).

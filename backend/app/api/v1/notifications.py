@@ -35,6 +35,12 @@ def get_alertmanager_client():
     return AlertmanagerClient()
 
 
+def get_alertmanager_client_for_org(org: str | None):
+    from app.integrations.alertmanager import AlertmanagerClient
+
+    return AlertmanagerClient(org=org)
+
+
 def _encrypt_config(config: dict) -> dict:
     return {
         k: encrypt_secret(str(v)) if k in SECRET_KEYS and v is not None else v

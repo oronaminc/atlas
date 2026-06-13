@@ -122,6 +122,20 @@ To validate manifests without a cluster:
 kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -
 ```
 
+## Multi-tenancy (subsidiaries)
+
+Tenancy is **Mimir-org-driven**: Alloy stamps each subsidiary's telemetry with its
+X-Scope-OrgID; `mimir_org_map` maps orgs (N:1) to tenants; alerts arriving on the
+org-qualified webhook `/api/v1/ingest/{provider}/{org}` are stamped with the tenant
+and stay isolated end to end (correlation, incidents, notifications, stats, graph,
+audit). Enforcement is a single ORM choke point (`backend/app/core/tenancy.py`) —
+no per-endpoint filters. HQ users (`users.tenant_id` NULL) see all tenants and get
+a tenant filter on /ops plus tenant management in /settings; subsidiary users see
+only their own tenant. Per-tenant notification settings: own Telegram bot token,
+rate, and quotas. Bootstrap an HQ admin with `scripts/create_admin.py`; migration
+0005 backfills existing data/users into a default tenant mapped to the legacy
+`system` org.
+
 ## UI pages
 
 - `/ops` — ops dashboard (incidents, delivery status, severity trend, per-host; 10s auto-refresh).

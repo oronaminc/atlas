@@ -1,4 +1,4 @@
-from app.api.v1.notifications import get_alertmanager_client
+from app.api.v1.alerts import get_am_factory
 from app.main import app
 
 
@@ -16,13 +16,13 @@ async def test_active_alerts_proxy(client, viewer_headers):
                 }
             ]
 
-    app.dependency_overrides[get_alertmanager_client] = lambda: FakeAM()
+    app.dependency_overrides[get_am_factory] = lambda: (lambda org=None: FakeAM())
     try:
         res = await client.get("/api/v1/alerts/active", headers=viewer_headers)
         assert res.status_code == 200
         assert res.json()["data"][0]["labels"]["alertname"] == "HighCPU"
     finally:
-        app.dependency_overrides.pop(get_alertmanager_client, None)
+        app.dependency_overrides.pop(get_am_factory, None)
 
 
 async def test_active_alerts_unreachable_returns_502(client, viewer_headers):
@@ -30,12 +30,12 @@ async def test_active_alerts_unreachable_returns_502(client, viewer_headers):
         async def get_active_alerts(self):
             raise RuntimeError("connection refused")
 
-    app.dependency_overrides[get_alertmanager_client] = lambda: DownAM()
+    app.dependency_overrides[get_am_factory] = lambda: (lambda org=None: DownAM())
     try:
         res = await client.get("/api/v1/alerts/active", headers=viewer_headers)
         assert res.status_code == 502
     finally:
-        app.dependency_overrides.pop(get_alertmanager_client, None)
+        app.dependency_overrides.pop(get_am_factory, None)
 
 
 async def test_healthz(client):

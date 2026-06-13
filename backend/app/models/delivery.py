@@ -15,10 +15,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import AwareDateTime, JsonType, TimestampedBase
+from app.models.base import AwareDateTime, JsonType, TenantScoped, TimestampedBase
 
 
-class Notification(TimestampedBase):
+class Notification(TenantScoped, TimestampedBase):
     """Outbox row = persisted send intent. Created before any side effect;
     claimed via CAS+lease; at-least-once delivery."""
 
@@ -28,6 +28,7 @@ class Notification(TimestampedBase):
             "incident_id", "channel", "recipient_user_id", name="uq_notification_target"
         ),
         Index("ix_notifications_status_retry", "status", "retry_at"),
+        Index("ix_notifications_tenant_status_created", "tenant_id", "status", "created_at"),
     )
 
     incident_id: Mapped[uuid.UUID] = mapped_column(
@@ -52,7 +53,7 @@ class Notification(TimestampedBase):
     incident = relationship("Incident", lazy="joined")
 
 
-class NotificationRoute(TimestampedBase):
+class NotificationRoute(TenantScoped, TimestampedBase):
     """Per-group send config: one route per group."""
 
     __tablename__ = "notification_routes"
@@ -64,7 +65,7 @@ class NotificationRoute(TimestampedBase):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
-class NotificationSettings(TimestampedBase):
+class NotificationSettings(TenantScoped, TimestampedBase):
     """Single row: bot token (Fernet-encrypted), rate limit, quotas."""
 
     __tablename__ = "notification_settings"

@@ -1,7 +1,8 @@
 import enum
+import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, String
+from sqlalchemy import Boolean, DateTime, Enum, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import TimestampedBase
@@ -21,6 +22,10 @@ class GlobalRole(enum.StrEnum):
 class User(TimestampedBase):
     __tablename__ = "users"
 
+    # NULL = HQ user (sees all tenants); set = locked to that tenant.
+    # No FK: 0001's metadata bootstrap creates users before tenants exists;
+    # tenants are soft-deactivated, never hard-deleted.
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     username: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)

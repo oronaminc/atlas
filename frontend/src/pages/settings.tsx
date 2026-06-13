@@ -21,10 +21,14 @@ import {
   NotificationSettingsCard,
   RecipientsCard,
 } from "@/features/notifications/notification-admin";
+import { TenantsCard } from "@/features/tenants/tenants-card";
+import { useAuth } from "@/hooks/use-auth";
 
 export function SettingsPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { user: me } = useAuth();
+  const isHq = me?.tenant_id == null;
   const config = useCorrelationConfig();
 
   const [dedupWindow, setDedupWindow] = useState("");
@@ -123,6 +127,7 @@ export function SettingsPage() {
       </Card>
 
       <div className="mt-6 space-y-6">
+        {isHq && <TenantsCard />}
         <NotificationSettingsCard />
         <NotificationRoutesCard />
         <RecipientsCard />

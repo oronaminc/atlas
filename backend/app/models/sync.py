@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, Enum, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import TimestampedBase
+from app.models.base import TenantScoped, TimestampedBase
 
 
 class SyncTarget(enum.StrEnum):
@@ -18,7 +18,7 @@ class SyncStatus(enum.StrEnum):
     failed = "failed"
 
 
-class SyncState(TimestampedBase):
+class SyncState(TenantScoped, TimestampedBase):
     __tablename__ = "sync_state"
     __table_args__ = (UniqueConstraint("target", name="uq_sync_target"),)
 

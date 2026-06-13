@@ -8,6 +8,7 @@ import {
 import { api } from "@/api/client";
 import type {
   ActiveAlert,
+  Tenant,
   CorrelationConfig,
   HostStat,
   Incident,
@@ -139,27 +140,31 @@ export const useNotificationRows = (params?: Params) =>
     queryFn: () => api.get<NotificationRow[]>("/notifications", params),
     refetchInterval: OPS_REFRESH_MS,
   });
-export const useStatsOverview = () =>
+export const useStatsOverview = (tenant?: string) =>
   useQuery({
-    queryKey: ["stats", "overview"],
-    queryFn: () => api.get<StatsOverview>("/stats/overview"),
+    queryKey: ["stats", "overview", tenant],
+    queryFn: () => api.get<StatsOverview>("/stats/overview", tenant ? { tenant } : undefined),
     refetchInterval: OPS_REFRESH_MS,
   });
-export const useStatsTrend = (hours: number) =>
+export const useStatsTrend = (hours: number, tenant?: string) =>
   useQuery({
-    queryKey: ["stats", "trend", hours],
+    queryKey: ["stats", "trend", hours, tenant],
     queryFn: () =>
       api.get<{ bucket_seconds: number; buckets: TrendBucket[] }>("/stats/trend", {
         hours: String(hours),
+        ...(tenant ? { tenant } : {}),
       }),
     refetchInterval: OPS_REFRESH_MS,
   });
-export const useStatsHosts = () =>
+export const useStatsHosts = (tenant?: string) =>
   useQuery({
-    queryKey: ["stats", "hosts"],
-    queryFn: () => api.get<HostStat[]>("/stats/hosts"),
+    queryKey: ["stats", "hosts", tenant],
+    queryFn: () => api.get<HostStat[]>("/stats/hosts", tenant ? { tenant } : undefined),
     refetchInterval: OPS_REFRESH_MS,
   });
+
+// --- Tenants ---
+export const useTenants = () => useList<Tenant>(["tenants"], "/tenants");
 
 // --- Sync / Audit / Alerts ---
 export const useSyncState = () =>

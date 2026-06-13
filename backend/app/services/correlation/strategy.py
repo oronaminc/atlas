@@ -1,6 +1,7 @@
 """Stage-2 correlation strategies (pluggable)."""
 
 import logging
+import uuid
 from datetime import datetime, timedelta
 from typing import Protocol
 
@@ -22,6 +23,7 @@ class CorrelationStrategy(Protocol):
         *,
         now: datetime,
         window_seconds: int,
+        tenant_id: uuid.UUID | None = None,
     ) -> Incident | None: ...
 
 
@@ -37,6 +39,7 @@ class AttributeTimeStrategy:
         *,
         now: datetime,
         window_seconds: int,
+        tenant_id: uuid.UUID | None = None,
     ) -> Incident | None:
         if group_key is None:
             return None
@@ -45,6 +48,7 @@ class AttributeTimeStrategy:
             select(Incident)
             .where(
                 Incident.group_key == group_key,
+                Incident.tenant_id == tenant_id,
                 Incident.status != IncidentStatus.resolved,
                 Incident.last_seen >= cutoff,
             )
@@ -69,6 +73,7 @@ class LLMStrategy:
         *,
         now: datetime,
         window_seconds: int,
+        tenant_id: uuid.UUID | None = None,
     ) -> Incident | None:
         logger.debug("LLMStrategy stub: no-op")
         return None

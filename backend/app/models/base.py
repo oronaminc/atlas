@@ -31,6 +31,16 @@ class Base(DeclarativeBase):
     pass
 
 
+class TenantScoped:
+    """Row-level tenancy mixin. tenant_id is nullable by design:
+    NULL = legacy/system rows, visible ONLY to HQ users (tenant_scope None).
+    The session-level choke point in core/tenancy.py auto-filters every
+    SELECT on these models and stamps tenant_id on flush when a scope is
+    set — endpoints never apply tenant filters themselves."""
+
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
+
+
 class TimestampedBase(Base):
     """Common columns shared by every table: uuid pk + audit timestamps/actors."""
 
