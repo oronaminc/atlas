@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Activity, BellRing, Flame, Server } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -6,6 +7,7 @@ import {
   useApiMutation,
   useGroups,
   useIncident,
+  useIncidentAnalysis,
   useIncidents,
   useNotificationRows,
   useStatsHosts,
@@ -109,6 +111,11 @@ export function OpsPage() {
   const tenantSlugById = new Map((tenants.data?.data ?? []).map((x) => [x.id, x.slug]));
   const [trendHours, setTrendHours] = useState(24);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const id = searchParams.get("incident");
+    if (id) setDetailId(id);
+  }, [searchParams]);
 
   const overview = useStatsOverview(tenantParam);
   const incidents = useIncidents({
@@ -120,6 +127,12 @@ export function OpsPage() {
   const trend = useStatsTrend(trendHours, tenantParam);
   const hostStats = useStatsHosts(tenantParam);
   const detail = useIncident(detailId);
+  const analysis = useIncidentAnalysis(detailId);
+  const analyze = useApiMutation(
+    ({ force }: { force?: boolean }) =>
+      api.post(`/incidents/${detailId}/analyze${force ? "?force=true" : ""}`),
+    ["incident-analysis"],
+  );
 
   const { toast } = useToast();
   const groups = useGroups();
@@ -508,6 +521,72 @@ export function OpsPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* LLM analysis (Feature A) */}
+              <div data-testid="incident-analysis">
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">{t("llm.analysis")}</h3>
+                  {canEdit && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        analyze.isPending ||
+                        analysis.data?.data?.status === "pending" ||
+                        analysis.data?.data?.status === "running"
+                      }
+                      onClick={() =>
+                        analyze.mutate(
+                          { force: analysis.data?.data?.status === "done" },
+                          {
+                            onError: (e) =>
+                              toast({
+                                variant: "destructive",
+                                title: t("common.failed"),
+                                description: e instanceof Error ? e.message : String(e),
+                              }),
+                          },
+                        )
+                      }
+                      data-testid="analyze-button"
+                    >
+                      {analysis.data?.data?.status === "done"
+                        ? t("llm.reanalyze")
+                        : t("llm.analyze")}
+                    </Button>
+                  )}
+                </div>
+                {(() => {
+                  const a = analysis.data?.data;
+                  if (!a) return <p className="text-xs text-muted-foreground">{t("llm.none")}</p>;
+                  if (a.status === "pending" || a.status === "running")
+                    return (
+                      <p className="text-xs text-muted-foreground" data-testid="analysis-running">
+                        {t("llm.running")}
+                      </p>
+                    );
+                  if (a.status === "failed")
+                    return (
+                      <p className="text-xs text-destructive" data-testid="analysis-failed">
+                        {t("llm.failed")}: {a.error}
+                      </p>
+                    );
+                  return (
+                    <div className="space-y-1 rounded-md border p-2 text-sm" data-testid="analysis-done">
+                      {a.root_cause && (
+                        <p>
+                          <span className="font-semibold">{t("llm.rootCause")}:</span>{" "}
+                          {a.root_cause}
+                        </p>
+                      )}
+                      <p className="text-muted-foreground">{a.summary}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {a.model} · {a.tokens_used} tokens
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>

@@ -11,8 +11,10 @@ from app.core.pagination import decode_cursor, page_meta
 from app.db import get_db
 from app.models import Group, Incident, User
 from app.models.alerting import IncidentEvent, IncidentStatus
+from app.models.llm import IncidentAnalysis
 from app.schemas.alerting import IncidentDetailOut, IncidentOut
 from app.schemas.delivery import NotifyRequest
+from app.schemas.llm import IncidentAnalysisOut
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
@@ -75,6 +77,67 @@ async def get_incident(
 ):
     incident = await load_incident(db, incident_id)
     return envelope(IncidentDetailOut.model_validate(incident).model_dump(mode="json"))
+
+
+@router.post("/{incident_id}/analyze")
+async def analyze_incident(
+    incident_id: uuid.UUID,
+    request: Request,
+    force: bool = False,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_editor),
+):
+    """Enqueue an LLM analysis (editor+). Idempotent: an existing job is
+    reused unless ?force=true. The llm_worker runs it async; poll
+    GET /incidents/{id}/analysis. tenant_id is stamped from the incident so
+    the worker sends only to this service's configured endpoint."""
+    incident = await load_incident(db, incident_id)  # 404 if cross-tenant
+    existing = (
+        await db.execute(
+            select(IncidentAnalysis).where(IncidentAnalysis.incident_id == incident.id)
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        existing = IncidentAnalysis(
+            incident_id=incident.id, tenant_id=incident.tenant_id, status="pending"
+        )
+        db.add(existing)
+    elif force or existing.status in ("done", "failed"):
+        existing.status = "pending"
+        existing.claimed_at = None
+        existing.claimed_by = None
+        existing.attempts = 0
+        if force:
+            existing.prompt_hash = None  # bust the cache
+    await record_audit(
+        db,
+        actor_id=user.id,
+        action="analyze",
+        resource_type="incident",
+        resource_id=incident.id,
+        after={"force": force},
+        ip=client_ip(request),
+    )
+    await db.commit()
+    await db.refresh(existing)
+    return envelope(IncidentAnalysisOut.model_validate(existing).model_dump(mode="json"))
+
+
+@router.get("/{incident_id}/analysis")
+async def get_incident_analysis(
+    incident_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    incident = await load_incident(db, incident_id)  # tenancy-scoped 404
+    row = (
+        await db.execute(
+            select(IncidentAnalysis).where(IncidentAnalysis.incident_id == incident.id)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return envelope(None)
+    return envelope(IncidentAnalysisOut.model_validate(row).model_dump(mode="json"))
 
 
 @router.post("/{incident_id}/notify")

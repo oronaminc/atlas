@@ -179,6 +179,22 @@ Air-gap, Prometheus-compatible, zero new deps (hand-rolled exposition).
   Prometheus `rule_files:`. Scrape via the pod annotations
   (`prometheus.io/scrape|port|path`) — no Prometheus Operator required.
 
+## LLM incident analysis & search
+
+**AI analysis** — connect an OpenAI-compatible endpoint (self-hosted vLLM/
+Ollama/internal gateway is the primary, air-gap path; external OpenAI only if
+a service configures it and egress is allowed). Configured per-service in
+/settings (api_key encrypted). On an incident, "Analyze" (editor+) enqueues a
+job; a dedicated `llm_worker` pod calls the model and stores a root-cause +
+summary shown in the /ops dialog. Slow/failed calls never block the incident
+pipeline (CAS+lease jobs, retries, per-service daily quota, prompt-hash cache).
+Secrets/PII in labels are redacted before the prompt; a service's data is only
+ever sent to that service's own endpoint.
+
+**Search** — global top-bar search (host / label `key=value` / incident text),
+tenancy-scoped. Label search rides a jsonb GIN index and is time-bounded for
+partition pruning; results route into the swimlane graph or incident detail.
+
 ## UI pages
 
 - `/ops` — ops dashboard (incidents, delivery status, severity trend, per-host; 10s auto-refresh).

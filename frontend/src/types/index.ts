@@ -289,3 +289,28 @@ export interface GraphData {
   edges: GraphEdge[];
   meta: { truncated: boolean; total_incidents: number };
 }
+
+export interface HostSearchResult { host: string; incidents: number; last_seen: string | null; }
+export interface LabelSearchResult {
+  alert_event_id: string; name: string; severity: string;
+  incident_id: string | null; labels: Record<string, string>; received_at: string;
+}
+export interface TextSearchResult {
+  incident_id: string; title: string; severity: string; status: string;
+  group_key: string | null; last_seen: string;
+}
+export interface SearchResponse {
+  type: "host" | "label" | "text";
+  results: (HostSearchResult | LabelSearchResult | TextSearchResult)[];
+  error?: string;
+}
+export interface IncidentAnalysis {
+  incident_id: string; status: "pending" | "running" | "done" | "failed";
+  summary: string | null; root_cause: string | null; model: string | null;
+  tokens_used: number; error: string | null; completed_at: string | null;
+}
+export interface LLMConfig {
+  enabled: boolean; base_url: string; api_key: string | null; model: string;
+  max_prompt_chars: number; max_completion_tokens: number; daily_quota: number;
+  auto_analyze: boolean; redact_external_strict: boolean;
+}

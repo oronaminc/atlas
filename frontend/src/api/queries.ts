@@ -8,6 +8,7 @@ import {
 import { api } from "@/api/client";
 import type {
   ActiveAlert,
+  IncidentAnalysis,
   Tenant,
   CorrelationConfig,
   HostStat,
@@ -134,6 +135,17 @@ export const useIncident = (id: string | null) =>
     queryFn: () => api.get<IncidentDetail>(`/incidents/${id}`),
     enabled: !!id,
   });
+export const useIncidentAnalysis = (id: string | null) =>
+  useQuery({
+    queryKey: ["incident-analysis", id],
+    queryFn: () => api.get<IncidentAnalysis | null>(`/incidents/${id}/analysis`),
+    enabled: !!id,
+    refetchInterval: (query) => {
+      const st = query.state.data?.data?.status;
+      return st === "pending" || st === "running" ? 2000 : false;
+    },
+  });
+
 export const useNotificationRows = (params?: Params) =>
   useQuery({
     queryKey: ["notifications", params],

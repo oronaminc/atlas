@@ -176,5 +176,33 @@
     "notifications": "Notifications (days)",
     "audit": "Audit log (days)",
     "archive": "Archive partitions to CSV before dropping"
+  },
+  "llm": {
+    "title": "LLM analysis",
+    "help": "OpenAI-compatible endpoint for incident root-cause analysis. Self-hosted (vLLM/Ollama/gateway) is the primary path; external OpenAI only if egress is allowed.",
+    "enabled": "Enabled",
+    "baseUrl": "Base URL",
+    "baseUrlHelp": "e.g. http://vllm.internal:8000 (self-hosted) — empty = disabled",
+    "model": "Model",
+    "dailyQuota": "Daily analysis quota",
+    "apiKey": "API key",
+    "keySet": "key set (blank = keep)",
+    "keyUnset": "no key (self-hosted may not need one)",
+    "autoAnalyze": "Auto-analyze new incidents",
+    "redactStrict": "Strict redaction for external endpoints",
+    "analysis": "AI analysis",
+    "analyze": "Analyze",
+    "reanalyze": "Re-analyze",
+    "none": "Not analyzed yet.",
+    "running": "Analyzing…",
+    "failed": "Analysis failed",
+    "rootCause": "Root cause"
+  },
+  "search": {
+    "placeholder": "Search hosts, labels, incidents…",
+    "host": "Host",
+    "label": "Label",
+    "text": "Text",
+    "noResults": "No results"
   }
 }

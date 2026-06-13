@@ -9,6 +9,7 @@ resources:
   - correlation-worker.yaml
   - notification-worker.yaml
   - maintenance-worker.yaml
+  - llm-worker.yaml
   - frontend.yaml
   - ingress.yaml
   - networkpolicy-metrics.yaml

@@ -104,6 +104,21 @@ services:
     ports:
       - "9103:9100"   # /metrics /healthz /readyz
 
+  llm-worker:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://atlas:atlas@postgres:5432/atlas
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m app.workers.llm_worker
+    ports:
+      - "9105:9100"   # /metrics /healthz /readyz
+
   frontend:
     build: ./frontend
     ports:

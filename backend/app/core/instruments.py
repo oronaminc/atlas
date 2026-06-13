@@ -86,3 +86,11 @@ tenant_pending_softcap_breached = REGISTRY.gauge(
     "1 per service whose pending queue exceeds NOTIFY_PENDING_SOFTCAP",
     ("service",),
 )
+
+# --- LLM analysis (Feature A) ---
+llm_requests = REGISTRY.counter("atlas_llm_requests_total", "LLM analysis requests", ("outcome",))
+llm_tokens = REGISTRY.counter("atlas_llm_tokens_total", "LLM tokens consumed")
+llm_request_seconds = REGISTRY.histogram("atlas_llm_request_seconds", "LLM analysis run duration")
+llm_analysis_pending = REGISTRY.gauge(
+    "atlas_llm_analysis_pending", "Claimable incident-analysis jobs (pending+failed)"
+)

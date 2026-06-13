@@ -51,7 +51,7 @@ Lane cap before the "+N hosts" expander: `GRAPH_MAX_VISIBLE_LANES` (same file).
 
 ```bash
 # backend (from backend/)
-uv run pytest -q                                  # 180 SQLite tests
+uv run pytest -q                                  # 203 SQLite tests
 uv run ruff check . && uv run black --check .
 ATLAS_PG_TEST_URL=postgresql+asyncpg://atlas:atlas@127.0.0.1:5432/atlas uv run pytest tests/pg -q   # real-PG concurrency
 ./scripts/pg_concurrency_test.sh                  # same, boots compose postgres
@@ -75,7 +75,7 @@ kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -
 - `backend/app/`: `api/v1/` (routers incl. ingest/incidents/correlation_config/notification_admin/stats/graph),
   `core/`, `models/`, `schemas/`, `services/` (permissions/rule_sync/rule_validate/audit/correlation/),
   `providers/`, `notifications/` (channels/, fanout, outbox, delivery, throttle, settings),
-  `workers/` (sync, correlation, notification, maintenance)
+  `workers/` (sync, correlation, notification, maintenance, llm)
 - `frontend/src/`: `pages/` (incl. ops.tsx, graph.tsx lazy), `features/` (rules/, notifications/, ops/, graph/),
   `components/{ui,common,layout}`, `api/` (client.ts/queries.ts), `locales/{ko,en}.json`
 - `deploy/`: `k8s/{base,overlays/{dev,prod}}`, `flux/`, `kind-up.sh`
@@ -92,6 +92,37 @@ image automation commits to prod overlay markers). Secrets never plaintext in gi
 - Playwright: `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`, import from
   `/opt/node22/lib/node_modules/playwright/index.mjs`.
 - jsdelivr blocked. Working branch: `claude/epic-dijkstra-mgq4oa` (push only there).
+
+## Features: LLM analysis + search (2026-06-13)
+
+**LLM incident analysis (Feature A)** — OpenAI-compatible (vLLM/Ollama/gateway
+primary; external OpenAI opt-in). `llm_config` per-service (mirrors
+notification_settings: tenant_id NULL=default; api_key Fernet+MASKED;
+base_url empty + enabled=False by default → nothing sent until configured).
+`incident_analysis` is the job-as-row (UNIQUE(incident_id), CAS+lease claim);
+separate `llm_worker` pod runs it so a slow/failing LLM never blocks the
+incident pipeline. `app/integrations/llm.py` = own httpx client (NOT
+BaseIntegrationClient — no X-Scope-OrgID), retry+timeout, mock transport in
+tests. TENANCY: the job carries the incident's stamped tenant_id; config is
+resolved by THAT id → a service's incident only ever POSTs to its own
+endpoint (tested A→A, never B). Redaction before prompt: secret-keyed/
+secret-shaped values masked always; external endpoints additionally drop
+unknown label keys + cap free-text. prompt_hash cache (re-run only on change
+or ?force=true); per-service daily_quota (default 200, audited). On-demand
+`POST /incidents/{id}/analyze` (editor+) + `GET .../analysis`; `auto_analyze`
+flag (default off) enqueues via the worker (bounded, off the hot path).
+Metrics: atlas_llm_* . /ops dialog Analyze button + polled result.
+
+**Search (Feature B)** — `GET /search?q=&type=host|label|text&since=&limit=`,
+auto-scoped by the tenancy choke point (service users see only their rows, HQ
+all). host→incidents.group_key prefix (small table→/graph); label→
+alert_events.labels @> {k:v} TIME-BOUNDED (default 7d, max 30d → partition
+pruning) + GIN index `ix_alert_events_labels_gin` (jsonb_path_ops, migration
+0009, partition-local); text→incidents.title ILIKE (no pg_trgm — air-gap).
+EXPLAIN-asserted: GIN bitmap scan, no full-table seq scan, old partitions
+pruned. UI: debounced global top-bar search → results dropdown → host routes
+/graph, incident routes /ops?incident=<id> (ops opens the dialog from the
+query param).
 
 ## Phase 5: observability (2026-06-13, final)
 

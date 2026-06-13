@@ -176,5 +176,33 @@
     "notifications": "알림 발송 (일)",
     "audit": "감사 로그 (일)",
     "archive": "삭제 전 CSV로 아카이브"
+  },
+  "llm": {
+    "title": "LLM 분석",
+    "help": "인시던트 근본원인 분석용 OpenAI 호환 엔드포인트. 자체 호스팅(vLLM/Ollama/게이트웨이)이 기본; 외부 OpenAI는 외부 송신 허용 시에만.",
+    "enabled": "사용",
+    "baseUrl": "베이스 URL",
+    "baseUrlHelp": "예: http://vllm.internal:8000 (자체 호스팅) — 비우면 비활성화",
+    "model": "모델",
+    "dailyQuota": "일일 분석 쿼터",
+    "apiKey": "API 키",
+    "keySet": "키 설정됨(비우면 유지)",
+    "keyUnset": "키 없음(자체 호스팅은 불필요할 수 있음)",
+    "autoAnalyze": "신규 인시던트 자동 분석",
+    "redactStrict": "외부 엔드포인트에 엄격 마스킹",
+    "analysis": "AI 분석",
+    "analyze": "분석",
+    "reanalyze": "재분석",
+    "none": "아직 분석되지 않음.",
+    "running": "분석 중…",
+    "failed": "분석 실패",
+    "rootCause": "근본 원인"
+  },
+  "search": {
+    "placeholder": "호스트, 라벨, 인시던트 검색…",
+    "host": "호스트",
+    "label": "라벨",
+    "text": "텍스트",
+    "noResults": "결과 없음"
   }
 }

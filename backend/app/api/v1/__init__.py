@@ -9,11 +9,13 @@ from app.api.v1 import (
     groups,
     incidents,
     ingest,
+    llm_config,
     notification_admin,
     notifications,
     retention_config,
     rule_groups,
     rules,
+    search,
     servers,
     stats,
     sync,
@@ -40,3 +42,5 @@ api_router.include_router(graph.router)
 api_router.include_router(sync.router)
 api_router.include_router(audit.router)
 api_router.include_router(tenants.router)
+api_router.include_router(llm_config.router)
+api_router.include_router(search.router)

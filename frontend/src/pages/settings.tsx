@@ -21,6 +21,7 @@ import {
   NotificationSettingsCard,
   RecipientsCard,
 } from "@/features/notifications/notification-admin";
+import { LLMConfigCard } from "@/features/llm/llm-config-card";
 import { RetentionCard } from "@/features/maintenance/retention-card";
 import { TenantsCard } from "@/features/tenants/tenants-card";
 import { useAuth } from "@/hooks/use-auth";
@@ -130,6 +131,7 @@ export function SettingsPage() {
       <div className="mt-6 space-y-6">
         {isHq && <TenantsCard />}
         {isHq && <RetentionCard />}
+        <LLMConfigCard />
         <NotificationSettingsCard />
         <NotificationRoutesCard />
         <RecipientsCard />

@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/common/theme-toggle";
+import { GlobalSearch } from "@/components/layout/global-search";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
@@ -136,7 +137,10 @@ export function AppLayout() {
             </SheetContent>
           </Sheet>
 
-          <div className="flex-1" />
+          <div className="mx-2 hidden flex-1 sm:block">
+            <GlobalSearch />
+          </div>
+          <div className="flex-1 sm:hidden" />
 
           <ThemeToggle />
 

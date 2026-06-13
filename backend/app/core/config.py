@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # alarm threshold (admin-adjustable via notify_config; alert, never shed).
     METRICS_PORT: int = 9100
     NOTIFY_PENDING_SOFTCAP: int = 50000
+    LLM_REQUEST_TIMEOUT_SECONDS: float = 60.0
     METRICS_DB_CACHE_SECONDS: float = 15.0
     MIMIR_RULER_URL: str = "http://mimir:8080/prometheus/config/v1/rules"
     MIMIR_ALERTMANAGER_URL: str = "http://mimir-alertmanager:8080"
