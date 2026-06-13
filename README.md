@@ -158,6 +158,27 @@ before warning before info), and quota-deferred rows surface the reason in the
 /ops delivery panel. At-least-once + idempotency are preserved (CAS+lease;
 crash-mid-delivery is resumed by another worker after the lease expires).
 
+## Observability (Phase 5)
+
+Air-gap, Prometheus-compatible, zero new deps (hand-rolled exposition).
+
+- **`GET /metrics`** on the API (own ingest counters + cross-pod DB-derived
+  gauges: queue depth, oldest-pending age, correlation backlog, default-partition
+  rows, rollup lag, per-service soft-cap breaches). Infra-internal &
+  unauthenticated — keep it off the public Ingress (see
+  `deploy/k8s/base/networkpolicy-metrics.yaml`).
+- **Each worker** (correlation/notification/maintenance/sync) serves
+  `/metrics` + `/healthz` (loop heartbeat → liveness) + `/readyz` (PG reachable)
+  on `METRICS_PORT` (9100; mapped to 9101-9104 in docker-compose).
+- **Cardinality**: hot-path counters use only fixed labels; per-service series
+  appear ONLY when a service breaches its `pending_softcap` (admin-set, default
+  50k) — steady state emits zero per-service series.
+- **Self-alerts**: `deploy/k8s/base/prometheus-rules.yaml` (10 rules). It's a
+  PrometheusRule CRD, kept out of the kustomization so `kubeconform -strict`
+  passes — apply with `kubectl apply -f` or copy its `groups:` into your
+  Prometheus `rule_files:`. Scrape via the pod annotations
+  (`prometheus.io/scrape|port|path`) — no Prometheus Operator required.
+
 ## UI pages
 
 - `/ops` — ops dashboard (incidents, delivery status, severity trend, per-host; 10s auto-refresh).

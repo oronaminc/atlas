@@ -12,6 +12,7 @@ ingest key, falling back to the default (MIMIR_TENANT_ID) org's tenant.
 import hashlib
 import logging
 import secrets
+import time
 import uuid
 from typing import Any
 
@@ -19,6 +20,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import instruments
 from app.core.config import settings
 from app.core.envelope import envelope
 from app.core.tenancy import resolve_org_tenant
@@ -84,9 +86,11 @@ async def _ingest(
     payload: dict[str, Any],
     tenant_id: uuid.UUID | None,
 ) -> dict:
+    start = time.perf_counter()
     try:
         provider = get_provider(provider_name)
     except KeyError as e:
+        instruments.ingest_requests.inc(provider=provider_name, status="rejected")
         raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_name}") from e
 
     alerts = provider.parse(payload)
@@ -96,6 +100,9 @@ async def _ingest(
     await db.commit()
 
     await _enqueue([str(e.id) for e in events])
+    instruments.ingest_requests.inc(provider=provider_name, status="accepted")
+    instruments.ingest_events.inc(len(events), provider=provider_name)
+    instruments.ingest_duration.observe(time.perf_counter() - start, provider=provider_name)
     return envelope({"accepted": len(events)})
 
 

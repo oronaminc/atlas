@@ -51,7 +51,7 @@ Lane cap before the "+N hosts" expander: `GRAPH_MAX_VISIBLE_LANES` (same file).
 
 ```bash
 # backend (from backend/)
-uv run pytest -q                                  # 170 SQLite tests
+uv run pytest -q                                  # 180 SQLite tests
 uv run ruff check . && uv run black --check .
 ATLAS_PG_TEST_URL=postgresql+asyncpg://atlas:atlas@127.0.0.1:5432/atlas uv run pytest tests/pg -q   # real-PG concurrency
 ./scripts/pg_concurrency_test.sh                  # same, boots compose postgres
@@ -92,6 +92,42 @@ image automation commits to prod overlay markers). Secrets never plaintext in gi
 - Playwright: `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`, import from
   `/opt/node22/lib/node_modules/playwright/index.mjs`.
 - jsdelivr blocked. Working branch: `claude/epic-dijkstra-mgq4oa` (push only there).
+
+## Phase 5: observability (2026-06-13, final)
+
+Terminology: a **tenant = a service** (one service has many vendors attached);
+the row-level tenancy STRUCTURE from Phases 2-4 is unchanged — only labels read
+"service". `tenant_id` columns/APIs keep their names.
+
+The monitoring system must not fail silently — Prometheus metrics + k8s health
++ self-alerts, all air-gap (zero new deps; hand-rolled exposition).
+- **Zero-dep registry** `app/core/metrics.py` (Counter/Gauge/Histogram + text
+  0.0.4 `render()`); instruments declared in `app/core/instruments.py`. One
+  registry PER PROCESS.
+- **API `GET /metrics`** (`api/v1/metrics.py`, mounted at root, unauthenticated,
+  infra-internal): own ingest counters + cross-pod DB-derived gauges computed at
+  scrape from an UNSCOPED session (bypasses the tenancy choke point — correct for
+  ops), cached `METRICS_DB_CACHE_SECONDS=15`. Never routed through public Ingress
+  (NetworkPolicy + no Ingress path).
+- **Each worker** runs a stdlib-asyncio server (`workers/metrics_server.py`) on
+  `METRICS_PORT=9100`: `/metrics` (own counters + heartbeat) + `/healthz`
+  (loop heartbeat fresh within N×interval -> liveness) + `/readyz` (PG reachable;
+  Redis best-effort, surfaced via `atlas_redis_up`, never gates readiness).
+- **Cardinality bound**: hot-path counters carry only fixed low-card labels
+  (provider/channel/reason/outcome). Per-service series exist ONLY on soft-cap
+  breach (`atlas_tenant_pending_softcap_breached{service=slug}`) — normal state =
+  zero per-service series.
+- **Per-service pending soft-cap**: `notification_settings.pending_softcap`
+  (migration 0008, default 50000, admin-adjustable via the notification-settings
+  card, audited). Alert, never shed.
+- **Self-alerts**: `deploy/k8s/base/prometheus-rules.yaml` (10 rules: correlation
+  backlog/stall, notif queue/oldest, soft-cap breach, default-partition>0, rollup
+  stale, delivery-failure-rate, worker down, worker-loop stalled). Kept out of the
+  kustomization (CRD) so kubeconform -strict stays green; apply separately.
+- Scrape via pod annotations (`prometheus.io/scrape|port|path`), no Operator CRD
+  needed. Overhead: +4.56µs/ingest request (~0.1%), 235 rps/worker (≥225 baseline).
+- 10 observability tests (registry format, value correctness, breach-only
+  cardinality, worker health/readiness, heartbeat-stale liveness).
 
 ## Phase 4: notification scale (2026-06-13)
 
@@ -204,7 +240,7 @@ All 12 original spec phases + correlation engine + notification delivery/HA + op
 former 3D view — three/r3f/d3-force-3d removed) + incident suppression (status enum value
 `suppressed`, migration 0004: reversible mute, excluded from active lists/stats, still absorbs
 alerts without re-notifying; editor+ via /ops detail dialog) + RBAC UI alignment (nav/route
-guards admin pages; incident + receiver-test actions gated editor+). 170 SQLite tests + 6 vitest,
+guards admin pages; incident + receiver-test actions gated editor+). 180 SQLite tests + 6 vitest,
 2 real-PG concurrency tests, 9 stats/graph tests included. Browser e2e verified: rules flow,
 admin settings, ops dashboard, 2D swimlane graph, 3-role RBAC + suppression flow, multi-tenant
 HQ/subsidiary isolation (screenshots in session history).

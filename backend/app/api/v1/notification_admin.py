@@ -33,6 +33,7 @@ SETTINGS_AUDIT_FIELDS = [
     "telegram_rate_per_second",
     "quota_group_per_hour",
     "quota_global_per_day",
+    "pending_softcap",
 ]
 
 
@@ -59,6 +60,7 @@ def settings_out(row) -> dict:
         telegram_rate_per_second=row.telegram_rate_per_second,
         quota_group_per_hour=row.quota_group_per_hour,
         quota_global_per_day=row.quota_global_per_day,
+        pending_softcap=row.pending_softcap,
     ).model_dump(mode="json")
 
 

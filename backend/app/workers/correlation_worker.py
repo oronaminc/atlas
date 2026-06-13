@@ -7,6 +7,7 @@ lease and another pod resumes the work.
 import asyncio
 import logging
 import os
+import time
 import uuid
 from datetime import datetime, timedelta
 
@@ -14,6 +15,7 @@ import redis.asyncio as aioredis
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import instruments
 from app.core.config import settings
 from app.db import async_session_factory
 from app.models.alerting import AlertEvent
@@ -23,6 +25,7 @@ from app.services.correlation.config import get_config
 from app.services.correlation.dedup import InMemoryDedupStore, RedisDedupStore
 from app.services.correlation.engine import CorrelationEngine
 from app.services.correlation.strategy import AttributeTimeStrategy, LLMStrategy
+from app.workers.metrics_server import heartbeat, start_metrics_server
 
 logger = logging.getLogger(__name__)
 
@@ -98,17 +101,23 @@ async def claim_events(
 
 async def correlate_pending(engine: CorrelationEngine) -> int:
     processed = 0
+    t0 = time.perf_counter()
     async with async_session_factory() as db:
         config = await get_config(db)
         for event in await claim_events(db, worker_id=WORKER_ID, now=utcnow()):
             await engine.correlate(db, event, to_normalized(event), config, now=utcnow())
             processed += 1
         await db.commit()
+    instruments.correlation_batch_seconds.observe(time.perf_counter() - t0)
+    instruments.correlation_events.inc(processed)
+    instruments.correlation_iterations.inc(outcome="busy" if processed else "idle")
     return processed
 
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
+
+    await start_metrics_server("correlation", port=settings.METRICS_PORT)
 
     redis: aioredis.Redis | None = None
     try:
@@ -121,6 +130,7 @@ async def main() -> None:
     except Exception:
         logger.warning("redis unavailable; falling back to PG polling only")
         redis = None
+    instruments.redis_up.set(1 if redis is not None else 0)
 
     dedup = RedisDedupStore(redis) if redis is not None else InMemoryDedupStore()
     engine = CorrelationEngine(
@@ -135,6 +145,7 @@ async def main() -> None:
                 logger.info("correlated %d alert events", n)
         except Exception:
             logger.exception("correlation iteration failed")
+        heartbeat("correlation")
 
         # Block on the stream as a wake-up; fall back to a fixed poll interval.
         if redis is not None:

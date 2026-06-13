@@ -101,3 +101,8 @@ burst within the 900s window and 10+ hosts for the /graph lane expander).
   and start in SEPARATE tool calls.
 - e2e.mjs's audit-log step expects `emergency_apply` on page 1 — it requires a
   truly fresh DB; a session's accumulated audit rows push it off the first page.
+
+
+## Phase 5 note
+- Worker /metrics+/healthz+/readyz on METRICS_PORT (9100). API /metrics at root.
+- `pkill -f "uvicorn app.main"` from THIS harness can match the wrapping bash and exit 144 — kill in a SEPARATE tool call from any start command.

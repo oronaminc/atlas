@@ -24,6 +24,20 @@ spec:
         - name: notification-worker
           image: ghcr.io/oronaminc/atlas/backend:latest
           command: ["python", "-m", "app.workers.notification_worker"]
+          ports:
+            - containerPort: 9100
+              name: metrics
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            periodSeconds: 15
           envFrom:
             - configMapRef:
                 name: atlas-config

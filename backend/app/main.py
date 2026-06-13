@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.api.v1 import api_router
+from app.api.v1 import metrics as metrics_router
 from app.core.config import settings
 from app.core.envelope import envelope, error_body
 from app.db import engine
@@ -29,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+app.include_router(metrics_router.router)  # /metrics (infra, unauthenticated)
 
 
 @app.exception_handler(HTTPException)

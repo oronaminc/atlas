@@ -107,7 +107,9 @@
     "channels": "채널",
     "selectGroup": "그룹 선택...",
     "recipients": "수신자 목록 (읽기 전용)",
-    "recipientsHelp": "chat_id는 사용자 관리에서 설정"
+    "recipientsHelp": "chat_id는 사용자 관리에서 설정",
+    "pendingSoftcap": "대기 소프트캡 (알람)",
+    "pendingSoftcapHelp": "이 서비스의 대기 큐가 이 값을 초과하면 알림(차단하지 않음; atlas_tenant_pending_softcap_breached 발생)"
   },
   "ops": {
     "title": "운영 대시보드",
@@ -155,16 +157,16 @@
     "noData": "이 기간에 인시던트가 없습니다"
   },
   "tenants": {
-    "title": "테넌트 (자회사)",
-    "help": "각 테넌트는 하나 이상의 Mimir 조직(Alloy가 설정하는 X-Scope-OrgID)에 매핑됩니다",
-    "tenant": "테넌트",
+    "title": "서비스 (테넌트)",
+    "help": "각 서비스는 하나 이상의 Mimir 조직(Alloy가 설정하는 X-Scope-OrgID)에 매핑됩니다; 벤더는 서비스에 연결됩니다",
+    "tenant": "서비스",
     "slug": "슬러그",
     "orgs": "Mimir 조직",
     "orgsHelp": "Mimir 조직 (쉼표로 구분된 X-Scope-OrgID 값)",
-    "createTitle": "테넌트 생성",
+    "createTitle": "서비스 생성",
     "keyOnce": "수집 키 — 한 번만 표시됩니다. 지금 복사하세요:",
-    "filterLabel": "테넌트",
-    "allTenants": "전체 테넌트"
+    "filterLabel": "서비스",
+    "allTenants": "전체 서비스"
   },
   "retention": {
     "title": "데이터 보존 기간",

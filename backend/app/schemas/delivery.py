@@ -52,6 +52,7 @@ class NotificationSettingsOut(BaseModel):
     telegram_rate_per_second: int
     quota_group_per_hour: int
     quota_global_per_day: int
+    pending_softcap: int
 
 
 class NotificationSettingsUpdate(BaseModel):
@@ -59,6 +60,7 @@ class NotificationSettingsUpdate(BaseModel):
     telegram_rate_per_second: int | None = Field(default=None, ge=1)
     quota_group_per_hour: int | None = Field(default=None, ge=1)
     quota_global_per_day: int | None = Field(default=None, ge=1)
+    pending_softcap: int | None = Field(default=None, ge=1)
 
 
 class RecipientOut(BaseModel):

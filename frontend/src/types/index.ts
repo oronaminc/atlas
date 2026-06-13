@@ -176,6 +176,7 @@ export interface NotificationSettings {
   telegram_rate_per_second: number;
   quota_group_per_hour: number;
   quota_global_per_day: number;
+  pending_softcap: number;
 }
 
 export interface NotificationRoute {

@@ -107,7 +107,9 @@
     "channels": "Channels",
     "selectGroup": "Select group...",
     "recipients": "Recipients (read-only)",
-    "recipientsHelp": "chat_id is set via user management"
+    "recipientsHelp": "chat_id is set via user management",
+    "pendingSoftcap": "Pending soft-cap (alarm)",
+    "pendingSoftcapHelp": "Alert when this service's pending queue exceeds this (never sheds; fires atlas_tenant_pending_softcap_breached)"
   },
   "ops": {
     "title": "Ops Dashboard",
@@ -155,16 +157,16 @@
     "noData": "No incidents in this window"
   },
   "tenants": {
-    "title": "Tenants (subsidiaries)",
-    "help": "Each tenant maps one or more Mimir orgs (X-Scope-OrgID set by Alloy)",
-    "tenant": "Tenant",
+    "title": "Services (tenants)",
+    "help": "Each service maps one or more Mimir orgs (X-Scope-OrgID set by Alloy); vendors attach to a service",
+    "tenant": "Service",
     "slug": "Slug",
     "orgs": "Mimir orgs",
     "orgsHelp": "Mimir orgs (comma-separated X-Scope-OrgID values)",
-    "createTitle": "Create tenant",
+    "createTitle": "Create service",
     "keyOnce": "Ingest key — shown only once, copy it now:",
-    "filterLabel": "Tenant",
-    "allTenants": "All tenants"
+    "filterLabel": "Service",
+    "allTenants": "All services"
   },
   "retention": {
     "title": "Data retention",

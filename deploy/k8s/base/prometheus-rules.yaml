@@ -1,0 +1,77 @@
+# Self-alerting baseline (Phase 5). Air-gap: pure Prometheus rules, no SaaS.
+# Requires the Prometheus Operator CRD; if not installed, load the same
+# `groups:` into your Prometheus `rule_files:` directly (see README).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: atlas-alerts
+  namespace: atlas
+  labels:
+    app.kubernetes.io/name: atlas
+    release: prometheus
+spec:
+  groups:
+    - name: atlas.observability
+      rules:
+        - alert: AtlasCorrelationBacklogHigh
+          expr: atlas_correlation_backlog > 10000
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Correlation backlog > 10k for 10m (drain-mode collapse risk)"
+        - alert: AtlasCorrelationStalled
+          expr: atlas_correlation_oldest_unprocessed_seconds > 300
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "Oldest uncorrelated alert event > 5m — correlation stuck"
+        - alert: AtlasNotificationQueueHigh
+          expr: atlas_notifications_pending > 100000
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Notification outbox > 100k pending for 10m"
+        - alert: AtlasNotificationOldestPendingHigh
+          expr: atlas_notifications_oldest_pending_seconds > 1800
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Oldest pending notification > 30m — sends not draining"
+        - alert: AtlasServicePendingSoftCapBreached
+          expr: atlas_tenant_pending_softcap_breached > 0
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Service {{ $labels.service }} pending queue over its soft-cap"
+        - alert: AtlasDefaultPartitionNonEmpty
+          expr: atlas_default_partition_rows > 0
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "alert_events DEFAULT partition non-empty — partition automation broke"
+        - alert: AtlasRollupStale
+          expr: atlas_alert_stats_rollup_lag_seconds > 3600
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: "alert_stats_hourly rollup > 1h stale — maintenance worker down?"
+        - alert: AtlasDeliveryFailureRateHigh
+          expr: |
+            sum(rate(atlas_notifications_failed_total[5m]))
+              / clamp_min(sum(rate(atlas_notifications_sent_total[5m])), 1) > 0.1
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: "Notification failure rate > 10% for 15m (channel/creds broken?)"
+        - alert: AtlasWorkerDown
+          expr: up{job=~"atlas-.*"} == 0
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: "Atlas pod {{ $labels.job }} scrape target down"
+        - alert: AtlasWorkerLoopStalled
+          expr: time() - atlas_worker_last_loop_timestamp_seconds > 300
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "Worker {{ $labels.worker }} loop stalled (alive but not looping)"

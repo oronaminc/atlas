@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     # the sustained rate — concurrency just fills the RTT pipe to saturate it.
     SEND_CONCURRENCY_CAP: int = 16
     SEND_RTT_ESTIMATE_SECONDS: float = 0.15
+    # Phase 5: observability. Workers expose /metrics+/healthz+/readyz on
+    # METRICS_PORT. NOTIFY_PENDING_SOFTCAP is the per-service pending-queue
+    # alarm threshold (admin-adjustable via notify_config; alert, never shed).
+    METRICS_PORT: int = 9100
+    NOTIFY_PENDING_SOFTCAP: int = 50000
+    METRICS_DB_CACHE_SECONDS: float = 15.0
     MIMIR_RULER_URL: str = "http://mimir:8080/prometheus/config/v1/rules"
     MIMIR_ALERTMANAGER_URL: str = "http://mimir-alertmanager:8080"
     MIMIR_QUERY_URL: str = "http://mimir:8080/prometheus"

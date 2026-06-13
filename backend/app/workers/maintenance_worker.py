@@ -10,12 +10,15 @@ A Redis lock (sync-worker pattern) prevents concurrent passes across pods.
 
 import asyncio
 import logging
+import time
 
 import redis.asyncio as aioredis
 
+from app.core import instruments
 from app.core.config import settings
 from app.db import async_session_factory
 from app.services.maintenance import rollup_hourly, run_maintenance
+from app.workers.metrics_server import heartbeat, start_metrics_server
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,8 @@ async def run_once(redis: aioredis.Redis | None, *, full: bool) -> None:
             if full:
                 summary = await run_maintenance(db)
                 await db.commit()
+                instruments.retention_partitions_dropped.inc(len(summary["partitions_dropped"]))
+                instruments.maintenance_last_run.set(time.time())
                 logger.info("maintenance pass: %s", summary)
                 if summary["default_partition_rows"]:
                     logger.warning(
@@ -63,6 +68,8 @@ async def main() -> None:
         logger.warning("redis unavailable; running without the maintenance lock")
         redis = None
 
+    await start_metrics_server("maintenance", port=settings.METRICS_PORT)
+    instruments.redis_up.set(1 if redis is not None else 0)
     logger.info("maintenance worker started (full=%ss)", MAINTENANCE_INTERVAL_SECONDS)
     elapsed_since_full = MAINTENANCE_INTERVAL_SECONDS  # full pass on start
     while True:
@@ -73,6 +80,7 @@ async def main() -> None:
             logger.exception("maintenance iteration failed")
         if full:
             elapsed_since_full = 0
+        heartbeat("maintenance")
         await asyncio.sleep(ROLLUP_INTERVAL_SECONDS)
         elapsed_since_full += ROLLUP_INTERVAL_SECONDS
 

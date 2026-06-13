@@ -11,12 +11,14 @@ import logging
 
 import redis.asyncio as aioredis
 
+from app.core import instruments
 from app.core.config import settings
 from app.db import async_session_factory
 from app.integrations.alertmanager import AlertmanagerClient
 from app.integrations.mimir_ruler import MimirRulerClient
 from app.services.am_provision import provision_am_configs
 from app.services.rule_sync import sync_all_rule_groups
+from app.workers.metrics_server import heartbeat, start_metrics_server
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +62,15 @@ async def main() -> None:
         logger.warning("redis unavailable; running without the distributed sync lock")
         redis = None
 
+    await start_metrics_server("sync", port=settings.METRICS_PORT)
+    instruments.redis_up.set(1 if redis is not None else 0)
     logger.info("sync worker started (interval=%ss)", settings.SYNC_INTERVAL_SECONDS)
     while True:
         try:
             await run_sync_once(ruler, redis)
         except Exception:
             logger.exception("sync iteration failed")
+        heartbeat("sync")
         await asyncio.sleep(settings.SYNC_INTERVAL_SECONDS)
 
 

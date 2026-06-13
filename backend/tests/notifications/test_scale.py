@@ -95,7 +95,7 @@ async def test_priority_set_from_severity_at_fanout(db):
 async def test_claim_orders_critical_before_info(db):
     """Within a tenant, the claim drains higher priority (critical) first."""
     users = [await seed_user(db, f"u{i}@x.io", chat_id=f"c{i}") for i in range(6)]
-    group = await seed_group(db, "g", users)
+    await seed_group(db, "g", users)
     # 3 info incidents (older) + 3 critical (newer): priority must win over age
     for i in range(3):
         inc = await seed_incident(db, severity="info", title=f"info{i}")
@@ -229,7 +229,7 @@ async def test_quota_defer_sets_reason_and_stays_pending(db):
     users = [await seed_user(db, f"u{i}@x.io", chat_id=f"c{i}") for i in range(5)]
     group = await seed_group(db, "g", users)
     await seed_route(db, group, min_severity="info", channels=["telegram"])
-    incident = await seed_incident(db, severity="critical")
+    await seed_incident(db, severity="critical")
     db.add(
         NotificationSettings(
             tenant_id=None,

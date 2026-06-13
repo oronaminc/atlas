@@ -49,6 +49,7 @@ export function NotificationSettingsCard() {
   const [rate, setRate] = useState("");
   const [groupQuota, setGroupQuota] = useState("");
   const [globalQuota, setGlobalQuota] = useState("");
+  const [softcap, setSoftcap] = useState("");
 
   useEffect(() => {
     const data = settings.data?.data;
@@ -56,6 +57,7 @@ export function NotificationSettingsCard() {
       setRate(String(data.telegram_rate_per_second));
       setGroupQuota(String(data.quota_group_per_hour));
       setGlobalQuota(String(data.quota_global_per_day));
+      setSoftcap(String(data.pending_softcap));
     }
   }, [settings.data]);
 
@@ -68,6 +70,7 @@ export function NotificationSettingsCard() {
         telegram_rate_per_second: Number(rate),
         quota_group_per_hour: Number(groupQuota),
         quota_global_per_day: Number(globalQuota),
+        pending_softcap: Number(softcap),
       }),
     ["notification-settings"],
     () => {
@@ -125,6 +128,19 @@ export function NotificationSettingsCard() {
             />
           </FormField>
         </div>
+        <FormField
+          label={t("notify.pendingSoftcap")}
+          htmlFor="pending-softcap"
+          description={t("notify.pendingSoftcapHelp")}
+        >
+          <Input
+            id="pending-softcap"
+            type="number"
+            min={1}
+            value={softcap}
+            onChange={(e) => setSoftcap(e.target.value)}
+          />
+        </FormField>
         <Button
           onClick={() => save.mutate(undefined)}
           disabled={save.isPending || !(Number(rate) >= 1)}

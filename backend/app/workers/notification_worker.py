@@ -7,10 +7,12 @@ import logging
 import os
 import uuid
 
+from app.core.config import settings
 from app.db import async_session_factory
 from app.models.base import utcnow
 from app.notifications.delivery import deliver_once
 from app.notifications.fanout import FANOUT_BATCH, fan_out_pending
+from app.workers.metrics_server import heartbeat, start_metrics_server
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,7 @@ async def run_once(throttles: dict) -> tuple[int, int, bool]:
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
+    await start_metrics_server("notification", port=settings.METRICS_PORT)
     logger.info("notification worker %s started", WORKER_ID)
     throttle_cache: dict = {}
     while True:
@@ -54,6 +57,7 @@ async def main() -> None:
                 continue  # busy: re-loop immediately, skip the idle sleep
         except Exception:
             logger.exception("notification iteration failed")
+        heartbeat("notification")
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 

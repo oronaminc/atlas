@@ -83,3 +83,6 @@ class NotificationSettings(TenantScoped, TimestampedBase):
     telegram_rate_per_second: Mapped[int] = mapped_column(Integer, default=25)
     quota_group_per_hour: Mapped[int] = mapped_column(Integer, default=30)
     quota_global_per_day: Mapped[int] = mapped_column(Integer, default=500)
+    # Phase 5: per-service pending-queue alarm threshold (alert, never shed).
+    # Breach -> atlas_tenant_pending_softcap_breached{service=slug}=1 at scrape.
+    pending_softcap: Mapped[int] = mapped_column(Integer, default=50000)

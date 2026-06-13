@@ -11,12 +11,14 @@ overrides, which apply to every row in the pass.
 import asyncio
 import logging
 import math
+import time
 import uuid
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import instruments
 from app.core.config import settings as app_settings
 from app.models.alerting import Incident
 from app.models.delivery import Notification, NotificationSettings
@@ -161,6 +163,7 @@ async def deliver_once(
                     retry_at=now + timedelta(days=1),
                     reason=f"quota: global {ctx.settings.quota_global_per_day}/day reached",
                 )
+                instruments.notifications_deferred.inc(reason="quota_global")
                 deferred += 1
                 continue
             if n.group_id is not None:
@@ -175,6 +178,7 @@ async def deliver_once(
                         retry_at=now + timedelta(hours=1),
                         reason=f"quota: group {ctx.settings.quota_group_per_hour}/h reached",
                     )
+                    instruments.notifications_deferred.inc(reason="quota_group")
                     deferred += 1
                     continue
             channel = ctx.channels.get(n.channel)
@@ -193,12 +197,16 @@ async def deliver_once(
         # --- phase 2: pipeline the network sends (bounded), DB-free
         sem = asyncio.Semaphore(_send_concurrency(ctx.settings.telegram_rate_per_second))
 
-        async def _do_send(n, channel, bucket=ctx.throttle):
+        async def _do_send(n, channel, bucket=ctx.throttle, sem=sem):
             async with sem:
                 if bucket is not None:
                     await bucket.acquire(n.recipient_address)
+                t0 = time.perf_counter()
                 try:
                     await channel.send(n.recipient_address, render_message(n.incident))
+                    instruments.notification_send_seconds.observe(
+                        time.perf_counter() - t0, channel=n.channel
+                    )
                     return n, None
                 except Exception as exc:  # noqa: BLE001
                     return n, exc
@@ -210,11 +218,15 @@ async def deliver_once(
         for n, err in results:
             if err is None:
                 await mark_sent(db, n, now=now)
+                instruments.notifications_sent.inc(channel=n.channel)
                 sent += 1
             else:
                 ctx.global_sent -= 1
                 if n.group_id is not None:
                     ctx.group_sent[n.group_id] -= 1
                 await mark_failed(db, n, str(err), now=now)
+                instruments.notifications_failed.inc(channel=n.channel)
+                if n.status == "dead":
+                    instruments.notifications_dead.inc(channel=n.channel)
 
     return DeliveryResult(sent, claimed=len(batch), deferred=deferred, was_full=len(batch) >= limit)
