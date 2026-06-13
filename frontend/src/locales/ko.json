@@ -165,5 +165,14 @@
     "keyOnce": "수집 키 — 한 번만 표시됩니다. 지금 복사하세요:",
     "filterLabel": "테넌트",
     "allTenants": "전체 테넌트"
+  },
+  "retention": {
+    "title": "데이터 보존 기간",
+    "help": "데이터 종류별 보존 일수 (0 = 무기한). alert_events는 일 단위 파티션을 통째로 삭제합니다.",
+    "alertEvents": "알림 이벤트 (일)",
+    "incidents": "인시던트 (일)",
+    "notifications": "알림 발송 (일)",
+    "audit": "감사 로그 (일)",
+    "archive": "삭제 전 CSV로 아카이브"
   }
 }

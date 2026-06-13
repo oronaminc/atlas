@@ -165,5 +165,14 @@
     "keyOnce": "Ingest key — shown only once, copy it now:",
     "filterLabel": "Tenant",
     "allTenants": "All tenants"
+  },
+  "retention": {
+    "title": "Data retention",
+    "help": "Days to keep each data class (0 = forever). alert_events drops whole daily partitions.",
+    "alertEvents": "Alert events (days)",
+    "incidents": "Incidents (days)",
+    "notifications": "Notifications (days)",
+    "audit": "Audit log (days)",
+    "archive": "Archive partitions to CSV before dropping"
   }
 }

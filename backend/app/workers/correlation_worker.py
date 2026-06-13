@@ -60,6 +60,9 @@ async def claim_events(
     guard = (
         AlertEvent.incident_id.is_(None),
         or_(AlertEvent.claimed_at.is_(None), AlertEvent.claimed_at < lease_cutoff),
+        # partition pruning: never scan further back than the claim lookback
+        # (events older than this are operationally dead anyway)
+        AlertEvent.received_at >= now - timedelta(days=settings.CLAIM_LOOKBACK_DAYS),
     )
 
     candidates = (

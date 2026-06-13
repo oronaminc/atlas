@@ -7,7 +7,7 @@ persisted, so ingestion ack never waits on correlation.
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,7 +77,9 @@ class CorrelationEngine:
         # Stage 1: dedup — collapse into the previous row, drop this one.
         dedup_key = f"{event.tenant_id}:{event.fingerprint}"
         if await self.dedup_store.seen_within(dedup_key, config.dedup_window_seconds):
-            prior = await self._latest_other_event(db, event)
+            prior = await self._latest_other_event(
+                db, event, window_seconds=config.dedup_window_seconds, now=now
+            )
             if prior is not None:
                 prior.dedup_count += 1
                 await db.delete(event)
@@ -152,13 +154,19 @@ class CorrelationEngine:
         return alert.name
 
     @staticmethod
-    async def _latest_other_event(db: AsyncSession, event: AlertEvent) -> AlertEvent | None:
+    async def _latest_other_event(
+        db: AsyncSession, event: AlertEvent, *, window_seconds: int, now: datetime
+    ) -> AlertEvent | None:
+        # received_at lower bound = the dedup window: semantically a no-op
+        # (we only collapse within the window) but it lets PG prune the
+        # partitioned alert_events down to 1-2 daily partitions.
         res = await db.execute(
             select(AlertEvent)
             .where(
                 AlertEvent.fingerprint == event.fingerprint,
                 AlertEvent.id != event.id,
                 AlertEvent.tenant_id == event.tenant_id,
+                AlertEvent.received_at >= now - timedelta(seconds=window_seconds),
             )
             .order_by(AlertEvent.received_at.desc())
             .limit(1)

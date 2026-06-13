@@ -21,6 +21,7 @@ import {
   NotificationSettingsCard,
   RecipientsCard,
 } from "@/features/notifications/notification-admin";
+import { RetentionCard } from "@/features/maintenance/retention-card";
 import { TenantsCard } from "@/features/tenants/tenants-card";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -128,6 +129,7 @@ export function SettingsPage() {
 
       <div className="mt-6 space-y-6">
         {isHq && <TenantsCard />}
+        {isHq && <RetentionCard />}
         <NotificationSettingsCard />
         <NotificationRoutesCard />
         <RecipientsCard />

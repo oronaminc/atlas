@@ -40,6 +40,18 @@ uv run python -m loadtest.fanout_storm --recipients 300 --incidents 10        # 
 Baseline numbers (2026-06-12, 4 vCPU / 16GB container): see CLAUDE.md
 "Load-test findings". Re-run after perf changes and diff against those.
 
+## Partition-migration proof (Phase 3 procedure)
+
+To re-verify migration 0006 on a populated table: reset PG to revision 0005
+(`uv run alembic downgrade`/fresh schema + `upgrade 0005`), seed
+(`uv run python -m loadtest.seed_events --rows 10000000` — stamps two
+synthetic tenant ids), snapshot `count(*)` + per-tenant counts, then time
+`uv run alembic upgrade head` (prints `0006: conversion lock window = Ns`)
+and re-compare counts. 2026-06-13 result @10M: 9.6s lock window, zero loss.
+After conversion, `query_bench` still works against the partitioned parent;
+run a maintenance pass + `app.api.v1.stats._alert_counts` timing for the
+trend before/after (909ms -> 2.3ms p50 @10M).
+
 ## Pitfalls (hit while building this)
 
 - `fanout_storm` reruns accumulate groups+routes: **routes are global**, every

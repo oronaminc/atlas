@@ -8,6 +8,7 @@ resources:
   - worker.yaml
   - correlation-worker.yaml
   - notification-worker.yaml
+  - maintenance-worker.yaml
   - frontend.yaml
   - ingress.yaml
 

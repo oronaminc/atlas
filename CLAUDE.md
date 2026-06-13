@@ -51,7 +51,7 @@ Lane cap before the "+N hosts" expander: `GRAPH_MAX_VISIBLE_LANES` (same file).
 
 ```bash
 # backend (from backend/)
-uv run pytest -q                                  # 155 SQLite tests
+uv run pytest -q                                  # 162 SQLite tests
 uv run ruff check . && uv run black --check .
 ATLAS_PG_TEST_URL=postgresql+asyncpg://atlas:atlas@127.0.0.1:5432/atlas uv run pytest tests/pg -q   # real-PG concurrency
 ./scripts/pg_concurrency_test.sh                  # same, boots compose postgres
@@ -75,7 +75,7 @@ kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -
 - `backend/app/`: `api/v1/` (routers incl. ingest/incidents/correlation_config/notification_admin/stats/graph),
   `core/`, `models/`, `schemas/`, `services/` (permissions/rule_sync/rule_validate/audit/correlation/),
   `providers/`, `notifications/` (channels/, fanout, outbox, delivery, throttle, settings),
-  `workers/` (sync, correlation, notification)
+  `workers/` (sync, correlation, notification, maintenance)
 - `frontend/src/`: `pages/` (incl. ops.tsx, graph.tsx lazy), `features/` (rules/, notifications/, ops/, graph/),
   `components/{ui,common,layout}`, `api/` (client.ts/queries.ts), `locales/{ko,en}.json`
 - `deploy/`: `k8s/{base,overlays/{dev,prod}}`, `flux/`, `kind-up.sh`
@@ -92,6 +92,32 @@ image automation commits to prod overlay markers). Secrets never plaintext in gi
 - Playwright: `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`, import from
   `/opt/node22/lib/node_modules/playwright/index.mjs`.
 - jsdelivr blocked. Working branch: `claude/epic-dijkstra-mgq4oa` (push only there).
+
+## Phase 3: partitioning + retention (2026-06-13)
+
+- **alert_events = PG RANGE-partitioned by received_at, DAILY** (`alert_events_pYYYYMMDD`),
+  PK(id, received_at), parent indexes materialize partition-local. SQLite (tests) stays a
+  regular table — partition ops are dialect-guarded (`services/maintenance.py::_is_pg`).
+- **Migration 0006** converts populated tables via CHECK-validate → rename+ATTACH:
+  measured on harness-seeded **10M rows: lock window 9.6s, zero data loss, per-tenant
+  counts byte-identical**. Fallback for ≥100M: full-copy + dual-write (not implemented).
+- **DEFAULT partition = insert safety net**: a missing date partition NEVER fails an insert;
+  `maintenance_worker` re-homes stray rows and `default_partition_count` (should be 0) is a
+  Phase 5 metric. Partition creation/drops/rollups/retention-deletes all live in
+  `services/maintenance.py`, driven by `workers/maintenance_worker.py` (full pass on start +
+  6h, rollups every 15min, Redis lock; separate pod in compose/k8s).
+- **Retention** (`retention_config`, single row, HQ-admin card in /settings, audited):
+  alert_events 90d (partition DETACH+DROP, optional gzip-CSV archive to ARCHIVE_DIR —
+  asyncpg COPY needs an ASYNC output callback on a DEDICATED connection),
+  incidents 180d (resolved/suppressed only, cascade), notifications 90d (sent/dead),
+  audit 365d. 0 = keep forever.
+- **stats/trend rewrite**: `alert_stats_hourly` rollups (idempotent DELETE+INSERT, NULL-tenant
+  safe, TenantScoped) + live scan only of hours after the last rolled bucket.
+  **Measured @10M rows: 909ms p50 (old full-24h fetch) → 2.3ms p50 (395×)**; point queries
+  flat at 0.2ms post-partition. Pruning is EXPLAIN-asserted in `tests/pg/test_partitioning.py`.
+- **Engine pruning bounds**: dedup lookup bounded by dedup window; claim scan bounded by
+  `CLAIM_LOOKBACK_DAYS` (default 7) — without these every partition's index gets probed.
+- Gotcha: asyncpg returns `relkind` as bytes — compare `relkind::text` in migrations.
 
 ## Load-test findings (Phase 1, 2026-06-12 — drives Phases 2-5)
 
@@ -132,6 +158,8 @@ Box: 4 vCPU / 16GB container, PG 16 + Redis local — treat as relative numbers.
 
 ## Status (do not redo)
 
+Phase 3 retention/partitioning: daily PG partitions + retention policies + hourly stats
+rollups (see Phase 3 section above; 7 maintenance tests + 3 real-PG partition tests).
 Phase 2 multi-tenancy: hierarchical row-level tenancy (HQ = tenant_id NULL sees all; tenant users
 locked to their tenant), Mimir-org-driven attribution (`tenants` + `mimir_org_map` + org-qualified
 ingest webhooks provisioned by `services/am_provision.py` behind AM_PROVISION_ENABLED), per-tenant

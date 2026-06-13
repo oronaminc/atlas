@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atlas-maintenance-worker
+  namespace: atlas
+  labels:
+    app.kubernetes.io/name: atlas
+    app.kubernetes.io/component: maintenance-worker
+spec:
+  # Single replica; the Redis lock makes extra replicas no-ops anyway.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: atlas
+      app.kubernetes.io/component: maintenance-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: atlas
+        app.kubernetes.io/component: maintenance-worker
+    spec:
+      containers:
+        - name: maintenance-worker
+          image: ghcr.io/oronaminc/atlas/backend:latest
+          command: ["python", "-m", "app.workers.maintenance_worker"]
+          envFrom:
+            - configMapRef:
+                name: atlas-config
+            - secretRef:
+                name: atlas-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi

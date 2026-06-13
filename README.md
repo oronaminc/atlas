@@ -136,6 +136,17 @@ rate, and quotas. Bootstrap an HQ admin with `scripts/create_admin.py`; migratio
 0005 backfills existing data/users into a default tenant mapped to the legacy
 `system` org.
 
+## Data retention & partitioning
+
+`alert_events` is range-partitioned by day on PostgreSQL (`PK(id, received_at)`); a
+DEFAULT partition guarantees inserts never fail on a missing date. The maintenance
+worker (`app.workers.maintenance_worker`, own compose service / k8s Deployment)
+creates partitions 7 days ahead, re-homes stray DEFAULT rows, drops expired
+partitions per the retention policy (optional gzip-CSV archive to `ARCHIVE_DIR`),
+prunes incidents/notifications/audit rows, and maintains `alert_stats_hourly`
+rollups that back /stats (810ms → ~2ms at 10M rows). Retention days are HQ-admin
+managed in /settings (0 = keep forever).
+
 ## UI pages
 
 - `/ops` — ops dashboard (incidents, delivery status, severity trend, per-host; 10s auto-refresh).

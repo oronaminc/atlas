@@ -13,12 +13,67 @@ from app.models import User
 from app.models.alerting import AlertEvent, Incident, IncidentStatus
 from app.models.base import utcnow
 from app.models.delivery import Notification
+from app.models.maintenance import AlertStatsHourly
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
 SEVERITIES = ("critical", "warning", "info")
 NOTIFICATION_STATUSES = ("pending", "sent", "failed", "dead")
 SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2}
+
+
+async def _rollup_floor(db: AsyncSession, since: datetime) -> datetime:
+    """Hours >= floor must be live-scanned: everything after the last rolled
+    bucket (worker downtime degrades latency, never correctness)."""
+    last = (
+        await db.execute(
+            select(func.max(AlertStatsHourly.bucket_start)).where(
+                AlertStatsHourly.bucket_start >= since
+            )
+        )
+    ).scalar_one_or_none()
+    if last is None:
+        return since
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=UTC)
+    return last + timedelta(hours=1)
+
+
+async def _alert_counts(
+    db: AsyncSession, since: datetime, until: datetime
+) -> list[tuple[datetime, str, int]]:
+    """(hour_bucket, severity, count) from rollups + live tail. Both legs go
+    through the ORM so the tenancy choke point applies."""
+    live_from = max(await _rollup_floor(db, since), since)
+    out: list[tuple[datetime, str, int]] = []
+    # hour-quantized window start: include the boundary bucket so the
+    # leading partial hour isn't dropped (24h counts are hour-granular)
+    floor_since = since.replace(minute=0, second=0, microsecond=0)
+    rows = await db.execute(
+        select(
+            AlertStatsHourly.bucket_start, AlertStatsHourly.severity, AlertStatsHourly.count
+        ).where(
+            AlertStatsHourly.bucket_start >= floor_since,
+            AlertStatsHourly.bucket_start < live_from,
+        )
+    )
+    for bucket, severity, n in rows.all():
+        if bucket.tzinfo is None:
+            bucket = bucket.replace(tzinfo=UTC)
+        out.append((bucket, severity, n))
+    if live_from < until:
+        # live tail: received_at bound -> partition pruning to 1-2 partitions
+        live = await db.execute(
+            select(AlertEvent.received_at, AlertEvent.severity).where(
+                AlertEvent.received_at >= live_from, AlertEvent.received_at < until
+            )
+        )
+        for received_at, severity in live.all():
+            if received_at.tzinfo is None:
+                received_at = received_at.replace(tzinfo=UTC)
+            bucket = received_at.replace(minute=0, second=0, microsecond=0)
+            out.append((bucket, severity, 1))
+    return out
 
 
 @router.get("/overview")
@@ -45,13 +100,8 @@ async def overview(
             )
         ).all()
     )
-    alerts_24h = (
-        await db.execute(
-            select(func.count())
-            .select_from(AlertEvent)
-            .where(AlertEvent.received_at > utcnow() - timedelta(hours=24))
-        )
-    ).scalar_one()
+    now = utcnow()
+    alerts_24h = sum(n for _, _, n in await _alert_counts(db, now - timedelta(hours=24), now))
 
     return envelope(
         {
@@ -70,18 +120,12 @@ async def trend(
     _: User = Depends(apply_tenant_param),
 ):
     """Alert volume by severity: hourly buckets up to 48h, daily beyond.
-    Bucketing in Python for SQLite/PG portability; windows are small."""
+    Reads pre-aggregated alert_stats_hourly for closed hours + a live scan
+    of the un-rolled-up tail only (Phase 3: was a full 24h alert_events
+    fetch — 810ms p50 @ 357k rows in Phase 1)."""
     now = utcnow()
     since = now - timedelta(hours=hours)
     bucket_seconds = 3600 if hours <= 48 else 86400
-
-    rows = (
-        await db.execute(
-            select(AlertEvent.received_at, AlertEvent.severity).where(
-                AlertEvent.received_at > since
-            )
-        )
-    ).all()
 
     n_buckets = max((hours * 3600) // bucket_seconds, 1)
     buckets: list[dict] = [
@@ -92,12 +136,10 @@ async def trend(
         for i in range(n_buckets)
     ]
 
-    for received_at, severity in rows:
-        if received_at.tzinfo is None:
-            received_at = received_at.replace(tzinfo=UTC)
-        index = int((received_at - since).total_seconds() // bucket_seconds)
+    for bucket_start, severity, n in await _alert_counts(db, since, now):
+        index = int((bucket_start - since).total_seconds() // bucket_seconds)
         if 0 <= index < n_buckets and severity in SEVERITIES:
-            buckets[index][severity] += 1
+            buckets[index][severity] += n
 
     return envelope({"bucket_seconds": bucket_seconds, "buckets": buckets})
 

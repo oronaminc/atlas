@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # back at {ATLAS_PUBLIC_URL}/api/v1/ingest/alertmanager/{org}.
     AM_PROVISION_ENABLED: bool = False
     ATLAS_PUBLIC_URL: str = ""
+    # Phase 3: partition/retention maintenance
+    ARCHIVE_DIR: str = ""  # gzip-CSV archive target (mounted volume); empty = no archive
+    CLAIM_LOOKBACK_DAYS: int = 7  # claim-scan lower bound -> partition pruning
     MIMIR_RULER_URL: str = "http://mimir:8080/prometheus/config/v1/rules"
     MIMIR_ALERTMANAGER_URL: str = "http://mimir-alertmanager:8080"
     MIMIR_QUERY_URL: str = "http://mimir:8080/prometheus"

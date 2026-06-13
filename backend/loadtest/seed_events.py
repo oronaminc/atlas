@@ -21,6 +21,11 @@ import asyncpg
 
 from loadtest.common import DB_DSN
 
+# two synthetic tenants so partition-migration tests can verify per-tenant
+# counts survive (no FK on alert_events.tenant_id)
+TENANT_A = uuid.UUID("00000000-0000-0000-0000-00000000000a")
+TENANT_B = uuid.UUID("00000000-0000-0000-0000-00000000000b")
+
 HOSTS = 5000
 NAMES = 3
 BATCH = 50_000
@@ -70,6 +75,7 @@ async def main():
         "dedup_count",
         "created_at",
         "updated_at",
+        "tenant_id",
     ]
     while written < todo:
         n = min(BATCH, todo - written)
@@ -81,9 +87,10 @@ async def main():
             fp = hashlib.sha256(f"srv-{host:05d}|Alert{name:02d}".encode()).hexdigest()[:64]
             ts = (now - span * rng.random()).isoformat()
             labels = json.dumps({"host": f"srv-{host:05d}"})
+            tenant = TENANT_A if host % 2 == 0 else TENANT_B
             lines.append(
                 f"{uuid.uuid4()}\t{fp}\talertmanager\tAlert{name:02d}\twarning\tfiring"
-                f"\t{labels}\t{{}}\t{ts}\t{ts}\t{incident_id}\t1\t{ts}\t{ts}\n"
+                f"\t{labels}\t{{}}\t{ts}\t{ts}\t{incident_id}\t1\t{ts}\t{ts}\t{tenant}\n"
             )
         import io
 

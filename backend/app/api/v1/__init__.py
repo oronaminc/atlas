@@ -11,6 +11,7 @@ from app.api.v1 import (
     ingest,
     notification_admin,
     notifications,
+    retention_config,
     rule_groups,
     rules,
     servers,
@@ -32,6 +33,7 @@ api_router.include_router(alerts.router)
 api_router.include_router(ingest.router)
 api_router.include_router(incidents.router)
 api_router.include_router(correlation_config.router)
+api_router.include_router(retention_config.router)
 api_router.include_router(notification_admin.router)
 api_router.include_router(stats.router)
 api_router.include_router(graph.router)
