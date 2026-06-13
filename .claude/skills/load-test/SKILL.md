@@ -52,6 +52,15 @@ After conversion, `query_bench` still works against the partitioned parent;
 run a maintenance pass + `app.api.v1.stats._alert_counts` timing for the
 trend before/after (909ms -> 2.3ms p50 @10M).
 
+## Notification scale (Phase 4)
+
+`fanout_storm` drives the real pipelined deliver_once. Before/after this phase:
+send rate 10.9/s -> 21.3/s at the 25/s bucket. claim @1.3M pending: seed via SQL
+(one notification per distinct user, UNIQUE(incident,channel,user)), then EXPLAIN
+the per-tenant claim — must be Index Scan using ix_notifications_claim, no Seq
+Scan, no Sort (861ms -> 0.49ms). TRUNCATE notifications + DELETE notification_routes
+between fanout_storm runs.
+
 ## Pitfalls (hit while building this)
 
 - `fanout_storm` reruns accumulate groups+routes: **routes are global**, every

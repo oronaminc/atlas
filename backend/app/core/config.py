@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # Phase 3: partition/retention maintenance
     ARCHIVE_DIR: str = ""  # gzip-CSV archive target (mounted volume); empty = no archive
     CLAIM_LOOKBACK_DAYS: int = 7  # claim-scan lower bound -> partition pruning
+    # Phase 4: notification send pipelining. concurrency = ceil(rate*RTT)+4
+    # capped at SEND_CONCURRENCY_CAP; the per-tenant TokenBucket still enforces
+    # the sustained rate — concurrency just fills the RTT pipe to saturate it.
+    SEND_CONCURRENCY_CAP: int = 16
+    SEND_RTT_ESTIMATE_SECONDS: float = 0.15
     MIMIR_RULER_URL: str = "http://mimir:8080/prometheus/config/v1/rules"
     MIMIR_ALERTMANAGER_URL: str = "http://mimir-alertmanager:8080"
     MIMIR_QUERY_URL: str = "http://mimir:8080/prometheus"

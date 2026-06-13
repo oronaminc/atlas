@@ -29,6 +29,12 @@ class Notification(TenantScoped, TimestampedBase):
         ),
         Index("ix_notifications_status_retry", "status", "retry_at"),
         Index("ix_notifications_tenant_status_created", "tenant_id", "status", "created_at"),
+        # Phase 4 claim index. Migration 0007 redefines this as a PARTIAL index
+        # WHERE status IN ('pending','failed') on PG — that's what turns the
+        # claim from an 861ms seq-scan+sort into an index-ordered scan. Declared
+        # plain here so SQLite/metadata create_all matches; the partial-ness is
+        # a PG storage detail the ORM never needs to know.
+        Index("ix_notifications_claim", "tenant_id", "priority", "created_at"),
     )
 
     incident_id: Mapped[uuid.UUID] = mapped_column(
@@ -43,6 +49,9 @@ class Notification(TenantScoped, TimestampedBase):
         Uuid, ForeignKey("groups.id", ondelete="SET NULL"), nullable=True, index=True
     )
     status: Mapped[str] = mapped_column(String(20), default="pending")
+    # send priority, lower = sooner; derived from incident severity at fan-out
+    # (critical=0, warning=1, info=2). Claim orders by (priority, created_at).
+    priority: Mapped[int] = mapped_column(Integer, default=1)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     retry_at: Mapped[datetime | None] = mapped_column(AwareDateTime(), nullable=True)
     claimed_at: Mapped[datetime | None] = mapped_column(AwareDateTime(), nullable=True)

@@ -147,6 +147,17 @@ prunes incidents/notifications/audit rows, and maintains `alert_stats_hourly`
 rollups that back /stats (810ms → ~2ms at 10M rows). Retention days are HQ-admin
 managed in /settings (0 = keep forever).
 
+## Notification scale
+
+Delivery is pipelined: per-tenant bounded-gather saturates each tenant's Telegram
+rate budget (~25-30/s/bot, up from a serial 10.9/s), the outbox claim rides a
+partial index (`status IN ('pending','failed')`) so it stays sub-millisecond at
+millions of pending rows, claims are round-robin across tenants so one
+subsidiary's storm can't starve another, sends are priority-ordered (critical
+before warning before info), and quota-deferred rows surface the reason in the
+/ops delivery panel. At-least-once + idempotency are preserved (CAS+lease;
+crash-mid-delivery is resumed by another worker after the lease expires).
+
 ## UI pages
 
 - `/ops` — ops dashboard (incidents, delivery status, severity trend, per-host; 10s auto-refresh).

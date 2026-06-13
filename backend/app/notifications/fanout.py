@@ -15,7 +15,13 @@ from app.models.delivery import Notification, NotificationRoute
 logger = logging.getLogger(__name__)
 
 SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2}
+# send priority: lower = sooner. critical jumps ahead of warning/info.
+SEVERITY_PRIORITY = {"critical": 0, "warning": 1, "info": 2}
 FANOUT_BATCH = 50
+
+
+def severity_priority(severity: str | None) -> int:
+    return SEVERITY_PRIORITY.get(severity or "", 1)
 
 
 async def group_member_users(db: AsyncSession, group_id: uuid.UUID) -> list[User]:
@@ -58,6 +64,7 @@ async def create_notifications(
             )
         ).all()
     }
+    priority = severity_priority(incident.severity)
     created = 0
     for channel, user, address in targets:
         if (channel, user.id) in existing:
@@ -71,6 +78,7 @@ async def create_notifications(
                 recipient_address=address,
                 group_id=group_id,
                 status="pending",
+                priority=priority,
             )
         )
         existing.add((channel, user.id))

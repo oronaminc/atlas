@@ -17,15 +17,20 @@ class TokenBucket:
         self._sleeper = sleeper
         self._tokens = self._rate  # burst capacity = 1s worth
         self._last = clock()
+        # acquire() is now called concurrently (bounded-gather send pipeline);
+        # serialize token math + pacing sleep so depletion stays correct and
+        # sustained rate is still capped at _rate.
+        self._lock = asyncio.Lock()
 
     async def acquire(self, address: str) -> None:  # noqa: ARG002 (per-chat later)
-        now = self._clock()
-        self._tokens = min(self._rate, self._tokens + (now - self._last) * self._rate)
-        self._last = now
-        if self._tokens < 1:
-            wait = (1 - self._tokens) / self._rate
-            await self._sleeper(wait)
-            self._last = self._clock()
-            self._tokens = 0
-        else:
-            self._tokens -= 1
+        async with self._lock:
+            now = self._clock()
+            self._tokens = min(self._rate, self._tokens + (now - self._last) * self._rate)
+            self._last = now
+            if self._tokens < 1:
+                wait = (1 - self._tokens) / self._rate
+                await self._sleeper(wait)
+                self._last = self._clock()
+                self._tokens = 0
+            else:
+                self._tokens -= 1

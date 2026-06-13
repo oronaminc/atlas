@@ -51,7 +51,7 @@ Lane cap before the "+N hosts" expander: `GRAPH_MAX_VISIBLE_LANES` (same file).
 
 ```bash
 # backend (from backend/)
-uv run pytest -q                                  # 162 SQLite tests
+uv run pytest -q                                  # 170 SQLite tests
 uv run ruff check . && uv run black --check .
 ATLAS_PG_TEST_URL=postgresql+asyncpg://atlas:atlas@127.0.0.1:5432/atlas uv run pytest tests/pg -q   # real-PG concurrency
 ./scripts/pg_concurrency_test.sh                  # same, boots compose postgres
@@ -92,6 +92,38 @@ image automation commits to prod overlay markers). Secrets never plaintext in gi
 - Playwright: `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`, import from
   `/opt/node22/lib/node_modules/playwright/index.mjs`.
 - jsdelivr blocked. Working branch: `claude/epic-dijkstra-mgq4oa` (push only there).
+
+## Phase 4: notification scale (2026-06-13)
+
+The Phase 1 first-bottleneck, fixed against re-measured numbers:
+- claim @1.3M pending: 861ms seq-scan+sort -> 0.49ms index scan. Migration 0007
+  makes ix_notifications_claim a PARTIAL index (tenant_id, priority, created_at)
+  WHERE status IN ('pending','failed') (PG). The Phase 2/3
+  (tenant_id,status,created_at) index was NOT partial -> planner ignored it.
+- send rate: 10.9/s -> 21.3/s (25/s/bot budget, ~85%). deliver_once was fully
+  serial (one await channel.send at a time); now per-tenant bounded-gather
+  (SEND_CONCURRENCY_CAP=16, ceil(rate*RTT)+4) pipelines the network RTT while DB
+  writes stay serial (one AsyncSession isn't concurrency-safe). TokenBucket got
+  an asyncio.Lock for concurrent acquire.
+- quota pre-reserved at dispatch (counters incremented synchronously before the
+  gather, rolled back on send failure) so concurrent sends can't slip past the
+  same quota; quota defer writes the reason to last_error ("quota: group N/h
+  reached") -> visible in the /ops delivery panel.
+- priority: notifications.priority smallint (critical=0/warning=1/info=2) set at
+  fan-out; claim orders (priority, created_at) so critical drains first.
+- cross-tenant fairness: claim is round-robin — _active_tenants (PG loose index
+  scan, ~3ms at 1.3M; inlined predicate, NOT a materialized CTE) finds tenants
+  with claimable work, each gets an equal share, leftover refills. One
+  subsidiary's storm can't starve another (tested A=50k vs B=5).
+- drop unconditional sleep(5): worker loops immediately while a fan-out or
+  delivery batch was full (DeliveryResult.was_full); sleeps only when idle.
+- per-incident dedup unchanged (UNIQUE(incident,channel,recipient) + notified_at
+  CAS already guarantee one row per recipient regardless of attached-alert
+  count — now explicitly tested). at-least-once/idempotency + crash-mid-delivery
+  proofs re-run green.
+- backpressure: durable outbox is the bounded queue, no shedding. Phase 5 TODO:
+  per-tenant pending soft-cap ALARM (alert, don't shed) + expose queue depth +
+  oldest-pending age.
 
 ## Phase 3: partitioning + retention (2026-06-13)
 
@@ -172,7 +204,7 @@ All 12 original spec phases + correlation engine + notification delivery/HA + op
 former 3D view — three/r3f/d3-force-3d removed) + incident suppression (status enum value
 `suppressed`, migration 0004: reversible mute, excluded from active lists/stats, still absorbs
 alerts without re-notifying; editor+ via /ops detail dialog) + RBAC UI alignment (nav/route
-guards admin pages; incident + receiver-test actions gated editor+). 155 SQLite tests + 6 vitest,
+guards admin pages; incident + receiver-test actions gated editor+). 170 SQLite tests + 6 vitest,
 2 real-PG concurrency tests, 9 stats/graph tests included. Browser e2e verified: rules flow,
 admin settings, ops dashboard, 2D swimlane graph, 3-role RBAC + suppression flow, multi-tenant
 HQ/subsidiary isolation (screenshots in session history).
