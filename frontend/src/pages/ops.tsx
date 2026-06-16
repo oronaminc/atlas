@@ -61,9 +61,9 @@ const ACTIVE = "open,acknowledged";
 
 const incidentStatusVariant: Record<
   IncidentStatus,
-  "destructive" | "warning" | "success" | "secondary"
+  "critical" | "warning" | "success" | "secondary"
 > = {
-  open: "destructive",
+  open: "critical",
   acknowledged: "warning",
   resolved: "success",
   suppressed: "secondary",

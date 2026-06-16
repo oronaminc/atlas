@@ -17,6 +17,8 @@ const badgeVariants = cva(
         outline: "text-foreground",
         // Soft tinted pills: meaningful color carried by the text, gentle
         // fill — not a loud solid block.
+        critical:
+          "border-transparent bg-severity-critical/15 text-severity-critical",
         success:
           "border-transparent bg-status-ok/15 text-status-ok",
         warning:
