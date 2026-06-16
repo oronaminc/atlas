@@ -17,7 +17,10 @@ try {
   await p.waitForSelector('[data-testid="global-search"]');
   await p.fill('[data-testid="search-input"]', "db-01");
   await p.waitForSelector('[data-testid="search-result-host"]');
-  await p.selectOption('[data-testid="search-type"]', "text");
+  // search-type is now a styled (radix) Select, not a native <select>:
+  // open the trigger, then click the option.
+  await p.click('[data-testid="search-type"]');
+  await p.click('[data-testid="search-type-text"]');
   await p.fill('[data-testid="search-input"]', "DiskFull");
   await p.waitForSelector('[data-testid="search-result-text"]');
   await p.click('[data-testid="search-result-text"]');

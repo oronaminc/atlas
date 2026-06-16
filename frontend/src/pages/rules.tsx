@@ -150,7 +150,7 @@ export function RulesPage() {
                 {r.enabled ? t("common.disabled") : t("common.enabled")}
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="text-amber-600"
+                className="text-severity-warning"
                 onClick={() => setEmergency(r)}
               >
                 <Siren className="h-4 w-4" />

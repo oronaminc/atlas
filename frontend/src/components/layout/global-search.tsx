@@ -11,6 +11,13 @@ import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type {
   HostSearchResult,
   LabelSearchResult,
@@ -75,16 +82,22 @@ export function GlobalSearch() {
             data-testid="search-input"
           />
         </div>
-        <select
-          className="h-9 rounded-md border bg-background px-1 text-xs"
-          value={type}
-          onChange={(e) => setType(e.target.value as SearchType)}
-          data-testid="search-type"
-        >
-          <option value="host">{t("search.host")}</option>
-          <option value="label">{t("search.label")}</option>
-          <option value="text">{t("search.text")}</option>
-        </select>
+        <Select value={type} onValueChange={(v) => setType(v as SearchType)}>
+          <SelectTrigger className="h-9 w-[5.5rem] text-xs" data-testid="search-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="host" data-testid="search-type-host">
+              {t("search.host")}
+            </SelectItem>
+            <SelectItem value="label" data-testid="search-type-label">
+              {t("search.label")}
+            </SelectItem>
+            <SelectItem value="text" data-testid="search-type-text">
+              {t("search.text")}
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {open && q.length >= 2 && (
