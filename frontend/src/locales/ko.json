@@ -42,7 +42,10 @@
     "logout": "로그아웃",
     "settings": "엔진 설정",
     "ops": "운영 대시보드",
-    "graph": "인시던트 그래프"
+    "graph": "인시던트 그래프",
+    "sectionMonitor": "모니터링",
+    "sectionConfigure": "설정",
+    "sectionAdmin": "관리"
   },
   "auth": {
     "login": "로그인",

@@ -13,6 +13,7 @@ import { SeverityBadge } from "@/components/common/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { GRAPH_DEFAULT_WINDOW_HOURS } from "@/features/graph/config";
 import { SwimlaneChart } from "@/features/graph/swimlane-chart";
 import { useExpandIncident, useGraphData } from "@/features/graph/use-graph-data";
@@ -35,18 +36,17 @@ export default function GraphPage() {
         <h1 className="mr-auto text-2xl font-semibold tracking-tight">
           {t("graph.title")}
         </h1>
-        <div className="flex gap-1">
-          {[24, 72, 168].map((h) => (
-            <Button
-              key={h}
-              size="sm"
-              variant={windowHours === h ? "default" : "outline"}
-              onClick={() => setWindowHours(h)}
-            >
-              {h === 24 ? "24h" : h === 72 ? "3d" : "7d"}
-            </Button>
-          ))}
-        </div>
+        <SegmentedToggle
+          size="sm"
+          aria-label={t("graph.title")}
+          value={String(windowHours)}
+          onValueChange={(v) => setWindowHours(Number(v))}
+          options={[
+            { value: "24", label: "24h" },
+            { value: "72", label: "3d" },
+            { value: "168", label: "7d" },
+          ]}
+        />
         {/* Manual refresh (no auto-poll): switch via config.ts if needed */}
         <Button
           size="sm"
@@ -61,10 +61,10 @@ export default function GraphPage() {
       </div>
 
       {graph.data?.data.meta.truncated && (
-        <p className="mb-2 text-sm text-amber-500">{t("graph.truncated")}</p>
+        <p className="mb-2 text-sm text-severity-warning">{t("graph.truncated")}</p>
       )}
 
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border">
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-border/60 bg-card">
         {graph.isLoading ? (
           <LoadingSpinner />
         ) : (
@@ -80,18 +80,34 @@ export default function GraphPage() {
         <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-background/80 p-2 text-xs backdrop-blur">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-red-500" /> critical
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: "hsl(var(--sev-critical))" }}
+              />{" "}
+              critical
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-amber-500" /> warning
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: "hsl(var(--sev-warning))" }}
+              />{" "}
+              warning
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-blue-500" /> info
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: "hsl(var(--sev-info))" }}
+              />{" "}
+              info
             </span>
           </div>
           <div className="mt-1 flex items-center gap-3 text-muted-foreground">
-            <span className="text-cyan-400">⌒ {t("graph.legendTemporal")}</span>
-            <span className="text-violet-400">┄ {t("graph.legendSameName")}</span>
+            <span style={{ color: "hsl(var(--sev-info))" }}>
+              ⌒ {t("graph.legendTemporal")}
+            </span>
+            <span style={{ color: "hsl(var(--primary))" }}>
+              ┄ {t("graph.legendSameName")}
+            </span>
           </div>
         </div>
 
@@ -128,7 +144,7 @@ export default function GraphPage() {
                         {(expansion.data?.data.nodes ?? []).map((alert) => (
                           <div
                             key={alert.id}
-                            className="flex items-center justify-between rounded border px-2 py-1"
+                            className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1"
                           >
                             <span>
                               {alert.label}

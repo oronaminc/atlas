@@ -43,8 +43,40 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Severity / status — opacity-modifier friendly (<alpha-value>) so
+        // tinted fills like `bg-severity-critical/10` work. Always paired
+        // with a per-severity icon (●/▲/■) for colorblind-safety.
+        severity: {
+          critical: "hsl(var(--sev-critical) / <alpha-value>)",
+          warning: "hsl(var(--sev-warning) / <alpha-value>)",
+          info: "hsl(var(--sev-info) / <alpha-value>)",
+        },
+        status: {
+          ok: "hsl(var(--sev-ok) / <alpha-value>)",
+          pending: "hsl(var(--sev-warning) / <alpha-value>)",
+          failed: "hsl(var(--sev-critical) / <alpha-value>)",
+          dead: "hsl(var(--sev-critical) / <alpha-value>)",
+          neutral: "hsl(var(--sev-neutral) / <alpha-value>)",
+        },
+      },
+      fontFamily: {
+        sans: [
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "Roboto",
+          "Noto Sans KR",
+          "Apple SD Gothic Neo",
+          "sans-serif",
+        ],
+      },
+      boxShadow: {
+        // Soft card elevation — separation by gentle shadow, not hard borders.
+        card: "0 1px 2px 0 hsl(220 30% 18% / 0.04), 0 1px 3px 0 hsl(220 30% 18% / 0.06)",
       },
       borderRadius: {
+        xl: "calc(var(--radius) + 4px)",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",

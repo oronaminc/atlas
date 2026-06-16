@@ -42,7 +42,10 @@
     "logout": "Log out",
     "settings": "Engine Settings",
     "ops": "Ops Dashboard",
-    "graph": "Incident Graph"
+    "graph": "Incident Graph",
+    "sectionMonitor": "Monitor",
+    "sectionConfigure": "Configure",
+    "sectionAdmin": "Admin"
   },
   "auth": {
     "login": "Log in",

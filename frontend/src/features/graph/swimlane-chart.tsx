@@ -22,11 +22,17 @@ const LANE_VPAD = 7;
 const PILL_H = 16;
 const PILL_MIN_W = 8;
 
+// Theme-aware: severity tokens resolve per light/dark via CSS vars, so the
+// swimlane reads correctly in both. Neutral fallback for unknown severities.
 const SEVERITY_FILL: Record<string, string> = {
-  critical: "#ef4444",
-  warning: "#f59e0b",
-  info: "#3b82f6",
+  critical: "hsl(var(--sev-critical))",
+  warning: "hsl(var(--sev-warning))",
+  info: "hsl(var(--sev-info))",
 };
+const SEVERITY_FALLBACK = "hsl(var(--sev-neutral))";
+const TEMPORAL_STROKE = "hsl(var(--sev-info))"; // proximity arcs
+const SAMENAME_STROKE = "hsl(var(--primary))"; // same_name arcs (accent)
+const SELECTED_STROKE = "hsl(var(--foreground))"; // high-contrast ring
 
 interface SwimlaneChartProps {
   data: GraphData;
@@ -180,7 +186,7 @@ export function SwimlaneChart({ data, selectedId, onSelect }: SwimlaneChartProps
               key={`t${i}`}
               d={arc(a, b)}
               fill="none"
-              stroke="#22d3ee"
+              stroke={TEMPORAL_STROKE}
               strokeWidth={1.2}
               opacity={(0.35 + edge.weight * 0.45) * (touched ? 1 : 0.15)}
             />
@@ -198,7 +204,7 @@ export function SwimlaneChart({ data, selectedId, onSelect }: SwimlaneChartProps
                 key={`s${partnerId}`}
                 d={arc(a, b)}
                 fill="none"
-                stroke="#a78bfa"
+                stroke={SAMENAME_STROKE}
                 strokeWidth={1.6}
                 strokeDasharray="5 3"
                 data-testid="same-name-arc"
@@ -238,13 +244,13 @@ export function SwimlaneChart({ data, selectedId, onSelect }: SwimlaneChartProps
                   width={pw}
                   height={PILL_H}
                   rx={4}
-                  fill={SEVERITY_FILL[pill.node.severity ?? ""] ?? "#64748b"}
+                  fill={SEVERITY_FILL[pill.node.severity ?? ""] ?? SEVERITY_FALLBACK}
                   fillOpacity={pill.node.status === "resolved" ? 0.4 : 0.9}
                   stroke={
                     pill.node.id === selectedId
-                      ? "#ffffff"
+                      ? SELECTED_STROKE
                       : highlighted
-                        ? "#a78bfa"
+                        ? SAMENAME_STROKE
                         : "none"
                   }
                   strokeWidth={pill.node.id === selectedId ? 2 : 1.5}

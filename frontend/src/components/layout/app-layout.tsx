@@ -42,19 +42,39 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { to: "/", labelKey: "nav.dashboard", icon: LayoutDashboard },
-  { to: "/ops", labelKey: "nav.ops", icon: Gauge },
-  { to: "/graph", labelKey: "nav.graph", icon: Network },
-  { to: "/servers", labelKey: "nav.servers", icon: Server },
-  { to: "/rules", labelKey: "nav.rules", icon: ShieldAlert },
-  { to: "/rule-groups", labelKey: "nav.ruleGroups", icon: Layers },
-  { to: "/alerts", labelKey: "nav.alerts", icon: Activity },
-  { to: "/notifications", labelKey: "nav.notifications", icon: BellRing },
-  { to: "/groups", labelKey: "nav.groups", icon: UsersRound },
-  { to: "/users", labelKey: "nav.users", icon: Users, adminOnly: true },
-  { to: "/settings", labelKey: "nav.settings", icon: Settings, adminOnly: true },
-  { to: "/audit", labelKey: "nav.audit", icon: ClipboardList },
+interface NavSection {
+  labelKey: string;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
+  {
+    labelKey: "nav.sectionMonitor",
+    items: [
+      { to: "/", labelKey: "nav.dashboard", icon: LayoutDashboard },
+      { to: "/ops", labelKey: "nav.ops", icon: Gauge },
+      { to: "/graph", labelKey: "nav.graph", icon: Network },
+      { to: "/alerts", labelKey: "nav.alerts", icon: Activity },
+    ],
+  },
+  {
+    labelKey: "nav.sectionConfigure",
+    items: [
+      { to: "/servers", labelKey: "nav.servers", icon: Server },
+      { to: "/rules", labelKey: "nav.rules", icon: ShieldAlert },
+      { to: "/rule-groups", labelKey: "nav.ruleGroups", icon: Layers },
+      { to: "/notifications", labelKey: "nav.notifications", icon: BellRing },
+    ],
+  },
+  {
+    labelKey: "nav.sectionAdmin",
+    items: [
+      { to: "/groups", labelKey: "nav.groups", icon: UsersRound },
+      { to: "/users", labelKey: "nav.users", icon: Users, adminOnly: true },
+      { to: "/settings", labelKey: "nav.settings", icon: Settings, adminOnly: true },
+      { to: "/audit", labelKey: "nav.audit", icon: ClipboardList },
+    ],
+  },
 ];
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
@@ -62,35 +82,46 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const { hasRole } = useAuth();
 
   return (
-    <nav className="flex flex-col gap-1 px-2">
-      {navItems
-        .filter((item) => !item.adminOnly || hasRole("admin"))
-        .map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/"}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-              )
-            }
-          >
-            <item.icon className="h-4 w-4" />
-            {t(item.labelKey)}
-          </NavLink>
-        ))}
+    <nav className="flex flex-col gap-5 px-3">
+      {navSections.map((section) => {
+        const items = section.items.filter(
+          (item) => !item.adminOnly || hasRole("admin"),
+        );
+        if (items.length === 0) return null;
+        return (
+          <div key={section.labelKey} className="flex flex-col gap-1">
+            <p className="px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
+              {t(section.labelKey)}
+            </p>
+            {items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                  )
+                }
+              >
+                <item.icon className="h-4 w-4" />
+                {t(item.labelKey)}
+              </NavLink>
+            ))}
+          </div>
+        );
+      })}
     </nav>
   );
 }
 
 function Brand() {
   return (
-    <div className="flex h-14 items-center gap-2 border-b px-4">
+    <div className="flex h-14 items-center gap-2 border-b border-border/60 px-4">
       <Activity className="h-5 w-5 text-primary" />
       <span className="text-lg font-semibold tracking-tight">Atlas</span>
     </div>
@@ -111,7 +142,7 @@ export function AppLayout() {
   return (
     <div className="grid h-screen grid-cols-1 md:grid-cols-[240px_1fr]">
       {/* Desktop sidebar */}
-      <aside className="hidden flex-col border-r bg-card md:flex">
+      <aside className="hidden flex-col border-r border-border/60 bg-card md:flex">
         <Brand />
         <div className="flex-1 overflow-y-auto py-4">
           <SidebarNav />
@@ -120,7 +151,7 @@ export function AppLayout() {
 
       <div className="flex h-screen flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 px-4">
           {/* Mobile menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
