@@ -42,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import {
   Table,
   TableBody,
@@ -88,12 +89,14 @@ function StatCard({
 }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className={`h-4 w-4 ${tone ?? "text-muted-foreground"}`} />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+      <CardContent className="flex items-center justify-between p-5">
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <p className="text-2xl font-semibold tabular-nums">{value}</p>
+        </div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+          <Icon className={`h-5 w-5 ${tone ?? "text-muted-foreground"}`} />
+        </div>
       </CardContent>
     </Card>
   );
@@ -204,7 +207,7 @@ export function OpsPage() {
           title={t("ops.failedNotifications")}
           value={ov ? ov.notifications.failed + ov.notifications.dead : "-"}
           icon={BellRing}
-          tone="text-amber-500"
+          tone="text-severity-warning"
         />
       </div>
 
@@ -214,7 +217,7 @@ export function OpsPage() {
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">{t("ops.incidents")}</CardTitle>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-8 w-40">
+              <SelectTrigger className="h-8 w-40" data-testid="incident-status-filter">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -331,18 +334,16 @@ export function OpsPage() {
         <Card data-testid="panel-trend">
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">{t("ops.trend")}</CardTitle>
-            <div className="flex gap-1">
-              {[24, 168].map((h) => (
-                <Button
-                  key={h}
-                  size="sm"
-                  variant={trendHours === h ? "default" : "outline"}
-                  onClick={() => setTrendHours(h)}
-                >
-                  {h === 24 ? "24h" : "7d"}
-                </Button>
-              ))}
-            </div>
+            <SegmentedToggle
+              size="sm"
+              aria-label={t("ops.trend")}
+              value={String(trendHours)}
+              onValueChange={(v) => setTrendHours(Number(v))}
+              options={[
+                { value: "24", label: "24h" },
+                { value: "168", label: "7d" },
+              ]}
+            />
           </CardHeader>
           <CardContent>
             <div className="mb-3 flex gap-4 text-sm">
@@ -430,7 +431,7 @@ export function OpsPage() {
               {/* actions: editor+ only (matches backend require_editor) */}
               {canEdit && detail.data.data.status !== "resolved" && (
                 <div
-                  className="flex flex-wrap items-center gap-2 rounded-md border p-2"
+                  className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/30 p-2"
                   data-testid="incident-actions"
                 >
                   {detail.data.data.status === "suppressed" ? (
@@ -509,7 +510,7 @@ export function OpsPage() {
                   {detail.data.data.alerts.map((alert) => (
                     <div
                       key={alert.id}
-                      className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                      className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-sm"
                     >
                       <div>
                         <span className="font-medium">{alert.name}</span>
@@ -573,7 +574,7 @@ export function OpsPage() {
                       </p>
                     );
                   return (
-                    <div className="space-y-1 rounded-md border p-2 text-sm" data-testid="analysis-done">
+                    <div className="space-y-1 rounded-lg border border-border/60 bg-muted/20 p-3 text-sm" data-testid="analysis-done">
                       {a.root_cause && (
                         <p>
                           <span className="font-semibold">{t("llm.rootCause")}:</span>{" "}

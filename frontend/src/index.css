@@ -4,48 +4,67 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Soft light surfaces: very light gray app bg, white cards (separation by
+       fill, not hard borders). Borders are faint hairlines. */
+    --background: 220 20% 97%;
+    --foreground: 222 30% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 222 30% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --popover-foreground: 222 30% 12%;
+    /* One accent: violet, used sparingly. */
+    --primary: 256 70% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 16% 94%;
+    --secondary-foreground: 222 25% 20%;
+    --muted: 220 16% 94%;
+    --muted-foreground: 220 9% 46%;
+    /* Active nav / selection = pale violet tint, not a heavy border. */
+    --accent: 256 60% 96%;
+    --accent-foreground: 256 70% 48%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 16% 90%;
+    --input: 220 16% 88%;
+    --ring: 256 70% 58%;
+    --radius: 0.75rem;
+
+    /* Severity / status tokens (colorblind-safe; always paired with an icon).
+       info = blue (accent owns violet). */
+    --sev-critical: 0 72% 48%;
+    --sev-warning: 35 92% 42%;
+    --sev-info: 217 75% 48%;
+    --sev-ok: 152 55% 36%;
+    --sev-neutral: 220 9% 46%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    /* Soft charcoal (not near-black): bg ~10% L, card ~14% L. */
+    --background: 222 18% 10%;
+    --foreground: 220 15% 92%;
+    --card: 222 16% 14%;
+    --card-foreground: 220 15% 92%;
+    --popover: 222 16% 14%;
+    --popover-foreground: 220 15% 92%;
+    --primary: 258 80% 70%;
+    --primary-foreground: 222 30% 12%;
+    --secondary: 220 12% 20%;
+    --secondary-foreground: 220 15% 92%;
+    --muted: 220 12% 20%;
+    --muted-foreground: 220 12% 65%;
+    --accent: 256 35% 22%;
+    --accent-foreground: 258 80% 80%;
+    --destructive: 0 70% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 12% 22%;
+    --input: 220 12% 26%;
+    --ring: 258 80% 70%;
+
+    --sev-critical: 0 80% 70%;
+    --sev-warning: 40 90% 62%;
+    --sev-info: 217 85% 70%;
+    --sev-ok: 152 50% 60%;
+    --sev-neutral: 220 12% 65%;
   }
 }
 

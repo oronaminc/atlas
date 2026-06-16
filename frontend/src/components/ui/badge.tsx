@@ -9,16 +9,18 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+          "border-transparent bg-primary text-primary-foreground hover:bg-primary/90",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive:
-          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
+          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline: "text-foreground",
+        // Soft tinted pills: meaningful color carried by the text, gentle
+        // fill — not a loud solid block.
         success:
-          "border-transparent bg-emerald-600 text-white hover:bg-emerald-600/80",
+          "border-transparent bg-status-ok/15 text-status-ok",
         warning:
-          "border-transparent bg-amber-500 text-white hover:bg-amber-500/80",
+          "border-transparent bg-severity-warning/15 text-severity-warning",
       },
     },
     defaultVariants: {
