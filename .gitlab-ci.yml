@@ -47,11 +47,20 @@ test-frontend:
   cache:
     key: pnpm-$CI_COMMIT_REF_SLUG
     paths: [frontend/node_modules]
+  variables:
+    # Air-gap: corepack must fetch pnpm (pinned via package.json "packageManager")
+    # from the internal mirror, never registry.npmjs.org. INTEGRITY_KEYS=0 skips
+    # signature checks against public keys (unreachable offline).
+    COREPACK_NPM_REGISTRY: "$NPM_REGISTRY"
+    COREPACK_INTEGRITY_KEYS: "0"
+    COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
   script:
+    # Fail loud if the mirror isn't configured — never silently hit npmjs.org.
+    - if [ -z "$NPM_REGISTRY" ]; then echo "NPM_REGISTRY is required (set it as a CI/CD variable, e.g. https://repo.sktelecom.com/repository/npm/)"; exit 1; fi
     - corepack enable
     - cd frontend
-    - if [ -n "$NPM_REGISTRY" ]; then pnpm config set registry "$NPM_REGISTRY"; fi
-    - pnpm install --frozen-lockfile
+    - corepack prepare --activate
+    - pnpm install --frozen-lockfile --registry "$NPM_REGISTRY"
     - pnpm lint
     - pnpm build
   rules:
