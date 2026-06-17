@@ -1,26 +1,27 @@
-import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AppLayout } from "@/components/layout/app-layout";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import { useAuth } from "@/hooks/use-auth";
-import { AlertsPage } from "@/pages/alerts";
-import { AuditPage } from "@/pages/audit";
-import { DashboardPage } from "@/pages/dashboard";
-import { GroupsPage } from "@/pages/groups";
 import { LoginPage } from "@/pages/login";
-import { NotificationsPage } from "@/pages/notifications";
-import { OpsPage } from "@/pages/ops";
+import { lazyPage } from "@/lib/lazy-page";
 
-// Lazy: swimlane chart chunk loads only when /graph is visited.
-const GraphPage = lazy(() => import("@/pages/graph"));
-import { ProfilePage } from "@/pages/profile";
-import { RuleGroupsPage } from "@/pages/rule-groups";
-import { RulesPage } from "@/pages/rules";
-import { ServerDetailPage } from "@/pages/server-detail";
-import { ServersPage } from "@/pages/servers";
-import { SettingsPage } from "@/pages/settings";
-import { UsersPage } from "@/pages/users";
+// Route-level code-splitting: every authenticated page is its own async chunk,
+// so the initial bundle stays small. /rules pulls Monaco — now only when opened.
+const DashboardPage = lazyPage(() => import("@/pages/dashboard"), "DashboardPage");
+const OpsPage = lazyPage(() => import("@/pages/ops"), "OpsPage");
+const GraphPage = lazyPage(() => import("@/pages/graph")); // default export
+const ServersPage = lazyPage(() => import("@/pages/servers"), "ServersPage");
+const ServerDetailPage = lazyPage(() => import("@/pages/server-detail"), "ServerDetailPage");
+const RulesPage = lazyPage(() => import("@/pages/rules"), "RulesPage");
+const RuleGroupsPage = lazyPage(() => import("@/pages/rule-groups"), "RuleGroupsPage");
+const AlertsPage = lazyPage(() => import("@/pages/alerts"), "AlertsPage");
+const NotificationsPage = lazyPage(() => import("@/pages/notifications"), "NotificationsPage");
+const GroupsPage = lazyPage(() => import("@/pages/groups"), "GroupsPage");
+const UsersPage = lazyPage(() => import("@/pages/users"), "UsersPage");
+const SettingsPage = lazyPage(() => import("@/pages/settings"), "SettingsPage");
+const AuditPage = lazyPage(() => import("@/pages/audit"), "AuditPage");
+const ProfilePage = lazyPage(() => import("@/pages/profile"), "ProfilePage");
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -54,14 +55,7 @@ export default function App() {
       >
         <Route path="/" element={<DashboardPage />} />
         <Route path="/ops" element={<OpsPage />} />
-        <Route
-          path="/graph"
-          element={
-            <Suspense fallback={<LoadingSpinner />}>
-              <GraphPage />
-            </Suspense>
-          }
-        />
+        <Route path="/graph" element={<GraphPage />} />
         <Route path="/servers" element={<ServersPage />} />
         <Route path="/servers/:id" element={<ServerDetailPage />} />
         <Route path="/rules" element={<RulesPage />} />
