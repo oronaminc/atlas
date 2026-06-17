@@ -76,6 +76,20 @@ async def pg_factory():
 async def test_pg_concurrent_workers_send_exactly_once(pg_factory):
     n_targets = 40
     async with pg_factory() as db:
+        # Quota out of scope: this test proves exactly-once-under-concurrency,
+        # not the 30/group/h cap. Without a settings row, get_notification_settings
+        # falls back to the 30/group/h default and (correctly) defers 10 of 40.
+        from app.models.delivery import NotificationSettings
+
+        db.add(
+            NotificationSettings(
+                tenant_id=None,
+                telegram_bot_token=None,
+                telegram_rate_per_second=25,
+                quota_group_per_hour=10_000,
+                quota_global_per_day=10_000,
+            )
+        )
         users = [await seed_user(db, f"u{i}@example.com", chat_id=f"{i}") for i in range(n_targets)]
         group = await seed_group(db, "oncall", users)
         await seed_route(db, group)
