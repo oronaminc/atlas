@@ -15,21 +15,24 @@ images:
     newTag: main-1-000000 # {"$imagepolicy": "flux-system:atlas-frontend:tag"}
 
 patches:
-  # replace with production host/origin
+  # Shares atlas.sktelecom.com with Grafana; atlas lives under /alert-hub.
   - patch: |-
       - op: replace
         path: /spec/rules/0/host
-        value: atlas.internal.example.com
+        value: atlas.sktelecom.com
     target:
       kind: Ingress
       name: atlas
   - patch: |-
       - op: replace
         path: /data/CORS_ORIGINS
-        value: https://atlas.internal.example.com
+        value: https://atlas.sktelecom.com
       - op: replace
         path: /data/FRONTEND_URL
-        value: https://atlas.internal.example.com
+        value: https://atlas.sktelecom.com/alert-hub
+      - op: replace
+        path: /data/ATLAS_PUBLIC_URL
+        value: https://atlas.sktelecom.com/alert-hub
     target:
       kind: ConfigMap
       name: atlas-config

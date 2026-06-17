@@ -21,7 +21,7 @@ existing Alloy + Mimir + Mimir Alertmanager + Loki + Tempo + Grafana stack.
 ```bash
 cp .env.example .env        # fill in FERNET_KEY, SECRET_KEY, etc.
 docker compose up --build
-# backend:  http://localhost:8000  (OpenAPI: /docs)
+# backend:  http://localhost:8000  (OpenAPI: /api/docs)
 # frontend: http://localhost:5173
 ```
 
@@ -104,7 +104,25 @@ kubectl -n atlas exec deploy/atlas-backend -- python scripts/create_admin.py adm
 
 - DB migrations run automatically at pod start via the backend `migrate` initContainer (`alembic upgrade head`)
 - The frontend nginx upstream is injected via the `BACKEND_ORIGIN` env var (k8s: `http://atlas-backend:8000`)
-- Ingress: `/api` → backend, `/` → frontend (adjust host per environment)
+- Ingress: single rule `/alert-hub(/|$)(.*)` → frontend (`rewrite-target: /$2` strips the prefix; nginx serves the SPA at `/` and proxies `/api/` → backend). Host patched per overlay.
+
+### Subpath deploy (shares a host with Grafana)
+
+Atlas is served under a **path prefix** (`/alert-hub`) so it can share a host
+with Grafana — no dedicated IP. Same prefix dev+prod; only the host differs
+(dev `atlas-dev.sktelecom.com`, prod `atlas.sktelecom.com`). Nothing is served
+at `/`. Set the prefix in two places (both default to root `/` for local dev):
+
+| Where | Value | Effect |
+|---|---|---|
+| Frontend image build-arg | `VITE_BASE_PATH=/alert-hub/` | baked into asset URLs, router basename, API base, monaco worker (build-time) |
+| Backend env | `ROOT_PATH=/alert-hub` | FastAPI `root_path` (docs at `<prefix>/api/docs`) + auth cookie path |
+| ConfigMap | `ATLAS_PUBLIC_URL`/`FRONTEND_URL` = `https://<host>/alert-hub` | AM ingest webhooks, OIDC redirect (`CORS_ORIGINS` stays origin-only) |
+| Ingress | `path: /alert-hub(/|$)(.*)`, `rewrite-target: /$2` | strips the prefix before the app |
+
+The build-arg is wired in `.gitlab-ci.yml` (build-frontend); env/host are set in
+`deploy/k8s/overlays/{dev,prod}`. To change the prefix, update `VITE_BASE_PATH`,
+`ROOT_PATH`, the ingress `path`, and `ATLAS_PUBLIC_URL`/`FRONTEND_URL` together.
 
 ### Local k8s testing (kind)
 

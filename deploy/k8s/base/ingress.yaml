@@ -5,22 +5,21 @@ metadata:
   namespace: atlas
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "4m"
+    # Subpath deploy: atlas shares a host with Grafana and lives under
+    # /alert-hub. Strip the prefix before the frontend nginx (which serves the
+    # SPA at / and proxies /api/ -> backend). Nothing of atlas is served at "/".
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
   ingressClassName: nginx
   rules:
+    # Host is patched per overlay (dev: atlas-dev.sktelecom.com,
+    # prod: atlas.sktelecom.com). Grafana owns the rest of the host.
     - host: atlas.example.com
       http:
         paths:
-          # /api goes straight to the backend (skips the frontend nginx hop).
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: atlas-backend
-                port:
-                  number: 8000
-          - path: /
-            pathType: Prefix
+          - path: /alert-hub(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: atlas-frontend

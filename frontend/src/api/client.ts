@@ -1,6 +1,10 @@
 import type { Envelope } from "@/types";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+// Subpath-aware: import.meta.env.BASE_URL is the Vite `base` (e.g. "/alert-hub/"
+// or "/"), so the API lives at <prefix>/api/v1. The ingress strips <prefix>
+// before the backend; the browser-facing URL (incl. the auth cookie path) keeps
+// it. VITE_API_BASE_URL still overrides for special setups.
+export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? `${import.meta.env.BASE_URL}api/v1`;
 
 let accessToken: string | null = null;
 let onUnauthorized: (() => void) | null = null;

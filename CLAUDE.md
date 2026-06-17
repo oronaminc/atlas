@@ -86,6 +86,31 @@ kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -
 Internal k8s. GitLab CI (test → kaniko, tags `main-<iid>-<sha>`) → Flux CD (`deploy/flux/`,
 image automation commits to prod overlay markers). Secrets never plaintext in git (SOPS/SealedSecrets).
 
+## Subpath deploy (`/alert-hub`, shares a host with Grafana)
+
+Atlas is served under **`/alert-hub`** (same prefix dev+prod; only the host
+differs — dev `atlas-dev.sktelecom.com`, prod `atlas.sktelecom.com`). Nothing
+of atlas is served at `/` (Grafana owns it). The prefix is **not hardcoded**:
+- Frontend (build-time, baked into asset URLs): `VITE_BASE_PATH=/alert-hub/`
+  → drives Vite `base`, router `basename` (`import.meta.env.BASE_URL`), API base
+  (`${BASE_URL}api/v1`), the dev-server proxy, and monaco worker/lazy-chunk URLs.
+  Set via the frontend image build-arg (`.gitlab-ci.yml` build-frontend
+  `--build-arg`, default `/alert-hub/`). Empty default `/` = local dev/test.
+- Backend (runtime env): `ROOT_PATH=/alert-hub` → FastAPI `root_path` (docs at
+  `<prefix>/api/docs`, openapi at `<prefix>/api/openapi.json` — moved UNDER `/api`
+  so they ride nginx's existing `/api` proxy) and the auth **cookie path**
+  (`{ROOT_PATH}/api/v1/auth` — the breakage to remember: the Set-Cookie path is
+  browser-facing, so it MUST carry the prefix or refresh drops the session).
+  Routes stay at `/api/v1`. `ATLAS_PUBLIC_URL`/`FRONTEND_URL` carry the prefix
+  (AM ingest webhook = `{ATLAS_PUBLIC_URL}/api/v1/ingest/...`, OIDC redirect);
+  `CORS_ORIGINS` is origin-only (no path).
+- Ingress: single rule `path: /alert-hub(/|$)(.*)` → `atlas-frontend:80` with
+  `rewrite-target: /$2` + `use-regex: "true"` (**strips** the prefix; the app/
+  nginx serve at root internally → no double-handling). The prefix lives only at
+  the edge + in browser-facing values. host patched per overlay.
+- Run e2e under the subpath: `VITE_BASE_PATH=/alert-hub/ pnpm dev` + backend
+  `ROOT_PATH=/alert-hub`, then `node /tmp/subpath_e2e.mjs` (`SUBPATH_E2E_OK`).
+
 ## Environment caveats (cloud session)
 
 - No Docker daemon. Real PG available: `service postgresql start` (apt-installed; user/db atlas/atlas).

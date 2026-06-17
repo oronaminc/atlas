@@ -103,6 +103,27 @@ burst within the 900s window and 10+ hosts for the /graph lane expander).
   truly fresh DB; a session's accumulated audit rows push it off the first page.
 
 
+## Subpath deploy (`/alert-hub`)
+
+Atlas runs under a path prefix in dev/prod (`/alert-hub`). To exercise the
+subpath locally, set the prefix on BOTH tiers (defaults are root `/`):
+
+```bash
+# backend: prefix only affects docs/openapi + auth-cookie path; routes stay /api/v1
+ROOT_PATH=/alert-hub uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# frontend: build-time base (dev server honors it + proxies <prefix>/api, strips prefix)
+VITE_BASE_PATH=/alert-hub/ pnpm dev --host 127.0.0.1 --port 5173
+```
+
+App root is then `http://127.0.0.1:5173/alert-hub/`. The auth cookie path is
+`/alert-hub/api/v1/auth` — verify a token refresh still sends it (the classic
+subpath breakage). docs/openapi move under `/api`: `<prefix>/api/docs`,
+`<prefix>/api/openapi.json`. Nothing is served at `/`. A ready scenario lives at
+`/tmp/subpath_e2e.mjs` in-session (prints `SUBPATH_E2E_OK`): loads under the
+prefix, logs in, forces a refresh, navigates lazy routes, opens the monaco
+/rules editor, global search, and an incident LLM analyze.
+
 ## Phase 5 note
 - Worker /metrics+/healthz+/readyz on METRICS_PORT (9100). API /metrics at root.
 - `pkill -f "uvicorn app.main"` from THIS harness can match the wrapping bash and exit 144 — kill in a SEPARATE tool call from any start command.

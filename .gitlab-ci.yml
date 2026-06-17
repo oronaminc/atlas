@@ -127,9 +127,12 @@ build-backend:
 build-frontend:
   extends: .build-image
   script:
+    # Subpath deploy: bake the path prefix into the SPA's asset URLs at build.
+    # Same value dev+prod, so one image serves both (only the host differs).
     - /kaniko/executor
       --context "$CI_PROJECT_DIR/frontend"
       --dockerfile "$CI_PROJECT_DIR/frontend/Dockerfile"
+      --build-arg "VITE_BASE_PATH=${VITE_BASE_PATH:-/alert-hub/}"
       --destination "$CI_REGISTRY_IMAGE/frontend:$IMAGE_TAG"
       --destination "$CI_REGISTRY_IMAGE/frontend:latest"
       --cache=true

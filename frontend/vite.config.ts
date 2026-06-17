@@ -2,7 +2,15 @@ import path from "path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+// Subpath deploy: the app is served under a path prefix (e.g. /alert-hub) so it
+// can share a host with Grafana. Build-time (baked into asset URLs); same value
+// dev+prod. Default "/" = local dev/test at root.
+const base = process.env.VITE_BASE_PATH || "/";
+const prefix = base === "/" ? "" : base.replace(/\/+$/, ""); // "/alert-hub" | ""
+const apiProxyPath = `${prefix}/api`;
+
 export default defineConfig({
+  base,
   plugins: [react()],
   resolve: {
     alias: {
@@ -29,9 +37,12 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": {
+      // Mirror the ingress: strip the prefix before forwarding to the backend
+      // (backend routes stay at /api/v1). At base "/" this is just "/api".
+      [apiProxyPath]: {
         target: "http://localhost:8000",
         changeOrigin: true,
+        rewrite: prefix ? (p) => p.slice(prefix.length) : undefined,
       },
     },
   },
