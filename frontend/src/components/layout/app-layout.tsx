@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Activity,
@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { LoadingSpinner } from "@/components/common/loading-spinner";
 import { ThemeToggle } from "@/components/common/theme-toggle";
 import { GlobalSearch } from "@/components/layout/global-search";
 import { useAuth } from "@/hooks/use-auth";
@@ -210,9 +211,11 @@ export function AppLayout() {
           </DropdownMenu>
         </header>
 
-        {/* Content */}
+        {/* Content. Suspense catches every lazily-loaded route chunk. */}
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          <Outlet />
+          <Suspense fallback={<LoadingSpinner />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>
