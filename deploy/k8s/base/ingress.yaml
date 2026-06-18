@@ -4,10 +4,11 @@ metadata:
   name: atlas
   namespace: atlas
   annotations:
-    # Traefik (same controller as Grafana on this host). Strip /alert-hub via a
-    # Middleware so the app/nginx still see "/" internally — replaces the old
-    # nginx rewrite-target; no app code change. Ref format: <ns>-<name>@kubernetescrd.
-    traefik.ingress.kubernetes.io/router.middlewares: atlas-stripprefix-alert-hub@kubernetescrd
+    # Traefik (same controller as Grafana on this host). Chain (order matters):
+    # 1) redirect the bare /alert-hub -> /alert-hub/ (else the SPA loads blank),
+    # 2) strip /alert-hub so the app/nginx still see "/" internally (replaces the
+    # old nginx rewrite-target; no app code change). Ref: <ns>-<name>@kubernetescrd.
+    traefik.ingress.kubernetes.io/router.middlewares: atlas-redirect-alert-hub-slash@kubernetescrd,atlas-stripprefix-alert-hub@kubernetescrd
     # Guarantee atlas wins over Grafana's "/" catch-all on the shared host.
     # Traefik already prefers the longer prefix (PathPrefix(`/alert-hub`) >
     # PathPrefix(`/`)); this makes it explicit so /alert-hub never falls through.
@@ -42,3 +43,16 @@ spec:
   stripPrefix:
     prefixes:
       - /alert-hub
+---
+# Redirect the exact bare path /alert-hub -> /alert-hub/ (301) so the SPA always
+# loads from the trailing-slash base. Runs BEFORE stripPrefix in the chain.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-alert-hub-slash
+  namespace: atlas
+spec:
+  redirectRegex:
+    regex: ^(https?://[^/]+)/alert-hub$
+    replacement: ${1}/alert-hub/
+    permanent: true
