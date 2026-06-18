@@ -24,10 +24,8 @@ echo "==> 3/5 load images into kind"
 kind load docker-image "$BACKEND_IMG" --name "$CLUSTER"
 kind load docker-image "$FRONTEND_IMG" --name "$CLUSTER"
 
-echo "==> 4/5 deploy (dev overlay, images retagged to :dev)"
-kubectl kustomize deploy/k8s/overlays/dev \
-  | sed "s|ghcr.io/oronaminc/atlas/backend:latest|$BACKEND_IMG|g; s|ghcr.io/oronaminc/atlas/frontend:latest|$FRONTEND_IMG|g" \
-  | kubectl apply -f -
+echo "==> 4/5 deploy (dev overlay; image tag = overlays/dev images: newTag, :dev)"
+kubectl apply -k deploy/k8s/overlays/dev
 
 echo "==> 5/5 wait for rollout"
 kubectl -n atlas rollout status statefulset/atlas-postgres --timeout=180s

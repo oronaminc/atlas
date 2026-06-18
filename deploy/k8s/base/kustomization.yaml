@@ -17,13 +17,10 @@ resources:
 # `kubectl apply -f deploy/k8s/base/prometheus-rules.yaml` or load its `groups:`
 # into your Prometheus rule_files (see README).
 
-# Image repos/placeholder tags only. EACH OVERLAY owns its own newName/newTag
-# via its `images:` field, so dev and prod run INDEPENDENT tags — bumping dev
-# never forces prod (and vice versa). The same two image streams cover every
-# pod: backend image = backend + all workers (sync/correlation/notification/
-# maintenance/llm); frontend image = frontend.
-images:
-  - name: ghcr.io/oronaminc/atlas/backend
-    newTag: latest
-  - name: ghcr.io/oronaminc/atlas/frontend
-    newTag: latest
+# NO images: block here on purpose. base is NOT a deploy target — deploy an
+# OVERLAY (overlays/dev or overlays/prod). The image TAG is owned solely by each
+# overlay's `images:` (newName/newTag), so dev and prod set their tag in exactly
+# ONE place and diverge independently. The same two streams cover every pod:
+# backend image = backend + all workers (sync/correlation/notification/
+# maintenance/llm) + the migrate initContainer; frontend image = frontend.
+# (Applying base directly would run the manifests' literal :latest placeholder.)
