@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "dev-secret-key-change-me"
     FERNET_KEY: str = ""
 
+    # Subpath deploy: when atlas is served under a path prefix (e.g. /alert-hub)
+    # behind an ingress that STRIPS the prefix, root_path tells FastAPI to
+    # generate docs/openapi/cookie URLs with it. "" = served at root. Must match
+    # the frontend VITE_BASE_PATH (without trailing slash).
+    ROOT_PATH: str = ""
+
     DATABASE_URL: str = "postgresql+asyncpg://atlas:atlas@localhost:5432/atlas"
     REDIS_URL: str = "redis://localhost:6379/0"
 

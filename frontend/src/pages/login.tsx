@@ -19,6 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { FormField } from "@/components/common/form-field";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { BASE_URL as API_BASE } from "@/api/client";
 
 const loginSchema = z.object({
   email: z.string().email("올바른 이메일을 입력하세요"),
@@ -26,8 +27,6 @@ const loginSchema = z.object({
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
 export function LoginPage() {
   const { t } = useTranslation();

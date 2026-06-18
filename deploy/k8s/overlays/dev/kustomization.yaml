@@ -46,17 +46,21 @@ patches:
         value: dev
       - op: replace
         path: /data/CORS_ORIGINS
-        value: http://localhost:8080,http://atlas.local
+        value: https://atlas-dev.sktelecom.com
       - op: replace
         path: /data/FRONTEND_URL
-        value: http://atlas.local
+        value: https://atlas-dev.sktelecom.com/alert-hub
+      - op: replace
+        path: /data/ATLAS_PUBLIC_URL
+        value: https://atlas-dev.sktelecom.com/alert-hub
     target:
       kind: ConfigMap
       name: atlas-config
+  # Shares atlas-dev.sktelecom.com with Grafana; atlas lives under /alert-hub.
   - patch: |-
       - op: replace
         path: /spec/rules/0/host
-        value: atlas.local
+        value: atlas-dev.sktelecom.com
     target:
       kind: Ingress
       name: atlas

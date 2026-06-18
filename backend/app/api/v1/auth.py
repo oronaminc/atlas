@@ -25,6 +25,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 REFRESH_COOKIE = "atlas_refresh"
 OIDC_STATE_COOKIE = "atlas_oidc_state"
 
+# Browser-facing cookie path. Under a subpath deploy the ingress strips
+# ROOT_PATH before the backend, but Set-Cookie path is what the BROWSER stores —
+# it must carry the prefix or the cookie won't be sent on /<prefix>/api/v1/auth.
+COOKIE_PATH = f"{settings.ROOT_PATH}/api/v1/auth"
+
 
 def user_to_out(user: User) -> UserOut:
     out = UserOut.model_validate(user)
@@ -48,7 +53,7 @@ def set_refresh_cookie(response: Response, user_id: uuid.UUID) -> None:
         secure=settings.APP_ENV not in ("dev", "test"),
         samesite="strict",  # CSRF protection for the refresh cookie
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/v1/auth",
+        path=COOKIE_PATH,
     )
 
 
@@ -117,7 +122,7 @@ async def refresh(request: Request, response: Response, db: AsyncSession = Depen
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie(REFRESH_COOKIE, path="/api/v1/auth")
+    response.delete_cookie(REFRESH_COOKIE, path=COOKIE_PATH)
     return envelope({"ok": True})
 
 
@@ -169,7 +174,7 @@ async def oidc_login(response: Response):
         secure=settings.APP_ENV not in ("dev", "test"),
         samesite="lax",
         max_age=600,
-        path="/api/v1/auth",
+        path=COOKIE_PATH,
     )
     return redirect
 
@@ -227,5 +232,5 @@ async def oidc_callback(
 
     redirect = RedirectResponse(settings.FRONTEND_URL)
     set_refresh_cookie(redirect, user.id)
-    redirect.delete_cookie(OIDC_STATE_COOKIE, path="/api/v1/auth")
+    redirect.delete_cookie(OIDC_STATE_COOKIE, path=COOKIE_PATH)
     return redirect

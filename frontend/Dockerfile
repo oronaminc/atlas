@@ -4,6 +4,10 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
+# Subpath base, baked into asset URLs at build (same value dev+prod, e.g.
+# /alert-hub/). Default "/" builds for root. Set via build-arg in CI/overlays.
+ARG VITE_BASE_PATH=/
+ENV VITE_BASE_PATH=$VITE_BASE_PATH
 RUN pnpm build
 
 FROM nginx:1.27-alpine

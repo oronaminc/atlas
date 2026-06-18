@@ -18,7 +18,13 @@ logging.basicConfig(level=logging.INFO)
 app = FastAPI(
     title="Atlas — Observability Alert Management",
     version="0.1.0",
-    docs_url="/docs",
+    # Docs live UNDER /api so they ride the frontend nginx's existing /api proxy
+    # (the only path forwarded to the backend) and are thus reachable under the
+    # subpath at <prefix>/api/docs. root_path makes Swagger fetch the openapi at
+    # <prefix>/api/openapi.json. Routes themselves stay at /api/v1.
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
+    root_path=settings.ROOT_PATH,
 )
 
 app.add_middleware(
