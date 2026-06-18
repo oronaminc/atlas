@@ -5,14 +5,16 @@ resources:
   - ../../base
 
 # Replace with the internal GitLab container registry path.
-# The newTag marker comments are where Flux ImageUpdateAutomation commits new tags.
+# newTag is a semver MAJOR.MINOR.PATCH (CI tags 0.1.<pipeline-iid>); the marker
+# comments are where Flux ImageUpdateAutomation (semver ImagePolicy) commits the
+# highest tag. Seed 0.1.0; Flux overwrites it.
 images:
   - name: ghcr.io/oronaminc/atlas/backend
     newName: registry.gitlab.internal/platform/atlas/backend
-    newTag: main-1-000000 # {"$imagepolicy": "flux-system:atlas-backend:tag"}
+    newTag: 0.1.0 # {"$imagepolicy": "flux-system:atlas-backend:tag"}
   - name: ghcr.io/oronaminc/atlas/frontend
     newName: registry.gitlab.internal/platform/atlas/frontend
-    newTag: main-1-000000 # {"$imagepolicy": "flux-system:atlas-frontend:tag"}
+    newTag: 0.1.0 # {"$imagepolicy": "flux-system:atlas-frontend:tag"}
 
 patches:
   # Shares atlas.sktelecom.com with Grafana; atlas lives under /alert-hub.
