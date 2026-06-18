@@ -81,11 +81,23 @@ Setup order:
 
 ```
 deploy/k8s/
-  base/            # Namespace, ConfigMap, backend (+migrate initContainer),
-                   # worker, frontend, Service, Ingress
-  overlays/dev/    # + in-cluster postgres/redis, dev secret, replicas=1
-  overlays/prod/   # internal registry images + Flux imagepolicy markers
+  base/            # env-AGNOSTIC: Namespace, ConfigMap (common keys only),
+                   # backend (+migrate initContainer), sync-worker,
+                   # correlation/notification/maintenance/llm workers,
+                   # frontend, Services, Ingress (placeholder host)
+  overlays/dev/    # host atlas-dev.sktelecom.com, in-cluster postgres/redis,
+                   # dev secret, replicas=1, image tag :dev
+  overlays/prod/   # host atlas.sktelecom.com, internal registry + Flux tag
 ```
+
+base holds only what's common to every environment (incl. `ROOT_PATH=/alert-hub`,
+the same dev+prod). Per-environment values live in each overlay: the ingress
+**host**, the host-bearing config (`ATLAS_PUBLIC_URL`/`FRONTEND_URL`/`CORS_ORIGINS`),
+replicas, and the **image tag**. Image tags are set per overlay via `images:`
+(`newTag`), so **dev and prod run independent tags** — bump dev to a test build
+without forcing prod off its pinned/stable tag (prod's tag is Flux-managed). Both
+the backend image (backend + all workers) and the frontend image are pinnable
+per overlay.
 
 Production deploy:
 

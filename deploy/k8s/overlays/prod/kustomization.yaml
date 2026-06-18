@@ -24,13 +24,14 @@ patches:
       kind: Ingress
       name: atlas
   - patch: |-
-      - op: replace
+      # Added here (not in base): host-bearing, env-specific.
+      - op: add
         path: /data/CORS_ORIGINS
         value: https://atlas.sktelecom.com
-      - op: replace
+      - op: add
         path: /data/FRONTEND_URL
         value: https://atlas.sktelecom.com/alert-hub
-      - op: replace
+      - op: add
         path: /data/ATLAS_PUBLIC_URL
         value: https://atlas.sktelecom.com/alert-hub
     target:

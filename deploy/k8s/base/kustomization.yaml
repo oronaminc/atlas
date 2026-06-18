@@ -5,7 +5,7 @@ resources:
   - namespace.yaml
   - configmap.yaml
   - backend.yaml
-  - worker.yaml
+  - sync-worker.yaml
   - correlation-worker.yaml
   - notification-worker.yaml
   - maintenance-worker.yaml
@@ -18,8 +18,11 @@ resources:
 # `kubectl apply -f deploy/k8s/base/prometheus-rules.yaml` or load its `groups:`
 # into your Prometheus rule_files (see README).
 
-# Retag both images in one place:
-#   kustomize edit set image ghcr.io/oronaminc/atlas/backend=ghcr.io/oronaminc/atlas/backend:v0.1.0
+# Image repos/placeholder tags only. EACH OVERLAY owns its own newName/newTag
+# via its `images:` field, so dev and prod run INDEPENDENT tags — bumping dev
+# never forces prod (and vice versa). The same two image streams cover every
+# pod: backend image = backend + all workers (sync/correlation/notification/
+# maintenance/llm); frontend image = frontend.
 images:
   - name: ghcr.io/oronaminc/atlas/backend
     newTag: latest
