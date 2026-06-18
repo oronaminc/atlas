@@ -33,6 +33,10 @@ spec:
               value: atlas
             - name: POSTGRES_DB
               value: atlas
+            # PVC mounts at the data dir with a lost+found/ that postgres refuses
+            # to initdb into; point PGDATA at a subdir so init succeeds.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
