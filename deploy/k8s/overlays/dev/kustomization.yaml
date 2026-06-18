@@ -61,6 +61,26 @@ patches:
       - op: add
         path: /data/ATLAS_PUBLIC_URL
         value: https://atlas-dev.sktelecom.com/alert-hub
+      # Observability endpoints — per-overlay so dev/prod can point at different
+      # stacks. Same values as the former base today (status quo); change freely.
+      - op: add
+        path: /data/MIMIR_RULER_URL
+        value: http://mimir.observability.svc:8080/prometheus/config/v1/rules
+      - op: add
+        path: /data/MIMIR_ALERTMANAGER_URL
+        value: http://mimir-alertmanager.observability.svc:8080
+      - op: add
+        path: /data/MIMIR_QUERY_URL
+        value: http://mimir.observability.svc:8080/prometheus
+      - op: add
+        path: /data/LOKI_URL
+        value: http://loki.observability.svc:3100
+      - op: add
+        path: /data/TEMPO_URL
+        value: http://tempo.observability.svc:3200
+      - op: add
+        path: /data/GRAFANA_URL
+        value: http://grafana.observability.svc:3000
     target:
       kind: ConfigMap
       name: atlas-config
