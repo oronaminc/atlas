@@ -96,4 +96,6 @@ jobs:
       - name: Validate with kubeconform
         run: |
           curl -sL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
-          ./kubeconform -strict -summary /tmp/base.yaml /tmp/dev.yaml
+          # -ignore-missing-schemas: skip CRDs with no bundled schema (Traefik
+          # Middleware) while still strictly validating every core/k8s kind.
+          ./kubeconform -strict -ignore-missing-schemas -summary /tmp/base.yaml /tmp/dev.yaml
