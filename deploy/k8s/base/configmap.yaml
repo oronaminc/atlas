@@ -3,15 +3,15 @@ kind: ConfigMap
 metadata:
   name: atlas-config
   namespace: atlas
+# Environment-AGNOSTIC config only. Host-bearing/per-env values
+# (ATLAS_PUBLIC_URL, FRONTEND_URL, CORS_ORIGINS) live in each overlay; the
+# prefix (ROOT_PATH) is identical dev+prod so it stays here.
 data:
   APP_ENV: "prod"
   # Subpath deploy: atlas is served under /alert-hub (same dev+prod; only the
   # host differs per overlay). The ingress strips this before the backend, so
   # ROOT_PATH only drives docs/openapi + auth-cookie URL generation.
   ROOT_PATH: "/alert-hub"
-  # Absolute base atlas advertises to itself (AM ingest webhooks, OIDC). Host is
-  # patched per overlay; the /alert-hub suffix is constant.
-  ATLAS_PUBLIC_URL: "https://atlas.example.com/alert-hub"
   # Multi-tenancy: always sent as X-Scope-OrgID on every Mimir/Loki/Tempo call.
   MIMIR_TENANT_ID: "system"
   # Point these at the existing observability stack (cluster-internal DNS).
@@ -21,8 +21,4 @@ data:
   LOKI_URL: "http://loki.observability.svc:3100"
   TEMPO_URL: "http://tempo.observability.svc:3200"
   GRAFANA_URL: "http://grafana.observability.svc:3000"
-  # CORS is origin-only (scheme+host, no path). FRONTEND_URL is where OIDC
-  # redirects land, so it carries the /alert-hub prefix.
-  CORS_ORIGINS: "https://atlas.example.com"
-  FRONTEND_URL: "https://atlas.example.com/alert-hub"
   SYNC_INTERVAL_SECONDS: "30"

@@ -6,6 +6,13 @@ resources:
   - postgres.yaml
   - redis.yaml
 
+# Dev owns its own image tag, independent of prod. kind-up builds/loads :dev.
+images:
+  - name: ghcr.io/oronaminc/atlas/backend
+    newTag: dev
+  - name: ghcr.io/oronaminc/atlas/frontend
+    newTag: dev
+
 # Dev-only credentials. Never use a generator like this in production.
 secretGenerator:
   - name: atlas-secrets
@@ -44,13 +51,14 @@ patches:
       - op: replace
         path: /data/APP_ENV
         value: dev
-      - op: replace
+      # Added here (not in base): host-bearing, env-specific.
+      - op: add
         path: /data/CORS_ORIGINS
         value: https://atlas-dev.sktelecom.com
-      - op: replace
+      - op: add
         path: /data/FRONTEND_URL
         value: https://atlas-dev.sktelecom.com/alert-hub
-      - op: replace
+      - op: add
         path: /data/ATLAS_PUBLIC_URL
         value: https://atlas-dev.sktelecom.com/alert-hub
     target:
