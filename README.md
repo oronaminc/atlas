@@ -99,17 +99,38 @@ without forcing prod off its pinned/stable tag (prod's tag is Flux-managed). Bot
 the backend image (backend + all workers) and the frontend image are pinnable
 per overlay.
 
+### Image tags — ONE place per environment
+
+Always deploy an **overlay**, never `base/` (base has no tag and would run the
+manifests' literal `:latest` placeholder). The tag is set in exactly one place
+per env — that overlay's `images:` entry:
+
+| env | the one place to set the tag | how it's applied |
+|-----|------------------------------|------------------|
+| dev | `deploy/k8s/overlays/dev/kustomization.yaml` → `images: [].newTag` | `kubectl apply -k deploy/k8s/overlays/dev` (or `kind-up.sh`) |
+| prod | `deploy/k8s/overlays/prod/kustomization.yaml` → `images: [].newTag` | Flux applies `overlays/prod` |
+
+dev and prod are independent: bumping one never touches the other. To change a
+tag, edit only that overlay's `newTag` (or use `kustomize edit set image` **in
+that overlay dir**) — e.g. `cd deploy/k8s/overlays/dev && kustomize edit set image ghcr.io/oronaminc/atlas/backend:dev-2`.
+
+**prod single source of truth:** Flux `ImageUpdateAutomation` *owns* the prod
+`newTag` line (the `# {"$imagepolicy": ...}` setter markers). Don't hand-edit it
+while automation is on — bump prod by pushing a new image (CI tags
+`0.1.<pipeline-iid>`; the semver `ImagePolicy` promotes the highest). To pin/roll
+back by hand, `flux suspend kustomization atlas` first, then edit the marker.
+
 Production deploy:
 
 ```bash
 # 1) Point the ConfigMap MIMIR_*_URL values at the existing observability stack
 # 2) Create the secret (see deploy/k8s/base/secret.example.yaml)
 kubectl -n atlas create secret generic atlas-secrets --from-literal=SECRET_KEY=... ...
-# 3) Pin image tags and apply
-cd deploy/k8s/base && kustomize edit set image \
-  ghcr.io/oronaminc/atlas/backend=ghcr.io/oronaminc/atlas/backend:v0.1.0 \
-  ghcr.io/oronaminc/atlas/frontend=ghcr.io/oronaminc/atlas/frontend:v0.1.0
-kubectl apply -k deploy/k8s/base
+# 3) Set the prod tag in the prod OVERLAY, then apply that overlay (NOT base):
+cd deploy/k8s/overlays/prod && kustomize edit set image \
+  ghcr.io/oronaminc/atlas/backend=registry.gitlab.internal/platform/atlas/backend:0.1.0 \
+  ghcr.io/oronaminc/atlas/frontend=registry.gitlab.internal/platform/atlas/frontend:0.1.0
+kubectl apply -k deploy/k8s/overlays/prod   # (or let Flux apply it)
 # 4) First admin
 kubectl -n atlas exec deploy/atlas-backend -- python scripts/create_admin.py admin@example.com admin <pw>
 ```
