@@ -9,6 +9,13 @@ metadata:
 spec:
   # The Redis lock allows >1 replica, but one is enough for the sync cadence.
   replicas: 1
+  # Zero-downtime updates: bring the replacement up (Ready) before retiring the
+  # old pod, so the worker is never fully absent during a rollout.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: atlas

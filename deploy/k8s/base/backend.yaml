@@ -8,6 +8,13 @@ metadata:
     app.kubernetes.io/component: backend
 spec:
   replicas: 2
+  # Zero-downtime updates: never take a replica down until its replacement is
+  # Ready (readinessProbe-gated), so >=1 pod always serves — even at replicas: 1.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: atlas
