@@ -59,10 +59,9 @@ patches:
     target:
       kind: ConfigMap
       name: atlas-config
-  - patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 2
-    target:
-      kind: Deployment
-      name: atlas-notification-worker
+  # NOTE: atlas-notification-worker is intentionally NOT scaled past 1.
+  # Its per-second send TokenBucket is per-process, so N replicas would send at
+  # ~N x the configured telegram_rate_per_second (exactly-once + daily/group
+  # quotas stay correct — only the rate budget breaks). Keep replicas: 1 until a
+  # distributed rate limiter exists. correlation/llm/sync/maintenance are N-safe
+  # and may be scaled here.
