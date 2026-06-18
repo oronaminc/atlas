@@ -10,9 +10,11 @@ metadata:
     # old nginx rewrite-target; no app code change). Ref: <ns>-<name>@kubernetescrd.
     traefik.ingress.kubernetes.io/router.middlewares: atlas-redirect-alert-hub-slash@kubernetescrd,atlas-stripprefix-alert-hub@kubernetescrd
     # Guarantee atlas wins over Grafana's "/" catch-all on the shared host.
-    # Traefik already prefers the longer prefix (PathPrefix(`/alert-hub`) >
-    # PathPrefix(`/`)); this makes it explicit so /alert-hub never falls through.
-    traefik.ingress.kubernetes.io/router.priority: "100"
+    # Traefik evaluates routers by DESCENDING priority; an explicit value
+    # REPLACES the default (= rule length), so it must be set high enough to beat
+    # Grafana's "/" router (whose own priority may be rule-length- or explicitly-
+    # derived). A large constant makes /alert-hub unambiguously win.
+    traefik.ingress.kubernetes.io/router.priority: "100000"
 spec:
   # Match Grafana's controller (Grafana uses the field, not the annotation).
   ingressClassName: traefik-monitoring
