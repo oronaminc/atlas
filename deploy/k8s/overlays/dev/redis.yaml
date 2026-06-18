@@ -8,6 +8,14 @@ metadata:
     app.kubernetes.io/component: redis
 spec:
   replicas: 1
+  # Keep a redis pod present across updates (>=1 available). Note: dev redis is
+  # an ephemeral cache, so this preserves pod-presence, not cache state — atlas
+  # treats Redis as best-effort (workers fall back to PG poll).
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: atlas
