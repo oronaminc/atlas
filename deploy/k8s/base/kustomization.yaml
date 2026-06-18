@@ -12,7 +12,6 @@ resources:
   - llm-worker.yaml
   - frontend.yaml
   - ingress.yaml
-  - networkpolicy-metrics.yaml
 # prometheus-rules.yaml is a PrometheusRule CRD (needs the Prometheus Operator);
 # kept OUT of this kustomization so kubeconform -strict stays green. Apply with
 # `kubectl apply -f deploy/k8s/base/prometheus-rules.yaml` or load its `groups:`
