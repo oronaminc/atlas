@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { api, setAccessToken, setOnUnauthorized } from "@/api/client";
+import { api, getAccessToken, setAccessToken, setOnUnauthorized } from "@/api/client";
 import type { User } from "@/types";
 
 interface AuthState {
@@ -39,12 +39,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(null);
       setUser(null);
     });
-    // Try restoring the session from the refresh cookie on first load.
+    // Restore the session on first load. The access token was rehydrated from
+    // localStorage at import, so validate it via /auth/me; if it's
+    // missing/expired the api client transparently falls back to the refresh
+    // cookie (401 -> POST /auth/refresh -> retry). Either path keeps the user
+    // logged in across a refresh; only a genuine failure clears state.
     (async () => {
       try {
-        const res = await api.post<{ access_token: string }>("/auth/refresh");
-        setAccessToken(res.data.access_token);
-        await refreshUser();
+        if (getAccessToken()) {
+          await refreshUser();
+        } else {
+          const res = await api.post<{ access_token: string }>("/auth/refresh");
+          setAccessToken(res.data.access_token);
+          await refreshUser();
+        }
       } catch {
         setUser(null);
       } finally {

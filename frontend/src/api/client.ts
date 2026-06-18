@@ -6,11 +6,32 @@ import type { Envelope } from "@/types";
 // it. VITE_API_BASE_URL still overrides for special setups.
 export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? `${import.meta.env.BASE_URL}api/v1`;
 
-let accessToken: string | null = null;
+// Access-token persistence: kept in localStorage so a page refresh survives
+// (the in-memory-only token cleared on reload = the logout-on-refresh bug). The
+// httpOnly refresh cookie is the more XSS-resistant mechanism, but it isn't
+// reaching the browser under the subpath deploy, so localStorage is the
+// reliable carrier. Key matches the atlas-* convention (atlas-ui-theme).
+const TOKEN_KEY = "atlas-access-token";
+
+function readStoredToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let accessToken: string | null = readStoredToken();
 let onUnauthorized: (() => void) | null = null;
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* storage unavailable (private mode) — fall back to in-memory only */
+  }
 }
 
 export function getAccessToken() {
@@ -42,7 +63,7 @@ async function refreshAccessToken(): Promise<boolean> {
     });
     if (!res.ok) return false;
     const body = (await res.json()) as Envelope<{ access_token: string }>;
-    accessToken = body.data.access_token;
+    setAccessToken(body.data.access_token);
     return true;
   } catch {
     return false;
