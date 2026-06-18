@@ -7,8 +7,12 @@ metadata:
     app.kubernetes.io/name: atlas
     app.kubernetes.io/component: notification-worker
 spec:
-  # Dedup state lives in Redis; PG-poll batches are idempotent, but keep one
-  # replica unless throughput demands more.
+  # MUST stay replicas: 1. Delivery is exactly-once at any N (outbox CAS+lease,
+  # so restarts never lose alerts), BUT the per-second send throttle is a
+  # per-PROCESS TokenBucket — N replicas would push the aggregate send rate to
+  # ~N x telegram_rate_per_second and blow the bot budget. Do NOT scale past 1
+  # until a distributed (Redis/DB) rate limiter replaces the in-process bucket.
+  # (Daily/group quotas are DB-counted and stay correct regardless.)
   replicas: 1
   # Zero-downtime updates: bring the replacement up (Ready) before retiring the
   # old pod, so the worker is never fully absent during a rollout.
