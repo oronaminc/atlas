@@ -4,24 +4,41 @@ metadata:
   name: atlas
   namespace: atlas
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "4m"
-    # Subpath deploy: atlas shares a host with Grafana and lives under
-    # /alert-hub. Strip the prefix before the frontend nginx (which serves the
-    # SPA at / and proxies /api/ -> backend). Nothing of atlas is served at "/".
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    # Traefik (same controller as Grafana on this host). Strip /alert-hub via a
+    # Middleware so the app/nginx still see "/" internally — replaces the old
+    # nginx rewrite-target; no app code change. Ref format: <ns>-<name>@kubernetescrd.
+    traefik.ingress.kubernetes.io/router.middlewares: atlas-stripprefix-alert-hub@kubernetescrd
+    # Guarantee atlas wins over Grafana's "/" catch-all on the shared host.
+    # Traefik already prefers the longer prefix (PathPrefix(`/alert-hub`) >
+    # PathPrefix(`/`)); this makes it explicit so /alert-hub never falls through.
+    traefik.ingress.kubernetes.io/router.priority: "100"
 spec:
-  ingressClassName: nginx
+  # Match Grafana's controller (Grafana uses the field, not the annotation).
+  ingressClassName: traefik-monitoring
   rules:
     # Host is patched per overlay (dev: atlas-dev.sktelecom.com,
-    # prod: atlas.sktelecom.com). Grafana owns the rest of the host.
+    # prod: atlas.sktelecom.com). Grafana owns "/" on the same host.
     - host: atlas.example.com
       http:
         paths:
-          - path: /alert-hub(/|$)(.*)
-            pathType: ImplementationSpecific
+          - path: /alert-hub
+            pathType: Prefix
             backend:
               service:
                 name: atlas-frontend
                 port:
                   number: 80
+---
+# Traefik stripPrefix: removes /alert-hub before the request reaches
+# atlas-frontend (nginx serves the SPA at / and proxies /api/ -> backend).
+# NOTE: CRD apiGroup is traefik.io on Traefik v3 / recent v2; if your cluster
+# runs the legacy group, change this to traefik.containo.us/v1alpha1.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: stripprefix-alert-hub
+  namespace: atlas
+spec:
+  stripPrefix:
+    prefixes:
+      - /alert-hub

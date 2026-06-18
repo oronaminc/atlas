@@ -67,7 +67,7 @@ pnpm test                                         # vitest (graph swimlane layou
 docker compose up --build                         # pg, redis, backend, sync/correlation/notification workers, frontend
 
 # k8s manifests
-kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -summary -
+kubectl kustomize deploy/k8s/overlays/dev | kubeconform -strict -ignore-missing-schemas -summary -  # -ignore-missing-schemas: Traefik Middleware CRD has no bundled schema
 ```
 
 ## Structure map

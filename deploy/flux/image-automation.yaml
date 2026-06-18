@@ -1,4 +1,5 @@
-# Auto-commits new image tags (main-<iid>-<sha>) pushed by CI into the prod overlay.
+# Auto-commits the highest semver image tag (CI pushes 0.1.<pipeline-iid>) into
+# the prod overlay (deploy/k8s/overlays/prod) via Setters.
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageRepository
 metadata:
@@ -28,12 +29,12 @@ metadata:
 spec:
   imageRepositoryRef:
     name: atlas-backend
+  # Only consider X.Y.Z tags (ignores :latest, :dev); pick the highest semver.
   filterTags:
-    pattern: '^main-(?P<iid>\d+)-.+$'
-    extract: '$iid'
+    pattern: '^\d+\.\d+\.\d+$'
   policy:
-    numerical:
-      order: asc
+    semver:
+      range: '>=0.1.0'
 ---
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImagePolicy
@@ -43,12 +44,12 @@ metadata:
 spec:
   imageRepositoryRef:
     name: atlas-frontend
+  # Only consider X.Y.Z tags (ignores :latest, :dev); pick the highest semver.
   filterTags:
-    pattern: '^main-(?P<iid>\d+)-.+$'
-    extract: '$iid'
+    pattern: '^\d+\.\d+\.\d+$'
   policy:
-    numerical:
-      order: asc
+    semver:
+      range: '>=0.1.0'
 ---
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageUpdateAutomation

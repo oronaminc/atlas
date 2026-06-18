@@ -19,9 +19,9 @@ kubectl apply -k deploy/flux
 Flow:
 
 ```
-GitLab CI (test → kaniko build → registry push, tags main-<iid>-<sha>)
+GitLab CI (test → kaniko build → registry push, tags 0.1.<pipeline-iid> semver)
    ↓
-ImageRepository polls the registry → ImagePolicy picks the highest iid
+ImageRepository polls the registry → ImagePolicy (semver) picks the highest version
    ↓
 ImageUpdateAutomation commits the new tag to the marker comments
 (# {"$imagepolicy": ...}) in deploy/k8s/overlays/prod/kustomization.yaml
