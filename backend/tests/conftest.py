@@ -8,6 +8,9 @@ os.environ.setdefault("SECRET_KEY", "test-secret")
 os.environ.setdefault("FERNET_KEY", Fernet.generate_key().decode())
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("INGEST_API_KEY", "test-ingest-key")
+# Test client speaks plain HTTP, so a `secure` cookie is never sent back ->
+# the refresh flow needs the cookie unsecured here (prod default stays true).
+os.environ.setdefault("COOKIE_SECURE", "false")
 
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
