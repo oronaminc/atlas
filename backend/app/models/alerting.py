@@ -6,7 +6,19 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, Uuid
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    Uuid,
+    false,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import JsonType, TenantScoped, TimestampedBase
@@ -38,6 +50,13 @@ class AlertEvent(TenantScoped, TimestampedBase):
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     dedup_count: Mapped[int] = mapped_column(Integer, default=1)
+    # Value fetched from Mimir by the ingest-time threshold filter (PR #2);
+    # recorded for audit (e.g. "suppressed: 92 < 95"). NULL = never evaluated.
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Terminal flag: threshold filter dropped this event below the effective
+    # override -> stored but NOT escalated to an incident, and excluded from
+    # re-claim (incident_id stays NULL).
+    suppressed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     claimed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     incident_id: Mapped[uuid.UUID | None] = mapped_column(
