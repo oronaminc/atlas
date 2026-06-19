@@ -14,6 +14,7 @@ import {
   Server,
   Settings,
   ShieldAlert,
+  SlidersHorizontal,
   User as UserIcon,
   Users,
   UsersRound,
@@ -67,6 +68,7 @@ const navSections: NavSection[] = [
       { to: "/rule-groups", labelKey: "nav.ruleGroups", icon: Layers },
       { to: "/notifications", labelKey: "nav.notifications", icon: BellRing },
       { to: "/mutes", labelKey: "nav.mutes", icon: BellOff },
+      { to: "/thresholds", labelKey: "nav.thresholds", icon: SlidersHorizontal },
     ],
   },
   {

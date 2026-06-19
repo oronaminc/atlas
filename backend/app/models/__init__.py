@@ -15,6 +15,7 @@ from app.models.rule import AlertRule, RuleGroup, RuleGroupRule
 from app.models.server import Server, ServerGroup
 from app.models.sync import SyncState
 from app.models.tenant import MimirOrgMap, Tenant
+from app.models.threshold import Comparator, OverrideTier, RuleCatalog, ThresholdOverride
 from app.models.user import User
 
 __all__ = [
@@ -38,9 +39,13 @@ __all__ = [
     "RetentionConfig",
     "RuleGroup",
     "RuleGroupRule",
+    "Comparator",
+    "OverrideTier",
+    "RuleCatalog",
     "Server",
     "ServerGroup",
     "Silence",
+    "ThresholdOverride",
     "MimirOrgMap",
     "SyncState",
     "Tenant",

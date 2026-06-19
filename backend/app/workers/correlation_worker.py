@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import instruments
 from app.core.config import settings
 from app.db import async_session_factory
+from app.integrations.mimir_ruler import MimirQueryClient
 from app.models.alerting import AlertEvent
 from app.models.base import utcnow
 from app.schemas.alerting import NormalizedAlert
@@ -25,6 +26,8 @@ from app.services.correlation.config import get_config
 from app.services.correlation.dedup import InMemoryDedupStore, RedisDedupStore
 from app.services.correlation.engine import CorrelationEngine
 from app.services.correlation.strategy import AttributeTimeStrategy, LLMStrategy
+from app.services.rule_sync import org_for_tenant
+from app.services.threshold import ValueCache, parse_instant_value, should_suppress
 from app.workers.metrics_server import heartbeat, start_metrics_server
 
 logger = logging.getLogger(__name__)
@@ -62,6 +65,7 @@ async def claim_events(
     lease_cutoff = now - timedelta(seconds=lease_seconds)
     guard = (
         AlertEvent.incident_id.is_(None),
+        AlertEvent.suppressed.isnot(True),  # threshold-dropped events are terminal
         or_(AlertEvent.claimed_at.is_(None), AlertEvent.claimed_at < lease_cutoff),
         # partition pruning: never scan further back than the claim lookback
         # (events older than this are operationally dead anyway)
@@ -99,17 +103,38 @@ async def claim_events(
     return list(res.scalars())
 
 
-async def correlate_pending(engine: CorrelationEngine) -> int:
+def _make_fetch_value(db: AsyncSession):
+    """Per-tenant Mimir value fetch for the threshold filter. Resolves the
+    tenant's Mimir org (X-Scope-OrgID) and runs an instant query; the caller
+    (should_suppress) treats exceptions/None as fail-open."""
+
+    async def fetch_value(tenant_id, promql: str) -> float | None:
+        org = await org_for_tenant(db, tenant_id)
+        client = MimirQueryClient(org=org)
+        resp = await client.instant_query(promql)
+        return parse_instant_value(resp)
+
+    return fetch_value
+
+
+async def correlate_pending(engine: CorrelationEngine, cache: ValueCache) -> int:
     processed = 0
     t0 = time.perf_counter()
     async with async_session_factory() as db:
         config = await get_config(db)
+        fetch_value = _make_fetch_value(db)
         for event in await claim_events(db, worker_id=WORKER_ID, now=utcnow()):
+            suppress, value = await should_suppress(db, event, fetch_value=fetch_value, cache=cache)
+            if value is not None:
+                event.value = value  # audit: record the fetched value
+            if suppress:
+                event.suppressed = True  # stored, NOT escalated; excluded from re-claim
+                processed += 1
+                continue
             await engine.correlate(db, event, to_normalized(event), config, now=utcnow())
             processed += 1
         await db.commit()
     instruments.correlation_batch_seconds.observe(time.perf_counter() - t0)
-    instruments.correlation_events.inc(processed)
     instruments.correlation_iterations.inc(outcome="busy" if processed else "idle")
     return processed
 
@@ -136,11 +161,12 @@ async def main() -> None:
     engine = CorrelationEngine(
         dedup_store=dedup, strategies=[AttributeTimeStrategy(), LLMStrategy()]
     )
+    value_cache = ValueCache()  # short-TTL cache for threshold-filter Mimir reads
 
     logger.info("correlation worker %s started", WORKER_ID)
     while True:
         try:
-            n = await correlate_pending(engine)
+            n = await correlate_pending(engine, value_cache)
             if n:
                 logger.info("correlated %d alert events", n)
         except Exception:
