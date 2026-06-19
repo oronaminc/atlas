@@ -46,10 +46,13 @@ class MimirRulerClient(BaseIntegrationClient):
 
 
 class MimirQueryClient(BaseIntegrationClient):
-    """Prometheus-compatible query API (instant queries for rule previews)."""
+    """Prometheus-compatible query API (instant queries for rule previews and
+    the ingest-time threshold filter). `org` (X-Scope-OrgID) is resolved from
+    the tenant by the caller — a tenant's threshold query only ever reads its
+    own org's metrics."""
 
-    def __init__(self, base_url: str | None = None) -> None:
-        super().__init__(base_url or settings.MIMIR_QUERY_URL)
+    def __init__(self, base_url: str | None = None, org: str | None = None) -> None:
+        super().__init__(base_url or settings.MIMIR_QUERY_URL, org=org)
 
     async def instant_query(self, expr: str) -> dict[str, Any]:
         response = await self.request("GET", "/api/v1/query", params={"query": expr})
