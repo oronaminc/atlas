@@ -58,6 +58,13 @@ class Settings(BaseSettings):
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Refresh/OIDC cookie flags. A `secure` cookie is DROPPED by the browser
+    # over plain HTTP, so an HTTP-served env (dev) must set COOKIE_SECURE=false
+    # or the refresh cookie is never stored and the session dies at the access
+    # TTL. Default true = safe for HTTPS (prod). samesite=strict is fine
+    # same-origin; relax to "lax"/"none" only if a cross-context flow breaks.
+    COOKIE_SECURE: bool = True
+    COOKIE_SAMESITE: str = "strict"
 
     SYNC_INTERVAL_SECONDS: int = 30
     INGEST_API_KEY: str = ""

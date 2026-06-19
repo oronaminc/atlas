@@ -37,25 +37,28 @@ patches:
         path: /data/ATLAS_PUBLIC_URL
         value: https://atlas.sktelecom.com/alert-hub
       # Observability endpoints — per-overlay so dev/prod can point at different
-      # stacks. Same values as the former base today (status quo); change freely.
+      # stacks. Each backend (mimir/loki/tempo) sits behind its own gateway in
+      # its own namespace; port 80 is the canonical gateway port (8080 is the
+      # deprecated legacy-http-metrics port). All Mimir traffic (ruler/query/
+      # alertmanager) shares the one mimir-gateway host.
       - op: add
         path: /data/MIMIR_RULER_URL
-        value: http://mimir.observability.svc:8080/prometheus/config/v1/rules
+        value: http://mimir-gateway.mimir.svc:80/prometheus/config/v1/rules
       - op: add
         path: /data/MIMIR_ALERTMANAGER_URL
-        value: http://mimir-alertmanager.observability.svc:8080
+        value: http://mimir-gateway.mimir.svc:80
       - op: add
         path: /data/MIMIR_QUERY_URL
-        value: http://mimir.observability.svc:8080/prometheus
+        value: http://mimir-gateway.mimir.svc:80/prometheus
       - op: add
         path: /data/LOKI_URL
-        value: http://loki.observability.svc:3100
+        value: http://loki-gateway.loki.svc:80
       - op: add
         path: /data/TEMPO_URL
-        value: http://tempo.observability.svc:3200
+        value: http://tempo-gateway.tempo.svc:80
       - op: add
         path: /data/GRAFANA_URL
-        value: http://grafana.observability.svc:3000
+        value: http://grafana.grafana.svc:80
     target:
       kind: ConfigMap
       name: atlas-config

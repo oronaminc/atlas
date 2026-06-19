@@ -50,8 +50,8 @@ def set_refresh_cookie(response: Response, user_id: uuid.UUID) -> None:
         REFRESH_COOKIE,
         token,
         httponly=True,
-        secure=settings.APP_ENV not in ("dev", "test"),
-        samesite="strict",  # CSRF protection for the refresh cookie
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,  # type: ignore[arg-type]  # CSRF protection
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
         path=COOKIE_PATH,
     )
@@ -171,8 +171,8 @@ async def oidc_login(response: Response):
         OIDC_STATE_COOKIE,
         state,
         httponly=True,
-        secure=settings.APP_ENV not in ("dev", "test"),
-        samesite="lax",
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",  # lax (not strict): the OIDC provider redirects back cross-site
         max_age=600,
         path=COOKIE_PATH,
     )
