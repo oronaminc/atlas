@@ -17,6 +17,7 @@ const RulesPage = lazyPage(() => import("@/pages/rules"), "RulesPage");
 const RuleGroupsPage = lazyPage(() => import("@/pages/rule-groups"), "RuleGroupsPage");
 const AlertsPage = lazyPage(() => import("@/pages/alerts"), "AlertsPage");
 const NotificationsPage = lazyPage(() => import("@/pages/notifications"), "NotificationsPage");
+const MutesPage = lazyPage(() => import("@/pages/mutes"), "MutesPage");
 const GroupsPage = lazyPage(() => import("@/pages/groups"), "GroupsPage");
 const UsersPage = lazyPage(() => import("@/pages/users"), "UsersPage");
 const SettingsPage = lazyPage(() => import("@/pages/settings"), "SettingsPage");
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="/rule-groups" element={<RuleGroupsPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/mutes" element={<MutesPage />} />
         <Route path="/groups" element={<GroupsPage />} />
         <Route
           path="/users"

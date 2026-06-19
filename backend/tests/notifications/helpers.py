@@ -69,6 +69,45 @@ async def seed_incident(
     return incident
 
 
+async def seed_incident_with_events(
+    db, pairs: list[tuple[str | None, str]], *, severity: str = "critical", tenant_id=None
+) -> Incident:
+    """Incident carrying alert_events with given (cmdb_ci, alertname) pairs —
+    for mute/threshold tests. cmdb_ci=None → label omitted."""
+    from app.models.alerting import AlertEvent
+
+    incident = Incident(
+        title="test incident",
+        status=IncidentStatus.open,
+        severity=severity,
+        group_key="host=test",
+        first_seen=NOW,
+        last_seen=NOW,
+        alert_count=len(pairs),
+        tenant_id=tenant_id,
+    )
+    db.add(incident)
+    await db.flush()
+    for i, (cmdb, name) in enumerate(pairs):
+        db.add(
+            AlertEvent(
+                fingerprint=f"fp-{i}-{name}",
+                source="alertmanager",
+                name=name,
+                severity=severity,
+                status="firing",
+                labels=({"cmdb_ci": cmdb} if cmdb else {}),
+                annotations={},
+                starts_at=NOW,
+                received_at=NOW,
+                incident_id=incident.id,
+                tenant_id=tenant_id,
+            )
+        )
+    await db.flush()
+    return incident
+
+
 class FakeChannel:
     """Records sends; can be told to fail."""
 

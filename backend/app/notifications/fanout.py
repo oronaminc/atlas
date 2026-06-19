@@ -9,8 +9,9 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Group, User, UserGroup
-from app.models.alerting import Incident
+from app.models.alerting import Incident, IncidentEvent
 from app.models.delivery import Notification, NotificationRoute
+from app.services.mute import is_incident_muted
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +108,18 @@ async def fan_out_pending(db: AsyncSession, *, now: datetime) -> int:
             continue  # another pod won
         incident = await db.get(Incident, incident_id)
         await db.refresh(incident)
+        # Mute: if every (cmdb_ci, alertname) the incident carries is muted, skip
+        # notification entirely (incident stays claimed -> not re-fanned). The
+        # incident itself is unaffected; this only silences delivery.
+        if await is_incident_muted(db, incident):
+            db.add(
+                IncidentEvent(
+                    incident_id=incident.id,
+                    kind="notification_muted",
+                    payload={"reason": "matched notification mute"},
+                )
+            )
+            continue
         severity_rank = SEVERITY_RANK.get(incident.severity, 0)
         # routes are tenant-scoped: only the incident's own tenant's routes
         # match (NULL-tenant incidents -> NULL-tenant/legacy routes)
