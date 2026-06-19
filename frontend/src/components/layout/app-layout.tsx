@@ -2,6 +2,7 @@ import { Suspense, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Activity,
+  BellOff,
   BellRing,
   ClipboardList,
   Gauge,
@@ -65,6 +66,7 @@ const navSections: NavSection[] = [
       { to: "/rules", labelKey: "nav.rules", icon: ShieldAlert },
       { to: "/rule-groups", labelKey: "nav.ruleGroups", icon: Layers },
       { to: "/notifications", labelKey: "nav.notifications", icon: BellRing },
+      { to: "/mutes", labelKey: "nav.mutes", icon: BellOff },
     ],
   },
   {
