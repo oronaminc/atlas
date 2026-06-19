@@ -73,11 +73,12 @@ Grep for the specific key to confirm: `... | grep COOKIE_SECURE` must print it.
 2. Render-verify: `kubectl kustomize infrastructure/dev | grep -A40 "name: atlas-config"`
    — confirm the new value is present.
 3. Commit + push → Flux reconciles and applies the ConfigMap.
-4. **Restart the pod** so it re-reads env: Flux rolls the Deployment on a
-   ConfigMap change if a checksum annotation is wired; otherwise
-   `kubectl rollout restart deploy/atlas-backend -n atlas` (and the affected
-   workers). Settings are read once at boot — a live pod will NOT pick up a
-   ConfigMap edit without a restart.
+4. **Pods roll automatically** — see §6. `atlas-config` is a `configMapGenerator`,
+   so a content change produces a new hash-suffixed name → new ReplicaSet → all
+   pods that reference it (backend + every worker) restart and re-read env. No
+   manual `kubectl rollout restart` needed. (Without the generator, settings are
+   read once at boot and a live pod keeps the OLD value until a restart — this is
+   the "I changed the ConfigMap but nothing happened" trap.)
 
 ### Scenario B — add/change a needs-rebuild var (e.g. `COOKIE_SECURE`)
 1. **Code change:** add the field to `Settings` in `backend/app/core/config.py`
@@ -200,11 +201,58 @@ no rebuild, *except the two new ones flagged ⚠️ until their image ships*.
 
 ## 5. Where per-env config lives (both repos)
 
-- **base** = env-agnostic only (the `atlas-config` ConfigMap with shared keys,
-  Deployments, Ingress). **No `images:` block, no patches.**
+- **base** = env-agnostic only (`atlas-config` as a `configMapGenerator` with
+  shared keys, Deployments, Ingress). **No `images:` block, no patches.**
 - **overlay** (`infrastructure/{dev,prd}` in gitops; `deploy/k8s/overlays/{dev,prod}`
   in the app repo) = `resources: [../base, …]` + `images:` (tags) + `patches:`
   (ConfigMap values, replicas, ingress host) at the **top-level kustomization.yaml**.
 - Per-env config (observability URLs, `APP_ENV`, `COOKIE_SECURE`, ingress host,
   replicas, image tags) → overlay top-level `kustomization.yaml`. **Never** in a
   base sub-folder — patches there don't reach base resources.
+
+---
+
+## 6. Auto-rollout on config change (configMapGenerator hash)
+
+**Why pods don't pick up ConfigMap changes by default:** the app reads env vars
+once, at process start (pydantic). A plain `kubectl`/Flux ConfigMap update mutates
+the object but does **not** touch the Deployment's pod template, so the running
+pods keep the value they booted with. Result: "I changed the ConfigMap but the
+pod still has the old value." A pod restart is required to re-read env.
+
+**The fix — `configMapGenerator`:** kustomize appends a **content-hash suffix** to
+the generated ConfigMap's name (`atlas-config-<hash>`) and rewrites every
+`envFrom.configMapRef.name` (backend + all workers) to match. Change any key →
+new hash → new name → the pod template changes → new ReplicaSet → automatic
+rollout. The restart is no longer manual.
+
+**Fits our base(generator)+overlay(JSON6902 patches) structure:** kustomize runs
+`patches` **before** the hash transformer, so the overlay's `op: add/replace
+/data/...` patches still apply and the suffix reflects the *final merged* content.
+No need to convert the overlay patches to generator `behavior: merge`.
+
+**base kustomization.yaml (both repos):**
+```yaml
+# replaces the plain `- configmap.yaml` resource
+configMapGenerator:
+  - name: atlas-config
+    namespace: atlas
+    literals:
+      - APP_ENV=prod
+      - ROOT_PATH=/alert-hub
+      - MIMIR_TENANT_ID=system
+      - SYNC_INTERVAL_SECONDS=30
+# hash is ENABLED on purpose — do NOT set generatorOptions.disableNameSuffixHash
+```
+Overlays are unchanged — their ConfigMap patches (and replicas/ingress patches)
+keep targeting `kind: ConfigMap, name: atlas-config`.
+
+> **Caveat — Secrets don't auto-roll:** the dev `secretGenerator` sets
+> `disableNameSuffixHash: true` (stable name), so changing `atlas-secrets` does
+> NOT roll pods. Either drop that option (accept hashed secret names) or
+> `kubectl rollout restart` after a secret change. Not changed here since this
+> work only touched `atlas-config`.
+
+> **Render-verify the hash:** `kubectl kustomize infrastructure/dev | grep "name: atlas-config"`
+> should show a `-<hash>` suffix, and the backend/worker `configMapRef` should
+> reference that same suffixed name.

@@ -3,7 +3,6 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
-  - configmap.yaml
   - backend.yaml
   - sync-worker.yaml
   - correlation-worker.yaml
@@ -12,6 +11,27 @@ resources:
   - llm-worker.yaml
   - frontend.yaml
   - ingress.yaml
+
+# atlas-config is a GENERATOR (not a plain ConfigMap) so kustomize appends a
+# content-hash suffix to its name and rewrites every envFrom.configMapRef
+# (backend + all workers) to the hashed name. Any change to the config -> new
+# name -> new ReplicaSet -> pods roll automatically. Without this, settings are
+# read once at boot and a live pod keeps the OLD value until a manual restart.
+# Env-AGNOSTIC keys only; per-env keys are added by each overlay (JSON6902
+# /data patches still apply — patches run BEFORE the hash, so the suffix
+# reflects the final merged content). Hash is intentionally left ENABLED.
+configMapGenerator:
+  - name: atlas-config
+    namespace: atlas
+    literals:
+      - APP_ENV=prod
+      # Subpath deploy: atlas served under /alert-hub (same dev+prod; only the
+      # host differs). Ingress strips it before the backend; ROOT_PATH only
+      # drives docs/openapi + auth-cookie URL generation.
+      - ROOT_PATH=/alert-hub
+      # Multi-tenancy default X-Scope-OrgID.
+      - MIMIR_TENANT_ID=system
+      - SYNC_INTERVAL_SECONDS=30
 # prometheus-rules.yaml is a PrometheusRule CRD (needs the Prometheus Operator);
 # kept OUT of this kustomization so kubeconform -strict stays green. Apply with
 # `kubectl apply -f deploy/k8s/base/prometheus-rules.yaml` or load its `groups:`
