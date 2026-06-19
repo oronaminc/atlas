@@ -12,7 +12,8 @@ import { Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
-import { useApiMutation } from "@/api/queries";
+import { useApiMutation, useServers } from "@/api/queries";
+import { hostnameFromLabels, instanceFromLabels } from "@/lib/server-identity";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +67,23 @@ export function ThresholdsPage() {
     queryKey: ["threshold-overrides"],
     queryFn: () => api.get<Override[]>("/threshold-overrides"),
   });
+  // cmdb_ci -> server, so a server-tier override DISPLAYS hostname (+ip), not
+  // the opaque cmdb_ci (which stays as secondary subtext).
+  const serversQ = useServers({ limit: "100" });
+  const serverByCmdb = useMemo(() => {
+    const m = new Map<string, { host: string; ip?: string }>();
+    for (const s of serversQ.data?.data ?? []) {
+      if (s.cmdb_ci)
+        m.set(s.cmdb_ci, {
+          host: hostnameFromLabels(s.labels) ?? s.name,
+          ip: instanceFromLabels(s.labels),
+        });
+    }
+    return m;
+  }, [serversQ.data]);
+  const serverHost = (cmdb: string | null) =>
+    (cmdb && serverByCmdb.get(cmdb)?.host) || cmdb || "—";
+  const serverIp = (cmdb: string | null) => (cmdb && serverByCmdb.get(cmdb)?.ip) || undefined;
 
   const fail = (e: unknown) =>
     toast({
@@ -378,9 +396,23 @@ export function ThresholdsPage() {
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="font-mono">{o.alertname}</span>
                     <Badge variant="outline">{t(`thresholds.tier${o.tier === "server" ? "Server" : "Group"}`)}</Badge>
-                    <span className="font-mono text-muted-foreground">
-                      {o.target_cmdb_ci ?? groupName(o.target_group_id)}
-                    </span>
+                    {o.tier === "server" ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-medium">{serverHost(o.target_cmdb_ci)}</span>
+                        {serverIp(o.target_cmdb_ci) && (
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {serverIp(o.target_cmdb_ci)}
+                          </span>
+                        )}
+                        <span className="font-mono text-[10px] text-muted-foreground/70">
+                          {o.target_cmdb_ci}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="font-medium text-muted-foreground">
+                        {groupName(o.target_group_id)}
+                      </span>
+                    )}
                     <span className="text-muted-foreground">·</span>
                     <span className="font-medium" data-testid="override-value">
                       {meta?.comparator ?? ""} {o.value}

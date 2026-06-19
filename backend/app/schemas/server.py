@@ -9,9 +9,11 @@ class ServerOut(BaseModel):
 
     id: uuid.UUID
     name: str
+    cmdb_ci: str | None = None
     labels: dict[str, str]
     description: str | None
     owner_group_id: uuid.UUID | None
+    server_group_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
