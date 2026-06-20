@@ -72,7 +72,8 @@
     "muteAllBtn": "Mute all rules",
     "muted": "Muted",
     "currentlyMuted": "Currently muted",
-    "noMutes": "Nothing muted"
+    "noMutes": "Nothing muted",
+    "noMembers": "No members"
   },
   "thresholds": {
     "title": "Threshold Overrides",
@@ -197,7 +198,23 @@
     "notify": "Notify group",
     "notifySend": "Send",
     "selectGroup": "Select group",
-    "actionFailed": "Action failed"
+    "actionFailed": "Action failed",
+    "loadMore": "Load more",
+    "unknownHost": "(unknown host)",
+    "labelsCount": "{{count}} labels",
+    "tlCreated": "incident created",
+    "tlAttached": "attached",
+    "tlMuted": "notifications muted",
+    "viewRaw": "raw",
+    "hideRaw": "hide"
+  },
+  "servers": {
+    "hostname": "Hostname",
+    "ip": "IP",
+    "service": "Service",
+    "environment": "Environment",
+    "group": "Group",
+    "labelsCount": "{{count}} labels"
   },
   "graph": {
     "title": "Incident Swimlanes",

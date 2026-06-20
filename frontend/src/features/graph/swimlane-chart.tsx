@@ -13,9 +13,10 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { GRAPH_MAX_VISIBLE_LANES } from "@/features/graph/config";
 import { buildSwimlanes } from "@/features/graph/swimlanes";
+import { stripGroupKey } from "@/lib/server-identity";
 import type { GraphData, GraphNode } from "@/types";
 
-const GUTTER_W = 180; // host label column
+const GUTTER_W = 260; // host label column (FQDNs need the room)
 const AXIS_H = 28;
 const ROW_H = 26;
 const LANE_VPAD = 7;
@@ -165,7 +166,8 @@ export function SwimlaneChart({ data, selectedId, onSelect }: SwimlaneChartProps
                 y={top + h / 2 + 4}
                 className="fill-foreground text-xs font-medium"
               >
-                {(lane.host || t("graph.noHost")).slice(0, 24)}
+                <title>{stripGroupKey(lane.host) || t("graph.noHost")}</title>
+                {(stripGroupKey(lane.host) || t("graph.noHost")).slice(0, 36)}
                 <tspan className="fill-muted-foreground font-normal">
                   {" "}({lane.pills.length})
                 </tspan>

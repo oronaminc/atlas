@@ -70,9 +70,11 @@ export interface GroupMember {
 export interface Server {
   id: string;
   name: string;
+  cmdb_ci: string | null;
   labels: Record<string, string>;
   description: string | null;
   owner_group_id: string | null;
+  server_group_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -219,6 +221,7 @@ export interface IncidentDetail extends Incident {
     severity: string;
     status: string;
     labels: Record<string, string>;
+    annotations: Record<string, string>;
     received_at: string;
     dedup_count: number;
   }[];

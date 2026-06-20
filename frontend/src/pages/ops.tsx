@@ -52,7 +52,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TrendChart } from "@/features/ops/trend-chart";
+import { AlertList, Timeline } from "@/features/ops/incident-detail";
 import { formatDate } from "@/lib/utils";
+import { stripGroupKey } from "@/lib/server-identity";
 import type { IncidentStatus } from "@/types";
 
 const ALL = "__all__";
@@ -121,11 +123,16 @@ export function OpsPage() {
   }, [searchParams]);
 
   const overview = useStatsOverview(tenantParam);
+  // "Load more" grows the page size (API caps at 100). Reset when filters change
+  // so a narrowed query starts from the top.
+  const [incidentLimit, setIncidentLimit] = useState(20);
+  useEffect(() => setIncidentLimit(20), [statusFilter, tenantFilter]);
   const incidents = useIncidents({
-    limit: "20",
+    limit: String(incidentLimit),
     status: statusFilter === ALL ? undefined : statusFilter,
     tenant: tenantParam,
   });
+  const incidentsHasMore = incidents.data?.meta?.has_more ?? false;
   const notifications = useNotificationRows({ limit: "20" });
   const trend = useStatsTrend(trendHours, tenantParam);
   const hostStats = useStatsHosts(tenantParam);
@@ -254,8 +261,9 @@ export function OpsPage() {
                     >
                       <TableCell>
                         <div className="font-medium">{incident.title}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {incident.group_key ?? "-"}
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Server className="h-3 w-3" />
+                          {stripGroupKey(incident.group_key) || "—"}
                         </div>
                       </TableCell>
                       {isHq && (
@@ -281,6 +289,18 @@ export function OpsPage() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+            {incidentsHasMore && (
+              <div className="mt-3 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIncidentLimit((n) => Math.min(n + 20, 100))}
+                  data-testid="incidents-load-more"
+                >
+                  {t("ops.loadMore")}
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -407,7 +427,7 @@ export function OpsPage() {
 
       {/* incident detail */}
       <Dialog open={!!detailId} onOpenChange={(open) => !open && setDetailId(null)}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-h-[88vh] max-w-4xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{detail.data?.data.title ?? t("ops.incident")}</DialogTitle>
           </DialogHeader>
@@ -506,22 +526,7 @@ export function OpsPage() {
                 <h3 className="mb-2 text-sm font-semibold">
                   {t("ops.alerts")} ({detail.data.data.alerts.length})
                 </h3>
-                <div className="space-y-1">
-                  {detail.data.data.alerts.map((alert) => (
-                    <div
-                      key={alert.id}
-                      className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-sm"
-                    >
-                      <div>
-                        <span className="font-medium">{alert.name}</span>
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {alert.source} · ×{alert.dedup_count}
-                        </span>
-                      </div>
-                      <SeverityBadge severity={alert.severity} />
-                    </div>
-                  ))}
-                </div>
+                <AlertList alerts={detail.data.data.alerts} />
               </div>
 
               {/* LLM analysis (Feature A) */}
@@ -592,19 +597,7 @@ export function OpsPage() {
 
               <div>
                 <h3 className="mb-2 text-sm font-semibold">{t("ops.timeline")}</h3>
-                <div className="space-y-1">
-                  {detail.data.data.timeline.map((event) => (
-                    <div key={event.id} className="flex min-w-0 gap-2 text-xs">
-                      <span className="w-36 shrink-0 text-muted-foreground">
-                        {formatDate(event.created_at)}
-                      </span>
-                      <Badge variant="outline">{event.kind}</Badge>
-                      <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                        {JSON.stringify(event.payload)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <Timeline events={detail.data.data.timeline} />
               </div>
             </div>
           )}

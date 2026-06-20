@@ -4,11 +4,12 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
-import { useApiMutation } from "@/api/queries";
+import { useApiMutation, useServers } from "@/api/queries";
+import { hostnameFromLabels, instanceFromLabels } from "@/lib/server-identity";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 interface ServerGroup {
   id: string;
   name: string;
+  description: string | null;
   member_count: number;
 }
 interface Mute {
@@ -55,6 +57,26 @@ export function MutesPage() {
     queryKey: ["mutes"],
     queryFn: () => api.get<Mute[]>("/mutes"),
   });
+  // servers feed group-member expansion + cmdb_ci -> hostname for mute targets.
+  const serversQ = useServers({ limit: "100" });
+  const allServers = useMemo(() => serversQ.data?.data ?? [], [serversQ.data]);
+  const serverByCmdb = useMemo(() => {
+    const m = new Map<string, { host: string; ip?: string }>();
+    for (const s of allServers)
+      if (s.cmdb_ci)
+        m.set(s.cmdb_ci, { host: hostnameFromLabels(s.labels) ?? s.name, ip: instanceFromLabels(s.labels) });
+    return m;
+  }, [allServers]);
+  const membersOf = (groupId: string) => allServers.filter((s) => s.server_group_id === groupId);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const muteHost = (cmdb: string | null) => (cmdb && serverByCmdb.get(cmdb)?.host) || cmdb;
 
   const fail = (e: unknown) =>
     toast({
@@ -144,18 +166,60 @@ export function MutesPage() {
             </div>
           )}
           <ul className="space-y-1" data-testid="sg-list">
-            {(groups.data?.data ?? []).map((g) => (
-              <li
-                key={g.id}
-                data-testid="sg-row"
-                className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm"
-              >
-                <span className="font-medium">{g.name}</span>
-                <Badge variant="secondary" data-testid="sg-count">
-                  {g.member_count} {t("mutes.members")}
-                </Badge>
-              </li>
-            ))}
+            {(groups.data?.data ?? []).map((g) => {
+              const isOpen = expanded.has(g.id);
+              return (
+                <li
+                  key={g.id}
+                  data-testid="sg-row"
+                  className="rounded-md border border-border/60 px-3 py-2 text-sm"
+                >
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(g.id)}
+                      className="flex min-w-0 items-center gap-2 text-left"
+                      data-testid="sg-expand"
+                    >
+                      {isOpen ? (
+                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="min-w-0">
+                        <span className="font-medium">{g.name}</span>
+                        {g.description && (
+                          <span className="ml-2 text-xs text-muted-foreground">{g.description}</span>
+                        )}
+                      </span>
+                    </button>
+                    <Badge variant="secondary" data-testid="sg-count">
+                      {g.member_count} {t("mutes.members")}
+                    </Badge>
+                  </div>
+                  {isOpen && (
+                    <ul className="mt-2 space-y-0.5 border-t border-border/40 pt-2" data-testid="sg-members">
+                      {membersOf(g.id).map((s) => (
+                        <li key={s.id} className="flex items-center gap-2 pl-6 text-xs">
+                          <span className="font-medium">{hostnameFromLabels(s.labels) ?? s.name}</span>
+                          {instanceFromLabels(s.labels) && (
+                            <span className="font-mono text-muted-foreground">
+                              {instanceFromLabels(s.labels)}
+                            </span>
+                          )}
+                          <span className="font-mono text-[10px] text-muted-foreground/70">
+                            {s.cmdb_ci}
+                          </span>
+                        </li>
+                      ))}
+                      {membersOf(g.id).length === 0 && (
+                        <li className="pl-6 text-xs text-muted-foreground">{t("mutes.noMembers")}</li>
+                      )}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
             {groups.data?.data.length === 0 && (
               <li className="text-sm text-muted-foreground" data-testid="sg-empty">
                 {t("mutes.noGroups")}
@@ -333,9 +397,18 @@ export function MutesPage() {
                 >
                   <span className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{m.target_type}</Badge>
-                    <span className="font-mono">
-                      {m.target_cmdb_ci ?? groupName_(m.target_group_id) ?? "*"}
-                    </span>
+                    {m.target_type === "server" ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-medium">{muteHost(m.target_cmdb_ci)}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground/70">
+                          {m.target_cmdb_ci}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="font-medium">
+                        {groupName_(m.target_group_id) ?? "*"}
+                      </span>
+                    )}
                     <span className="text-muted-foreground">·</span>
                     <span>{m.alertname ?? t("mutes.allRules")}</span>
                   </span>

@@ -6,8 +6,17 @@ import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
 
+import { useQuery } from "@tanstack/react-query";
+
 import { api } from "@/api/client";
 import { useApiMutation, useServers } from "@/api/queries";
+import {
+  cmdbCiFromLabels,
+  envFromLabels,
+  hostnameFromLabels,
+  instanceFromLabels,
+  serviceFromLabels,
+} from "@/lib/server-identity";
 import { DataTable, type Column } from "@/components/common/data-table";
 import { FormField } from "@/components/common/form-field";
 import { PageHeader } from "@/components/layout/page-header";
@@ -56,30 +65,70 @@ export function ServersPage() {
   const [editing, setEditing] = useState<Server | null>(null);
 
   const servers = useServers({ q: search || undefined, cursor, limit: "20" });
+  const groups = useQuery({
+    queryKey: ["server-groups"],
+    queryFn: () => api.get<{ id: string; name: string }[]>("/server-groups"),
+  });
+  const groupName = (id: string | null) =>
+    (id && groups.data?.data.find((g) => g.id === id)?.name) || undefined;
 
   const columns: Column<Server>[] = [
     {
-      key: "name",
-      header: t("common.name"),
-      render: (s) => <span className="font-medium">{s.name}</span>,
+      key: "host",
+      header: t("servers.hostname"),
+      render: (s) => {
+        const host = hostnameFromLabels(s.labels) ?? s.name;
+        const cmdb = s.cmdb_ci ?? cmdbCiFromLabels(s.labels);
+        return (
+          <div>
+            <div className="font-medium">{host}</div>
+            {cmdb && <div className="font-mono text-[10px] text-muted-foreground/70">{cmdb}</div>}
+          </div>
+        );
+      },
+    },
+    {
+      key: "ip",
+      header: t("servers.ip"),
+      render: (s) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          {instanceFromLabels(s.labels) ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "service",
+      header: t("servers.service"),
+      render: (s) => <span className="text-sm">{serviceFromLabels(s.labels) ?? "—"}</span>,
+    },
+    {
+      key: "env",
+      header: t("servers.environment"),
+      render: (s) =>
+        envFromLabels(s.labels) ? (
+          <Badge variant="outline">{envFromLabels(s.labels)}</Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      key: "group",
+      header: t("servers.group"),
+      render: (s) =>
+        groupName(s.server_group_id) ? (
+          <Badge variant="secondary">{groupName(s.server_group_id)}</Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       key: "labels",
       header: t("rules.labels"),
       render: (s) => (
-        <div className="flex flex-wrap gap-1">
-          {Object.entries(s.labels ?? {}).map(([k, v]) => (
-            <Badge key={k} variant="secondary">
-              {k}={v}
-            </Badge>
-          ))}
-        </div>
+        <span className="text-xs text-muted-foreground" data-testid="server-label-count">
+          {t("servers.labelsCount", { count: Object.keys(s.labels ?? {}).length })}
+        </span>
       ),
-    },
-    {
-      key: "description",
-      header: t("common.description"),
-      render: (s) => <span className="text-muted-foreground">{s.description ?? "-"}</span>,
     },
   ];
 

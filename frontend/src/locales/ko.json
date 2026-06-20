@@ -72,7 +72,8 @@
     "muteAllBtn": "전체 룰 차단",
     "muted": "차단됨",
     "currentlyMuted": "현재 차단 목록",
-    "noMutes": "차단된 항목이 없습니다"
+    "noMutes": "차단된 항목이 없습니다",
+    "noMembers": "멤버 없음"
   },
   "thresholds": {
     "title": "임계값 재정의",
@@ -197,7 +198,23 @@
     "notify": "그룹 알림",
     "notifySend": "발송",
     "selectGroup": "그룹 선택",
-    "actionFailed": "처리에 실패했습니다"
+    "actionFailed": "처리에 실패했습니다",
+    "loadMore": "더 보기",
+    "unknownHost": "(호스트 미상)",
+    "labelsCount": "라벨 {{count}}개",
+    "tlCreated": "인시던트 생성됨",
+    "tlAttached": "연결됨",
+    "tlMuted": "알림 차단됨",
+    "viewRaw": "원본",
+    "hideRaw": "접기"
+  },
+  "servers": {
+    "hostname": "호스트명",
+    "ip": "IP",
+    "service": "서비스",
+    "environment": "환경",
+    "group": "그룹",
+    "labelsCount": "라벨 {{count}}개"
   },
   "graph": {
     "title": "인시던트 스윔레인",
