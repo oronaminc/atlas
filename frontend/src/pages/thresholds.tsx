@@ -1,10 +1,11 @@
-/** Threshold overrides (PR #2). Two cards:
+/** Threshold overrides. Two cards:
  *  1. Rule catalog metadata — per-alertname comparator (>/<), unit, and the
  *     Mimir value_query (with a {{cmdb_ci}} slot). No value_query = pass-through
  *     (the ingest filter never suppresses, fail-open).
- *  2. Threshold overrides — per server (cmdb_ci) or group, with precedence
- *     server > group > default(none). The correlation worker fetches the live
- *     value from Mimir at filter time and suppresses below-threshold alerts. */
+ *  2. Threshold overrides — the alertname is picked from the rules PULLED from
+ *     the Mimir Ruler (read-only), and the target is EITHER a specific server
+ *     (cmdb_ci) OR a label match (key=value). The correlation worker fetches the
+ *     live value from Mimir at filter time and suppresses below-threshold alerts. */
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -12,8 +13,7 @@ import { Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
-import { useApiMutation, useServers } from "@/api/queries";
-import { hostnameFromLabels, instanceFromLabels } from "@/lib/server-identity";
+import { useApiMutation, useRulesPulled } from "@/api/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,26 +28,24 @@ import {
 import { PageHeader } from "@/components/layout/page-header";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { SeverityBadge } from "@/components/common/status-badge";
 
-interface ServerGroup {
-  id: string;
-  name: string;
-  member_count: number;
-}
 interface CatalogRule {
   alertname: string;
   comparator: ">" | "<" | null;
   unit: string | null;
   value_query: string | null;
 }
-interface Override {
+interface ThresholdOverrideOut {
   id: string;
   alertname: string;
-  tier: "server" | "group";
   target_cmdb_ci: string | null;
-  target_group_id: string | null;
+  target_label_key: string | null;
+  target_label_value: string | null;
   value: number;
 }
+
+type TargetKind = "cmdb_ci" | "label";
 
 export function ThresholdsPage() {
   const { t } = useTranslation();
@@ -55,35 +53,15 @@ export function ThresholdsPage() {
   const { hasRole } = useAuth();
   const canEdit = hasRole("admin", "editor");
 
-  const groups = useQuery({
-    queryKey: ["server-groups"],
-    queryFn: () => api.get<ServerGroup[]>("/server-groups"),
-  });
+  const pulled = useRulesPulled();
   const catalog = useQuery({
     queryKey: ["rule-catalog"],
     queryFn: () => api.get<CatalogRule[]>("/rule-catalog"),
   });
   const overrides = useQuery({
     queryKey: ["threshold-overrides"],
-    queryFn: () => api.get<Override[]>("/threshold-overrides"),
+    queryFn: () => api.get<ThresholdOverrideOut[]>("/threshold-overrides"),
   });
-  // cmdb_ci -> server, so a server-tier override DISPLAYS hostname (+ip), not
-  // the opaque cmdb_ci (which stays as secondary subtext).
-  const serversQ = useServers({ limit: "100" });
-  const serverByCmdb = useMemo(() => {
-    const m = new Map<string, { host: string; ip?: string }>();
-    for (const s of serversQ.data?.data ?? []) {
-      if (s.cmdb_ci)
-        m.set(s.cmdb_ci, {
-          host: hostnameFromLabels(s.labels) ?? s.name,
-          ip: instanceFromLabels(s.labels),
-        });
-    }
-    return m;
-  }, [serversQ.data]);
-  const serverHost = (cmdb: string | null) =>
-    (cmdb && serverByCmdb.get(cmdb)?.host) || cmdb || "—";
-  const serverIp = (cmdb: string | null) => (cmdb && serverByCmdb.get(cmdb)?.ip) || undefined;
 
   const fail = (e: unknown) =>
     toast({
@@ -122,25 +100,37 @@ export function ThresholdsPage() {
     ["rule-catalog"],
   );
 
-  // --- override create ---
+  // --- override create (pick alertname from the pulled Ruler rules) ---
+  const pulledRules = useMemo(() => pulled.data?.data ?? [], [pulled.data]);
+  const [ovrSearch, setOvrSearch] = useState("");
   const [ovrAlert, setOvrAlert] = useState<string | null>(null);
-  const [tier, setTier] = useState<"server" | "group">("server");
+  const [targetKind, setTargetKind] = useState<TargetKind>("cmdb_ci");
   const [cmdb, setCmdb] = useState("");
-  const [ovrGroup, setOvrGroup] = useState("");
+  const [labelKey, setLabelKey] = useState("");
+  const [labelValue, setLabelValue] = useState("");
   const [ovrValue, setOvrValue] = useState("");
+
+  const filteredPulled = useMemo(() => {
+    const q = ovrSearch.trim().toLowerCase();
+    return q
+      ? pulledRules.filter((r) => r.alertname.toLowerCase().includes(q))
+      : pulledRules;
+  }, [pulledRules, ovrSearch]);
 
   const createOverride = useApiMutation(
     () =>
       api.post("/threshold-overrides", {
         alertname: ovrAlert,
-        tier,
-        target_cmdb_ci: tier === "server" ? cmdb : null,
-        target_group_id: tier === "group" ? ovrGroup : null,
+        ...(targetKind === "cmdb_ci"
+          ? { target_cmdb_ci: cmdb }
+          : { target_label_key: labelKey, target_label_value: labelValue }),
         value: Number(ovrValue),
       }),
     ["threshold-overrides"],
     () => {
       setCmdb("");
+      setLabelKey("");
+      setLabelValue("");
       setOvrValue("");
     },
   );
@@ -149,15 +139,15 @@ export function ThresholdsPage() {
     ["threshold-overrides"],
   );
 
-  const groupName = (id: string | null) =>
-    groups.data?.data.find((g) => g.id === id)?.name ?? id;
-
-  const selectedRuleMeta = rules.find((r) => r.alertname === ovrAlert);
+  const catalogMeta = (name: string) => rules.find((r) => r.alertname === name);
+  const selectedRuleMeta = ovrAlert ? catalogMeta(ovrAlert) : undefined;
   const canSubmitOverride =
     !!ovrAlert &&
     ovrValue.trim() !== "" &&
     !Number.isNaN(Number(ovrValue)) &&
-    ((tier === "server" && !!cmdb) || (tier === "group" && !!ovrGroup));
+    (targetKind === "cmdb_ci"
+      ? !!cmdb.trim()
+      : !!labelKey.trim() && !!labelValue.trim());
 
   return (
     <div data-testid="thresholds-page" className="space-y-6">
@@ -293,151 +283,190 @@ export function ThresholdsPage() {
         <CardHeader>
           <CardTitle className="text-base">{t("thresholds.overrides")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {canEdit && (
-            <div className="flex flex-wrap items-end gap-2 rounded-md border border-border/60 bg-muted/20 p-3">
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">{t("thresholds.rule")}</label>
-                <Select value={ovrAlert ?? ""} onValueChange={setOvrAlert}>
-                  <SelectTrigger className="w-56" data-testid="ovr-alert">
-                    <SelectValue placeholder={t("thresholds.selectRule")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {rules.map((r) => (
-                      <SelectItem key={r.alertname} value={r.alertname} data-testid="ovr-alert-option">
-                        {r.alertname}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">{t("thresholds.tier")}</label>
-                <Select value={tier} onValueChange={(v) => setTier(v as "server" | "group")}>
-                  <SelectTrigger className="w-36" data-testid="ovr-tier">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="server" data-testid="tier-server">
-                      {t("thresholds.tierServer")}
-                    </SelectItem>
-                    <SelectItem value="group" data-testid="tier-group">
-                      {t("thresholds.tierGroup")}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {tier === "server" ? (
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">cmdb_ci</label>
-                  <Input
-                    className="w-56 font-mono"
-                    placeholder="cmdb_ci"
-                    value={cmdb}
-                    onChange={(e) => setCmdb(e.target.value)}
-                    data-testid="ovr-cmdb"
-                  />
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          {/* pulled-rule picker: choose the alertname */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">{t("thresholds.pulledHelp")}</p>
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                placeholder={t("thresholds.searchRules")}
+                value={ovrSearch}
+                onChange={(e) => setOvrSearch(e.target.value)}
+                data-testid="pulled-search"
+              />
+            </div>
+            <div className="max-h-64 overflow-y-auto rounded-md border border-border/60" data-testid="pulled-list">
+              {filteredPulled.map((r) => (
+                <button
+                  key={`${r.group}/${r.alertname}`}
+                  type="button"
+                  onClick={() => setOvrAlert(r.alertname)}
+                  data-testid="pulled-rule"
+                  className={`flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent ${
+                    ovrAlert === r.alertname ? "bg-accent text-accent-foreground" : ""
+                  }`}
+                >
+                  <span className="flex items-center justify-between">
+                    <span className="font-mono">{r.alertname}</span>
+                    {r.severity && <SeverityBadge severity={r.severity} />}
+                  </span>
+                  <span className="truncate font-mono text-xs text-muted-foreground">
+                    {r.expr}
+                  </span>
+                </button>
+              ))}
+              {filteredPulled.length === 0 && (
+                <div className="px-3 py-2 text-sm text-muted-foreground" data-testid="pulled-empty">
+                  {pulled.isLoading ? t("common.loading") : t("thresholds.noRules")}
                 </div>
-              ) : (
+              )}
+            </div>
+          </div>
+
+          {/* override form + list */}
+          <div className="space-y-4">
+            {canEdit && (
+              <div className="space-y-3 rounded-md border border-border/60 bg-muted/20 p-3" data-testid="override-form">
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">{t("thresholds.tierGroup")}</label>
-                  <Select value={ovrGroup} onValueChange={setOvrGroup}>
-                    <SelectTrigger className="w-48" data-testid="ovr-group">
-                      <SelectValue placeholder={t("thresholds.selectGroup")} />
+                  <label className="text-xs text-muted-foreground">{t("thresholds.rule")}</label>
+                  <div className="font-mono text-sm" data-testid="ovr-selected">
+                    {ovrAlert ?? <span className="text-muted-foreground">{t("thresholds.selectRule")}</span>}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">{t("thresholds.target")}</label>
+                  <Select value={targetKind} onValueChange={(v) => setTargetKind(v as TargetKind)}>
+                    <SelectTrigger className="w-48" data-testid="ovr-target-kind">
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(groups.data?.data ?? []).map((g) => (
-                        <SelectItem key={g.id} value={g.id}>
-                          {g.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="cmdb_ci" data-testid="target-cmdb">
+                        {t("thresholds.targetCmdb")}
+                      </SelectItem>
+                      <SelectItem value="label" data-testid="target-label">
+                        {t("thresholds.targetLabel")}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              )}
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">
-                  {t("thresholds.value")}
-                  {selectedRuleMeta?.unit ? ` (${selectedRuleMeta.unit})` : ""}
-                </label>
-                <Input
-                  className="w-28"
-                  type="number"
-                  placeholder="95"
-                  value={ovrValue}
-                  onChange={(e) => setOvrValue(e.target.value)}
-                  data-testid="ovr-value"
-                />
-              </div>
-              <Button
-                disabled={!canSubmitOverride || createOverride.isPending}
-                onClick={() =>
-                  createOverride.mutate(undefined, {
-                    onError: fail,
-                    onSuccess: () => toast({ title: t("thresholds.added") }),
-                  })
-                }
-                data-testid="ovr-create"
-              >
-                {t("thresholds.addOverride")}
-              </Button>
-            </div>
-          )}
-
-          <ul className="space-y-1" data-testid="overrides-list">
-            {(overrides.data?.data ?? []).map((o) => {
-              const meta = rules.find((r) => r.alertname === o.alertname);
-              return (
-                <li
-                  key={o.id}
-                  data-testid="override-row"
-                  className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm"
+                {targetKind === "cmdb_ci" ? (
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">cmdb_ci</label>
+                    <Input
+                      className="font-mono"
+                      placeholder="cmdb_ci"
+                      value={cmdb}
+                      onChange={(e) => setCmdb(e.target.value)}
+                      data-testid="ovr-cmdb"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">{t("thresholds.labelKey")}</label>
+                      <Input
+                        className="font-mono"
+                        placeholder="severity"
+                        value={labelKey}
+                        onChange={(e) => setLabelKey(e.target.value)}
+                        data-testid="ovr-label-key"
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs text-muted-foreground">{t("thresholds.labelValue")}</label>
+                      <Input
+                        className="font-mono"
+                        placeholder="critical"
+                        value={labelValue}
+                        onChange={(e) => setLabelValue(e.target.value)}
+                        data-testid="ovr-label-value"
+                      />
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">
+                    {t("thresholds.value")}
+                    {selectedRuleMeta?.unit ? ` (${selectedRuleMeta.unit})` : ""}
+                  </label>
+                  <Input
+                    className="w-28"
+                    type="number"
+                    placeholder="95"
+                    value={ovrValue}
+                    onChange={(e) => setOvrValue(e.target.value)}
+                    data-testid="ovr-value"
+                  />
+                </div>
+                <Button
+                  disabled={!canSubmitOverride || createOverride.isPending}
+                  onClick={() =>
+                    createOverride.mutate(undefined, {
+                      onError: fail,
+                      onSuccess: () => toast({ title: t("thresholds.added") }),
+                    })
+                  }
+                  data-testid="ovr-create"
                 >
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono">{o.alertname}</span>
-                    <Badge variant="outline">{t(`thresholds.tier${o.tier === "server" ? "Server" : "Group"}`)}</Badge>
-                    {o.tier === "server" ? (
-                      <span className="flex items-center gap-1.5">
-                        <span className="font-medium">{serverHost(o.target_cmdb_ci)}</span>
-                        {serverIp(o.target_cmdb_ci) && (
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {serverIp(o.target_cmdb_ci)}
-                          </span>
-                        )}
-                        <span className="font-mono text-[10px] text-muted-foreground/70">
-                          {o.target_cmdb_ci}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="font-medium text-muted-foreground">
-                        {groupName(o.target_group_id)}
-                      </span>
-                    )}
-                    <span className="text-muted-foreground">·</span>
-                    <span className="font-medium" data-testid="override-value">
-                      {meta?.comparator ?? ""} {o.value}
-                      {meta?.unit ?? ""}
-                    </span>
-                  </span>
-                  {canEdit && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => deleteOverride.mutate(o.id, { onError: fail })}
-                      data-testid="override-delete"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </li>
-              );
-            })}
-            {overrides.data?.data.length === 0 && (
-              <li className="text-sm text-muted-foreground" data-testid="overrides-empty">
-                {t("thresholds.noOverrides")}
-              </li>
+                  {t("thresholds.addOverride")}
+                </Button>
+              </div>
             )}
-          </ul>
+
+            <ul className="space-y-1" data-testid="overrides-list">
+              {(overrides.data?.data ?? []).map((o) => {
+                const meta = catalogMeta(o.alertname);
+                return (
+                  <li
+                    key={o.id}
+                    data-testid="override-row"
+                    className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm"
+                  >
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono">{o.alertname}</span>
+                      {o.target_cmdb_ci ? (
+                        <span className="flex items-center gap-1.5">
+                          <Badge variant="outline">{t("thresholds.targetCmdb")}</Badge>
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {o.target_cmdb_ci}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5">
+                          <Badge variant="outline">{t("thresholds.targetLabel")}</Badge>
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {o.target_label_key}={o.target_label_value}
+                          </span>
+                        </span>
+                      )}
+                      <span className="text-muted-foreground">·</span>
+                      <span className="font-medium" data-testid="override-value">
+                        {meta?.comparator ?? ""} {o.value}
+                        {meta?.unit ?? ""}
+                      </span>
+                    </span>
+                    {canEdit && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => deleteOverride.mutate(o.id, { onError: fail })}
+                        data-testid="override-delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </li>
+                );
+              })}
+              {overrides.data?.data.length === 0 && (
+                <li className="text-sm text-muted-foreground" data-testid="overrides-empty">
+                  {t("thresholds.noOverrides")}
+                </li>
+              )}
+            </ul>
+          </div>
         </CardContent>
       </Card>
     </div>

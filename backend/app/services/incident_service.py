@@ -127,7 +127,6 @@ async def _new_incident(
 ) -> Incident:
     defaults = await get_notification_defaults(db)
     inc = Incident(
-        tenant_id=alert.tenant_id,
         title=title or _title(alert, key),
         status=IncidentStatus.open,
         severity=alert.severity,
@@ -144,16 +143,12 @@ async def _new_incident(
     _denorm_from_alert(inc, alert)
     db.add(inc)
     await db.flush()
-    db.add(
-        IncidentEvent(
-            incident_id=inc.id, tenant_id=inc.tenant_id, kind="created", payload={"origin": origin}
-        )
-    )
+    db.add(IncidentEvent(incident_id=inc.id, kind="created", payload={"origin": origin}))
     return inc
 
 
 async def _timeline(db: AsyncSession, inc: Incident, kind: str, payload: dict) -> None:
-    db.add(IncidentEvent(incident_id=inc.id, tenant_id=inc.tenant_id, kind=kind, payload=payload))
+    db.add(IncidentEvent(incident_id=inc.id, kind=kind, payload=payload))
 
 
 async def attach_alert(

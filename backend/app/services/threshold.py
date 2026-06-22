@@ -12,7 +12,6 @@ alert must never be dropped because of a lookup hiccup.
 """
 
 import time
-import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -22,12 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.alerting import AlertEvent
 from app.models.threshold import Comparator, RuleCatalog, ThresholdOverride
 
-# fetch_value(tenant_id, filled_promql) -> current value, or None on any failure
-FetchValue = Callable[[uuid.UUID | None, str], Awaitable[float | None]]
+# fetch_value(filled_promql) -> current value, or None on any failure
+FetchValue = Callable[[str], Awaitable[float | None]]
 
 
 class ValueCache:
-    """Tiny per-(tenant, cmdb_ci, alertname) TTL cache so AM resends/dedup don't
+    """Tiny per-(cmdb_ci, alertname) TTL cache so AM resends/dedup don't
     re-hammer Mimir. Caches misses too (None) — still fail-open."""
 
     def __init__(self, ttl_seconds: float = 10.0) -> None:
@@ -56,7 +55,6 @@ def parse_instant_value(resp: dict[str, Any]) -> float | None:
 
 async def resolve_threshold(
     db: AsyncSession,
-    tenant_id: uuid.UUID | None,
     labels: dict[str, str],
     alertname: str,
 ) -> tuple[str, float] | None:
@@ -69,7 +67,6 @@ async def resolve_threshold(
         server_ovr = (
             await db.execute(
                 select(ThresholdOverride.value).where(
-                    ThresholdOverride.tenant_id == tenant_id,
                     ThresholdOverride.alertname == alertname,
                     ThresholdOverride.target_cmdb_ci == cmdb_ci,
                 )
@@ -86,7 +83,6 @@ async def resolve_threshold(
                 ThresholdOverride.target_label_value,
                 ThresholdOverride.value,
             ).where(
-                ThresholdOverride.tenant_id == tenant_id,
                 ThresholdOverride.alertname == alertname,
                 ThresholdOverride.target_label_key.isnot(None),
             )
@@ -124,27 +120,23 @@ async def should_suppress(
     if not cmdb_ci:
         return (False, None)
 
-    resolved = await resolve_threshold(db, event.tenant_id, labels, event.name)
+    resolved = await resolve_threshold(db, labels, event.name)
     if resolved is None:
         return (False, None)  # no override -> never suppress
     _tier, threshold = resolved
 
     catalog = (
-        await db.execute(
-            select(RuleCatalog).where(
-                RuleCatalog.tenant_id == event.tenant_id, RuleCatalog.alertname == event.name
-            )
-        )
+        await db.execute(select(RuleCatalog).where(RuleCatalog.alertname == event.name))
     ).scalar_one_or_none()
     if catalog is None or not catalog.value_query or not catalog.comparator:
         return (False, None)  # not configured -> pass-through
 
     promql = catalog.value_query.replace("{{cmdb_ci}}", cmdb_ci)
-    key = (event.tenant_id, cmdb_ci, event.name)
+    key = (cmdb_ci, event.name)
 
     async def _load() -> float | None:
         try:
-            return await fetch_value(event.tenant_id, promql)
+            return await fetch_value(promql)
         except Exception:
             return None  # query error/timeout -> fail-open
 

@@ -1,6 +1,6 @@
-"""Feature A: redaction, prompt-hash cache, per-service config isolation,
-tenancy (A's incident never hits B's endpoint), failure/timeout/retry, quota,
-crash-resume via lease. No real network — a FakeLLM/transport is injected."""
+"""Feature A: redaction, prompt-hash cache, single global config, failure/
+timeout/retry, quota, crash-resume via lease. No real network — a FakeLLM/
+transport is injected."""
 
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -47,9 +47,8 @@ class FakeLLM:
         return self.content, 42
 
 
-async def _incident(db, tenant_id, *, title="DiskFull on db-01", labels=None):
+async def _incident(db, *, title="DiskFull on db-01", labels=None):
     inc = Incident(
-        tenant_id=tenant_id,
         title=title,
         status=IncidentStatus.open,
         severity="critical",
@@ -62,7 +61,6 @@ async def _incident(db, tenant_id, *, title="DiskFull on db-01", labels=None):
     await db.flush()
     db.add(
         AlertEvent(
-            tenant_id=tenant_id,
             fingerprint=f"fp{uuid.uuid4().hex[:8]}",
             source="alertmanager",
             name="DiskFull",
@@ -75,17 +73,17 @@ async def _incident(db, tenant_id, *, title="DiskFull on db-01", labels=None):
             incident_id=inc.id,
         )
     )
-    db.add(IncidentEvent(tenant_id=tenant_id, incident_id=inc.id, kind="created", payload={}))
+    db.add(IncidentEvent(incident_id=inc.id, kind="created", payload={}))
     await db.flush()
     return inc
 
 
-async def _cfg(db, tenant_id, **kw):
+async def _cfg(db, **kw):
     defaults = dict(
         enabled=True, base_url="http://vllm.internal:8000", model="llama-3", daily_quota=200
     )
     defaults.update(kw)
-    cfg = LLMConfig(tenant_id=tenant_id, **defaults)
+    cfg = LLMConfig(**defaults)
     db.add(cfg)
     await db.flush()
     return cfg
@@ -117,56 +115,54 @@ def test_is_external_classification():
     assert is_external("http://localhost:11434") is False
 
 
-async def test_secret_shaped_value_redacted_even_on_allowed_key(db, tenant_a):
-    cfg = await _cfg(db, tenant_a.id, base_url="http://vllm.internal:8000")
-    inc = await _incident(
-        db, tenant_a.id, labels={"host": "Bearer abcdef0123456789abcdef0123456789"}
-    )
+async def test_secret_shaped_value_redacted_even_on_allowed_key(db):
+    cfg = await _cfg(db, base_url="http://vllm.internal:8000")
+    inc = await _incident(db, labels={"host": "Bearer abcdef0123456789abcdef0123456789"})
     alerts = [(await db.execute(select(AlertEvent))).scalars().first()]
     _system, user, _h = build_prompt(inc, alerts, [], cfg)
     assert "Bearer abcdef" not in user
     assert "redacted" in user
 
 
-# --- tenancy / config isolation ---
+# --- single global config ---
 
 
-async def test_config_resolves_per_service_then_default(db, tenant_a, tenant_b):
-    await _cfg(db, None, base_url="http://default.internal:8000", model="default-m")
-    await _cfg(db, tenant_a.id, base_url="http://a.internal:8000", model="a-m")
+async def test_config_is_single_global_row(db):
+    assert await get_llm_config(db) is None  # nothing configured
+    await _cfg(db, base_url="http://a.internal:8000", model="a-m")
     await db.commit()
-    a = await get_llm_config(db, tenant_a.id)
-    assert a.base_url == "http://a.internal:8000"
-    b = await get_llm_config(db, tenant_b.id)  # no B row -> default
-    assert b.base_url == "http://default.internal:8000"
+    cfg = await get_llm_config(db)
+    assert cfg is not None and cfg.base_url == "http://a.internal:8000" and cfg.model == "a-m"
 
 
-async def test_analysis_sends_only_to_own_service_endpoint(db, tenant_a, tenant_b):
-    # A and B both configured with DISTINCT endpoints; analysing A's incident
-    # must build a client for A and never consult B's config.
-    await _cfg(db, tenant_a.id, base_url="http://a.internal:8000", model="a-m")
-    await _cfg(db, tenant_b.id, base_url="http://b.internal:8000", model="b-m")
-    inc = await _incident(db, tenant_a.id)
-    analysis = IncidentAnalysis(incident_id=inc.id, tenant_id=tenant_a.id, status="running")
+async def test_disabled_config_returns_none(db):
+    await _cfg(db, enabled=False)
+    await db.commit()
+    assert await get_llm_config(db) is None
+
+
+async def test_analysis_uses_global_config(db):
+    await _cfg(db, base_url="http://a.internal:8000", model="a-m")
+    inc = await _incident(db)
+    analysis = IncidentAnalysis(incident_id=inc.id, status="running")
     db.add(analysis)
     await db.flush()
 
-    # run_analysis resolves config by analysis.tenant_id -> A's config only
     fake = FakeLLM()
     await run_analysis(db, analysis, client_factory=lambda: fake)
     await db.commit()
     assert analysis.status == "done"
-    assert analysis.model == "a-m"  # A's model, never b-m
+    assert analysis.model == "a-m"  # the global config's model
     assert fake.calls  # exactly one call made
 
 
 # --- cache / idempotency ---
 
 
-async def test_prompt_hash_cache_skips_llm_call(db, tenant_a):
-    await _cfg(db, tenant_a.id)
-    inc = await _incident(db, tenant_a.id)
-    analysis = IncidentAnalysis(incident_id=inc.id, tenant_id=tenant_a.id, status="running")
+async def test_prompt_hash_cache_skips_llm_call(db):
+    await _cfg(db)
+    inc = await _incident(db)
+    analysis = IncidentAnalysis(incident_id=inc.id, status="running")
     db.add(analysis)
     await db.flush()
 
@@ -188,10 +184,10 @@ async def test_prompt_hash_cache_skips_llm_call(db, tenant_a):
 # --- failure / quota ---
 
 
-async def test_failure_recorded_never_raises(db, tenant_a):
-    await _cfg(db, tenant_a.id)
-    inc = await _incident(db, tenant_a.id)
-    analysis = IncidentAnalysis(incident_id=inc.id, tenant_id=tenant_a.id, status="running")
+async def test_failure_recorded_never_raises(db):
+    await _cfg(db)
+    inc = await _incident(db)
+    analysis = IncidentAnalysis(incident_id=inc.id, status="running")
     db.add(analysis)
     await db.flush()
     fake = FakeLLM(exc=LLMTimeout("timeout"))
@@ -201,31 +197,30 @@ async def test_failure_recorded_never_raises(db, tenant_a):
     assert analysis.attempts == 1
 
 
-async def test_disabled_or_unconfigured_fails_cleanly(db, tenant_a):
-    await _cfg(db, tenant_a.id, enabled=False)
-    inc = await _incident(db, tenant_a.id)
-    analysis = IncidentAnalysis(incident_id=inc.id, tenant_id=tenant_a.id, status="running")
+async def test_disabled_or_unconfigured_fails_cleanly(db):
+    await _cfg(db, enabled=False)
+    inc = await _incident(db)
+    analysis = IncidentAnalysis(incident_id=inc.id, status="running")
     db.add(analysis)
     await db.flush()
     await run_analysis(db, analysis, client_factory=lambda: FakeLLM())
     assert analysis.status == "failed" and "not configured" in analysis.error
 
 
-async def test_daily_quota_enforced(db, tenant_a):
-    await _cfg(db, tenant_a.id, daily_quota=1)
+async def test_daily_quota_enforced(db):
+    await _cfg(db, daily_quota=1)
     # one already-done analysis today consumes the quota
-    inc0 = await _incident(db, tenant_a.id, title="prior")
+    inc0 = await _incident(db, title="prior")
     db.add(
         IncidentAnalysis(
             incident_id=inc0.id,
-            tenant_id=tenant_a.id,
             status="done",
             completed_at=datetime.now(UTC),
             summary="x",
         )
     )
-    inc = await _incident(db, tenant_a.id)
-    analysis = IncidentAnalysis(incident_id=inc.id, tenant_id=tenant_a.id, status="running")
+    inc = await _incident(db)
+    analysis = IncidentAnalysis(incident_id=inc.id, status="running")
     db.add(analysis)
     await db.flush()
     await run_analysis(db, analysis, client_factory=lambda: FakeLLM())
@@ -235,10 +230,10 @@ async def test_daily_quota_enforced(db, tenant_a):
 # --- claim / crash-resume ---
 
 
-async def test_claim_is_exclusive_and_lease_resumes(db, tenant_a):
-    await _cfg(db, tenant_a.id)
-    inc = await _incident(db, tenant_a.id)
-    db.add(IncidentAnalysis(incident_id=inc.id, tenant_id=tenant_a.id, status="pending"))
+async def test_claim_is_exclusive_and_lease_resumes(db):
+    await _cfg(db)
+    inc = await _incident(db)
+    db.add(IncidentAnalysis(incident_id=inc.id, status="pending"))
     await db.commit()
 
     claimed = await claim_pending_analyses(db, worker_id="w1", now=NOW)

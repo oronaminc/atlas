@@ -52,7 +52,7 @@ async def pg(monkeypatch):
     await engine.dispose()
 
 
-def make_event(received_at, fp="fp-1", tenant_id=None):
+def make_event(received_at, fp="fp-1"):
     return AlertEvent(
         fingerprint=fp,
         source="alertmanager",
@@ -63,7 +63,6 @@ def make_event(received_at, fp="fp-1", tenant_id=None):
         annotations={},
         starts_at=received_at,
         received_at=received_at,
-        tenant_id=tenant_id,
     )
 
 

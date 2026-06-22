@@ -85,10 +85,10 @@ async def seed_incident(
 
 
 async def seed_incident_with_events(
-    db, pairs: list[tuple[str | None, str]], *, severity: str = "critical", tenant_id=None
+    db, pairs: list[tuple[str | None, str]], *, severity: str = "critical"
 ) -> Incident:
     """Incident carrying alert_events with given (cmdb_ci, alertname) pairs —
-    for mute/threshold tests. cmdb_ci=None → label omitted."""
+    for threshold tests. cmdb_ci=None → label omitted."""
     from app.models.alerting import AlertEvent
 
     incident = Incident(
@@ -99,7 +99,6 @@ async def seed_incident_with_events(
         first_seen=NOW,
         last_seen=NOW,
         alert_count=len(pairs),
-        tenant_id=tenant_id,
         cmdb_service_l2_code=L2,
     )
     db.add(incident)
@@ -117,7 +116,6 @@ async def seed_incident_with_events(
                 starts_at=NOW,
                 received_at=NOW,
                 incident_id=incident.id,
-                tenant_id=tenant_id,
             )
         )
     await db.flush()

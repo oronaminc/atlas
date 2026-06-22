@@ -103,7 +103,6 @@ async def create_notifications(
         db.add(
             Notification(
                 incident_id=incident.id,
-                tenant_id=incident.tenant_id,
                 channel=channel,
                 recipient_user_id=user.id,
                 recipient_address=address,
@@ -133,7 +132,6 @@ async def create_oncall(db: AsyncSession, incident: Incident) -> int:
     db.add(
         Notification(
             incident_id=incident.id,
-            tenant_id=incident.tenant_id,
             channel="oncall",
             recipient_user_id=None,
             recipient_address=incident.cmdb_service_l2_code or "oncall",
@@ -190,7 +188,6 @@ async def fan_out_pending(db: AsyncSession, *, now: datetime) -> int:
                 db.add(
                     IncidentEvent(
                         incident_id=incident.id,
-                        tenant_id=incident.tenant_id,
                         kind="no_recipients",
                         payload={"l2_code": incident.cmdb_service_l2_code},
                     )

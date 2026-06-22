@@ -6,7 +6,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import apply_tenant_param, client_ip, get_current_user, require_editor
+from app.core.deps import client_ip, get_current_user, require_editor
 from app.core.envelope import envelope
 from app.core.pagination import decode_cursor, page_meta
 from app.db import get_db
@@ -54,7 +54,7 @@ async def list_incidents(
     status: str | None = Query(default=None, description="comma-separated IncidentStatus values"),
     severity: str | None = None,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(apply_tenant_param),
+    _: User = Depends(get_current_user),
 ):
     stmt = select(Incident).order_by(Incident.created_at.desc(), Incident.id.desc())
     if status is not None:
@@ -234,9 +234,7 @@ async def analyze_incident(
         )
     ).scalar_one_or_none()
     if existing is None:
-        existing = IncidentAnalysis(
-            incident_id=incident.id, tenant_id=incident.tenant_id, status="pending"
-        )
+        existing = IncidentAnalysis(incident_id=incident.id, status="pending")
         db.add(existing)
     elif force or existing.status in ("done", "failed"):
         existing.status = "pending"

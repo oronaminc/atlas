@@ -9,28 +9,22 @@ import { api } from "@/api/client";
 import type {
   ActiveAlert,
   IncidentAnalysis,
-  Tenant,
-  CorrelationConfig,
   HostStat,
   Incident,
   IncidentDetail,
   NotificationRow,
   StatsOverview,
   TrendBucket,
-  NotificationRoute,
   NotificationSettings,
   Recipient,
-  AlertRule,
   AuditLog,
   Envelope,
   Group,
   GroupMember,
   NotificationPolicy,
+  PulledRule,
   Receiver,
-  RuleGroup,
-  Server,
   Silence,
-  SyncState,
   User,
 } from "@/types";
 
@@ -54,38 +48,9 @@ export function useInvalidate() {
   return (key: string) => qc.invalidateQueries({ queryKey: [key] });
 }
 
-// --- Servers ---
-export const useServers = (params?: Params) =>
-  useList<Server>(["servers"], "/servers", params);
-export const useServer = (id: string) =>
-  useQuery({
-    queryKey: ["servers", id],
-    queryFn: () => api.get<Server>(`/servers/${id}`),
-  });
-export const useServerRules = (id: string) =>
-  useQuery({
-    queryKey: ["servers", id, "rules"],
-    queryFn: () => api.get<AlertRule[]>(`/servers/${id}/rules`),
-  });
-
-// --- Rules ---
-export const useRules = (params?: Params) => useList<AlertRule>(["rules"], "/rules", params);
-export const useRule = (id: string | undefined) =>
-  useQuery({
-    queryKey: ["rules", id],
-    queryFn: () => api.get<AlertRule>(`/rules/${id}`),
-    enabled: !!id,
-  });
-
-// --- Rule groups ---
-export const useRuleGroups = (params?: Params) =>
-  useList<RuleGroup>(["rule-groups"], "/rule-groups", params);
-export const useRuleGroup = (id: string | undefined) =>
-  useQuery({
-    queryKey: ["rule-groups", id],
-    queryFn: () => api.get<RuleGroup>(`/rule-groups/${id}`),
-    enabled: !!id,
-  });
+// --- Rules pulled from the Mimir Ruler (read-only) ---
+export const useRulesPulled = () =>
+  useList<PulledRule>(["rules-pulled"], "/rules/pulled");
 
 // --- Groups / Users ---
 export const useGroups = (params?: Params) => useList<Group>(["groups"], "/groups", params);
@@ -103,20 +68,11 @@ export const usePolicies = () =>
   useList<NotificationPolicy>(["notification-policies"], "/notification-policies");
 export const useSilences = () => useList<Silence>(["silences"], "/silences");
 
-// --- Correlation config ---
-export const useCorrelationConfig = () =>
-  useQuery({
-    queryKey: ["correlation-config"],
-    queryFn: () => api.get<CorrelationConfig>("/correlation-config"),
-  });
-
 export const useNotificationSettings = () =>
   useQuery({
     queryKey: ["notification-settings"],
     queryFn: () => api.get<NotificationSettings>("/notification-settings"),
   });
-export const useNotificationRoutes = () =>
-  useList<NotificationRoute>(["notification-routes"], "/notification-routes");
 export const useRecipients = () =>
   useList<Recipient>(["notification-recipients"], "/notification-recipients");
 
@@ -180,39 +136,29 @@ export const useGroupServiceCodes = (groupId: string | null) =>
     queryFn: () => api.get<{ codes: string[] }>(`/groups/${groupId}/service-codes`),
     enabled: !!groupId,
   });
-export const useStatsOverview = (tenant?: string) =>
+export const useStatsOverview = () =>
   useQuery({
-    queryKey: ["stats", "overview", tenant],
-    queryFn: () => api.get<StatsOverview>("/stats/overview", tenant ? { tenant } : undefined),
+    queryKey: ["stats", "overview"],
+    queryFn: () => api.get<StatsOverview>("/stats/overview"),
     refetchInterval: OPS_REFRESH_MS,
   });
-export const useStatsTrend = (hours: number, tenant?: string) =>
+export const useStatsTrend = (hours: number) =>
   useQuery({
-    queryKey: ["stats", "trend", hours, tenant],
+    queryKey: ["stats", "trend", hours],
     queryFn: () =>
       api.get<{ bucket_seconds: number; buckets: TrendBucket[] }>("/stats/trend", {
         hours: String(hours),
-        ...(tenant ? { tenant } : {}),
       }),
     refetchInterval: OPS_REFRESH_MS,
   });
-export const useStatsHosts = (tenant?: string) =>
+export const useStatsHosts = () =>
   useQuery({
-    queryKey: ["stats", "hosts", tenant],
-    queryFn: () => api.get<HostStat[]>("/stats/hosts", tenant ? { tenant } : undefined),
+    queryKey: ["stats", "hosts"],
+    queryFn: () => api.get<HostStat[]>("/stats/hosts"),
     refetchInterval: OPS_REFRESH_MS,
   });
 
-// --- Tenants ---
-export const useTenants = () => useList<Tenant>(["tenants"], "/tenants");
-
-// --- Sync / Audit / Alerts ---
-export const useSyncState = () =>
-  useQuery({
-    queryKey: ["sync-state"],
-    queryFn: () => api.get<SyncState[]>("/sync-state"),
-    refetchInterval: 15_000,
-  });
+// --- Audit / Alerts ---
 export const useAuditLogs = (params?: Params) =>
   useList<AuditLog>(["audit-logs"], "/audit-logs", params);
 export const useActiveAlerts = () =>

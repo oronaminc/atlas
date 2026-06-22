@@ -7,7 +7,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_token
-from app.core.tenancy import resolve_tenant_slug, set_tenant_scope
 from app.core.visibility import allowed_l2_codes, set_l2_scope
 from app.db import get_db
 from app.models import User
@@ -40,9 +39,6 @@ async def get_current_user(
     user = await db.get(User, user_id)
     if user is None or not user.is_active:
         raise _unauthorized("User not found or inactive")
-    # Tenancy choke point: every authenticated request scopes its DB session
-    # here. HQ users (tenant_id NULL) get an unscoped (= all tenants) session.
-    set_tenant_scope(db, user.tenant_id)
     # Visibility choke point (IMP §6): admins see everything (None = bypass);
     # non-admins see only alerts/incidents whose l2_code their groups map to.
     if user.role == GlobalRole.admin:
@@ -68,28 +64,9 @@ require_admin = require_roles(GlobalRole.admin)
 require_editor = require_roles(GlobalRole.admin, GlobalRole.editor)
 
 
-async def require_hq_admin(user: User = Depends(require_admin)) -> User:
-    """Super-admin: admin role AND HQ scope (tenant_id NULL).
-    Tenant-admins (admin with a tenant) are rejected."""
-    if user.tenant_id is not None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="HQ admin only")
-    return user
-
-
-async def apply_tenant_param(
-    tenant: str | None = None,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> User:
-    """Optional `?tenant=<slug>` drill-down for HQ users on aggregate views
-    (stats/graph/incidents/alerts). Ignored for tenant users — their session
-    scope is already locked by get_current_user."""
-    if tenant and user.tenant_id is None:
-        target = await resolve_tenant_slug(db, tenant)
-        if target is None:
-            raise HTTPException(status_code=404, detail="Unknown tenant")
-        set_tenant_scope(db, target.id)
-    return user
+# Tenancy was removed (IMP cleanup); HQ-admin == admin now. Kept as an alias so
+# admin-only config endpoints (e.g. retention) read intent at the call site.
+require_hq_admin = require_admin
 
 
 def user_group_ids(user: User) -> set[uuid.UUID]:

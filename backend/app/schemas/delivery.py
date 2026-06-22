@@ -24,30 +24,6 @@ class NotificationOut(BaseModel):
     created_at: datetime
 
 
-class RouteOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    group_id: uuid.UUID
-    min_severity: str
-    channels: list[str]
-    enabled: bool
-    created_at: datetime
-
-
-class RouteCreate(BaseModel):
-    group_id: uuid.UUID
-    min_severity: str = Field(default="warning", pattern="^(critical|warning|info)$")
-    channels: list[str] = Field(default=["telegram"], min_length=1)
-    enabled: bool = True
-
-
-class RouteUpdate(BaseModel):
-    min_severity: str | None = Field(default=None, pattern="^(critical|warning|info)$")
-    channels: list[str] | None = Field(default=None, min_length=1)
-    enabled: bool | None = None
-
-
 class NotificationSettingsOut(BaseModel):
     telegram_bot_token: str | None  # masked, never the stored value
     telegram_rate_per_second: int

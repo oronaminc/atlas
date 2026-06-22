@@ -10,12 +10,11 @@ not configured => pass-through (the filter can't evaluate, so it never
 suppresses)."""
 
 import enum
-import uuid
 
-from sqlalchemy import Float, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import Float, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import TenantScoped, TimestampedBase
+from app.models.base import TimestampedBase
 
 
 class Comparator(enum.StrEnum):
@@ -23,14 +22,9 @@ class Comparator(enum.StrEnum):
     lt = "<"  # fires when value is LOW (e.g. mem available %) -> suppress if value > threshold
 
 
-class OverrideTier(enum.StrEnum):
-    server = "server"
-    group = "group"
-
-
-class RuleCatalog(TenantScoped, TimestampedBase):
+class RuleCatalog(TimestampedBase):
     __tablename__ = "rule_catalog"
-    __table_args__ = (UniqueConstraint("tenant_id", "alertname", name="uq_rule_catalog_alertname"),)
+    __table_args__ = (UniqueConstraint("alertname", name="uq_rule_catalog_alertname"),)
 
     alertname: Mapped[str] = mapped_column(String(255), index=True)
     # stored as the StrEnum value (">"/"<"); plain VARCHAR for dialect simplicity
@@ -41,25 +35,22 @@ class RuleCatalog(TenantScoped, TimestampedBase):
     value_query: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class ThresholdOverride(TenantScoped, TimestampedBase):
+class ThresholdOverride(TimestampedBase):
     __tablename__ = "threshold_overrides"
     __table_args__ = (
         UniqueConstraint(
-            "tenant_id",
             "alertname",
-            "tier",
             "target_cmdb_ci",
-            "target_group_id",
+            "target_label_key",
+            "target_label_value",
             name="uq_threshold_override",
         ),
     )
 
     alertname: Mapped[str] = mapped_column(String(255), index=True)
-    tier: Mapped[str] = mapped_column(String(10), index=True)  # OverrideTier value
+    # IMP redesign: label-scoped override target. Precedence at resolve time:
+    # target_cmdb_ci > (target_label_key, target_label_value) > none.
     target_cmdb_ci: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    target_group_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
-    # IMP redesign: label-scoped override target (replaces server-group tier in a
-    # later stage). Precedence at resolve time: target_cmdb_ci > (key,value) > none.
     target_label_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
     target_label_value: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     value: Mapped[float] = mapped_column(Float)

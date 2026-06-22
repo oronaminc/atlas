@@ -112,7 +112,6 @@ async def test_threshold_override_label_target(db):
     db.add(RuleCatalog(alertname="HostHighCpuLoad", comparator=">", value_query="q"))
     o = ThresholdOverride(
         alertname="HostHighCpuLoad",
-        tier="label",
         target_label_key="cmdb_service_l2_code",
         target_label_value="sub20251126_1040230842",
         value=90.0,

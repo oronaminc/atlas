@@ -19,12 +19,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://atlas:atlas@localhost:5432/atlas"
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # Default/legacy Mimir org (X-Scope-OrgID) used when no tenant org is
-    # resolved. Per-tenant orgs come from mimir_org_map (core/tenancy.py).
+    # The single Mimir org (X-Scope-OrgID), set on every observability-stack
+    # client by integrations/base.py::make_client.
     MIMIR_TENANT_ID: str = "system"
-    # AM webhook provisioning: push per-org Alertmanager configs pointing
-    # back at {ATLAS_PUBLIC_URL}/api/v1/ingest/alertmanager/{org}.
-    AM_PROVISION_ENABLED: bool = False
     ATLAS_PUBLIC_URL: str = ""
     # Phase 3: partition/retention maintenance
     ARCHIVE_DIR: str = ""  # gzip-CSV archive target (mounted volume); empty = no archive

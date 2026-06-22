@@ -15,12 +15,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.models import Base
 from app.models.alerting import AlertEvent
 from app.models.threshold import RuleCatalog, ThresholdOverride
-from app.services.correlation.config import get_config
 from app.services.correlation.dedup import InMemoryDedupStore
-from app.services.correlation.engine import CorrelationEngine
-from app.services.correlation.strategy import AttributeTimeStrategy
+from app.services.grouping_config import get_active_rule
+from app.services.incident_service import group_alert
 from app.services.threshold import ValueCache, should_suppress
-from app.workers.correlation_worker import claim_events, to_normalized
+from app.workers.correlation_worker import claim_events
 from tests.notifications.helpers import NOW
 
 PG_URL = os.environ.get("ATLAS_PG_TEST_URL")
@@ -45,15 +44,15 @@ async def pg_factory():
     await engine.dispose()
 
 
-async def _fetch(_tid, promql):  # LOW -> 92 (suppress), HIGH -> 97 (pass)
+async def _fetch(promql):  # LOW -> 92 (suppress), HIGH -> 97 (pass)
     return 92.0 if '"LOW"' in promql else 97.0
 
 
 async def test_concurrent_threshold_filter(pg_factory):
     async with pg_factory() as db:
         db.add(RuleCatalog(alertname="A", comparator=">", value_query='m{cmdb_ci="{{cmdb_ci}}"}'))
-        db.add(ThresholdOverride(alertname="A", tier="server", target_cmdb_ci="LOW", value=95))
-        db.add(ThresholdOverride(alertname="A", tier="server", target_cmdb_ci="HIGH", value=95))
+        db.add(ThresholdOverride(alertname="A", target_cmdb_ci="LOW", value=95))
+        db.add(ThresholdOverride(alertname="A", target_cmdb_ci="HIGH", value=95))
         for i in range(6):
             db.add(
                 AlertEvent(
@@ -80,17 +79,16 @@ async def test_concurrent_threshold_filter(pg_factory):
                     annotations={},
                     starts_at=NOW,
                     received_at=NOW,
+                    cmdb_service_l2_code=f"HIGH-{i}",
                 )
             )
         await db.commit()
 
     async def worker():
         async with pg_factory() as db:
-            engine = CorrelationEngine(
-                dedup_store=InMemoryDedupStore(), strategies=[AttributeTimeStrategy()]
-            )
+            InMemoryDedupStore()  # dedup not exercised (distinct fingerprints)
             cache = ValueCache()
-            config = await get_config(db)
+            rule = await get_active_rule(db)
             while True:
                 events = await claim_events(
                     db, worker_id=f"w{uuid.uuid4().hex[:4]}", now=NOW, limit=3
@@ -106,7 +104,8 @@ async def test_concurrent_threshold_filter(pg_factory):
                     if suppress:
                         event.suppressed = True
                         continue
-                    await engine.correlate(db, event, to_normalized(event), config, now=NOW)
+                    await group_alert(db, event, rule, NOW)
+                    event.correlated = True
                 await db.commit()
 
     await asyncio.gather(*[worker() for _ in range(N_WORKERS)])

@@ -1,17 +1,13 @@
-"""LLM endpoint config admin (per-service, mirrors notification-settings).
-api_key Fernet-encrypted + MASKED in responses. Tenant-admin edits its own
-service; HQ picks via ?tenant=<slug>. Audited."""
+"""LLM endpoint config admin (single global row, mirrors notification-settings).
+api_key Fernet-encrypted + MASKED in responses. Audited."""
 
-import uuid
-
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import client_ip, require_admin
 from app.core.envelope import envelope
 from app.core.security import encrypt_secret
-from app.core.tenancy import resolve_tenant_slug
 from app.db import get_db
 from app.models import User
 from app.models.llm import LLMConfig
@@ -32,27 +28,10 @@ AUDIT_FIELDS = [
 ]
 
 
-async def _config_tenant_id(
-    tenant: str | None = None,
-    db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
-) -> uuid.UUID | None:
-    if admin.tenant_id is not None:
-        return admin.tenant_id
-    if tenant:
-        target = await resolve_tenant_slug(db, tenant)
-        if target is None:
-            raise HTTPException(status_code=404, detail="Unknown tenant")
-        return target.id
-    return None
-
-
-async def _get_or_create(db: AsyncSession, tenant_id: uuid.UUID | None) -> LLMConfig:
-    row = (
-        await db.execute(select(LLMConfig).where(LLMConfig.tenant_id == tenant_id).limit(1))
-    ).scalar_one_or_none()
+async def _get_or_create(db: AsyncSession) -> LLMConfig:
+    row = (await db.execute(select(LLMConfig).limit(1))).scalar_one_or_none()
     if row is None:
-        row = LLMConfig(tenant_id=tenant_id)
+        row = LLMConfig()
         db.add(row)
         await db.flush()
     return row
@@ -82,9 +61,8 @@ def _snapshot(row: LLMConfig) -> dict:
 async def read_config(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
-    tenant_id: uuid.UUID | None = Depends(_config_tenant_id),
 ):
-    row = await _get_or_create(db, tenant_id)
+    row = await _get_or_create(db)
     await db.commit()
     return envelope(_out(row))
 
@@ -95,9 +73,8 @@ async def update_config(
     request: Request,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
-    tenant_id: uuid.UUID | None = Depends(_config_tenant_id),
 ):
-    row = await _get_or_create(db, tenant_id)
+    row = await _get_or_create(db)
     before = _snapshot(row)
     data = body.model_dump(exclude_unset=True)
     key = data.pop("api_key", MASKED)

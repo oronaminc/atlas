@@ -99,9 +99,9 @@ async def create_override(
         await db.execute(
             select(ThresholdOverride).where(
                 ThresholdOverride.alertname == body.alertname,
-                ThresholdOverride.tier == body.tier,
                 ThresholdOverride.target_cmdb_ci == body.target_cmdb_ci,
-                ThresholdOverride.target_group_id == body.target_group_id,
+                ThresholdOverride.target_label_key == body.target_label_key,
+                ThresholdOverride.target_label_value == body.target_label_value,
             )
         )
     ).scalar_one_or_none()
@@ -109,9 +109,9 @@ async def create_override(
         raise HTTPException(status_code=409, detail="Override already exists")
     o = ThresholdOverride(
         alertname=body.alertname,
-        tier=body.tier,
         target_cmdb_ci=body.target_cmdb_ci,
-        target_group_id=body.target_group_id,
+        target_label_key=body.target_label_key,
+        target_label_value=body.target_label_value,
         value=body.value,
     )
     db.add(o)
@@ -122,7 +122,7 @@ async def create_override(
         action="create",
         resource_type="threshold_override",
         resource_id=o.id,
-        after={"alertname": o.alertname, "tier": o.tier, "value": o.value},
+        after={"alertname": o.alertname, "value": o.value},
         ip=client_ip(request),
     )
     await db.commit()
@@ -170,7 +170,7 @@ async def delete_override(
         action="delete",
         resource_type="threshold_override",
         resource_id=o.id,
-        before={"alertname": o.alertname, "tier": o.tier},
+        before={"alertname": o.alertname},
         ip=client_ip(request),
     )
     await db.delete(o)

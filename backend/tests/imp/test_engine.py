@@ -62,7 +62,7 @@ async def run_worker(db, now=NOW, dedup=None):
         if ev.incident_id is not None:
             ev.correlated = True
             continue
-        key = f"{ev.tenant_id}:{ev.fingerprint}"
+        key = ev.fingerprint
         if await dedup.seen_within(key, rule.dedup_window_seconds):
             prior = await latest_other_event(
                 db, ev, window_seconds=rule.dedup_window_seconds, now=now

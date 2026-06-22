@@ -17,10 +17,7 @@ export interface Meta {
 
 export type GlobalRole = "admin" | "editor" | "viewer";
 export type AuthProvider = "local" | "oidc";
-export type ScopeType = "global" | "server" | "user" | "group";
 export type Severity = "critical" | "warning" | "info";
-export type Datasource = "metrics" | "logs";
-export type SyncStatus = "ok" | "pending" | "failed";
 export type ReceiverType = "slack" | "email" | "webhook" | "pagerduty";
 
 export interface User {
@@ -32,18 +29,19 @@ export interface User {
   is_active: boolean;
   last_login_at: string | null;
   created_at: string;
-  tenant_id: string | null;
   groups: GroupMembership[];
 }
 
-export interface Tenant {
-  id: string;
-  slug: string;
-  name: string;
-  is_active: boolean;
-  mimir_orgs: string[];
-  created_at: string;
-  ingest_key?: string; // present only in the create response
+// Read-only rule pulled from the Mimir Ruler (the alertname catalog source).
+export interface PulledRule {
+  alertname: string;
+  expr: string;
+  for: string;
+  severity: string;
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  namespace: string;
+  group: string;
 }
 
 export interface GroupMembership {
@@ -65,47 +63,6 @@ export interface GroupMember {
   username: string;
   email: string;
   role_in_group: "member" | "manager";
-}
-
-export interface Server {
-  id: string;
-  name: string;
-  cmdb_ci: string | null;
-  labels: Record<string, string>;
-  description: string | null;
-  owner_group_id: string | null;
-  server_group_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface AlertRule {
-  id: string;
-  name: string;
-  description: string | null;
-  scope_type: ScopeType;
-  scope_ref_id: string | null;
-  expr: string;
-  for_duration: string;
-  severity: Severity;
-  labels: Record<string, string>;
-  annotations: Record<string, string>;
-  enabled: boolean;
-  datasource: Datasource;
-  created_at: string;
-  updated_at: string;
-  created_by: string | null;
-}
-
-export interface RuleGroup {
-  id: string;
-  name: string;
-  namespace: string;
-  interval: string;
-  tenant: string;
-  rule_count?: number;
-  rules?: AlertRule[];
-  created_at: string;
 }
 
 export interface Receiver {
@@ -135,15 +92,6 @@ export interface Silence {
   created_at: string;
 }
 
-export interface SyncState {
-  id: string;
-  target: "ruler" | "alertmanager";
-  last_synced_at: string | null;
-  status: SyncStatus;
-  last_error: string | null;
-  checksum: string | null;
-}
-
 export interface AuditLog {
   id: string;
   actor_id: string | null;
@@ -167,27 +115,12 @@ export interface ActiveAlert {
   endsAt: string;
 }
 
-export interface CorrelationConfig {
-  dedup_window_seconds: number;
-  correlation_window_seconds: number;
-  group_attrs: string[];
-}
-
 export interface NotificationSettings {
   telegram_bot_token: string | null;
   telegram_rate_per_second: number;
   quota_group_per_hour: number;
   quota_global_per_day: number;
   pending_softcap: number;
-}
-
-export interface NotificationRoute {
-  id: string;
-  group_id: string;
-  min_severity: Severity;
-  channels: string[];
-  enabled: boolean;
-  created_at: string;
 }
 
 export interface Recipient {
@@ -230,7 +163,6 @@ export interface Incident {
   title: string;
   status: IncidentStatus;
   severity: Severity;
-  tenant_id: string | null;
   group_key: string | null;
   first_seen: string;
   last_seen: string;

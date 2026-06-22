@@ -1,9 +1,8 @@
-import { Activity, AlertTriangle, BellOff, ShieldAlert } from "lucide-react";
+import { Activity, AlertTriangle, BellOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { useActiveAlerts, useAuditLogs, useSyncState } from "@/api/queries";
+import { useActiveAlerts, useAuditLogs } from "@/api/queries";
 import { PageHeader } from "@/components/layout/page-header";
-import { StatusBadge } from "@/components/common/status-badge";
 import { LoadingSpinner } from "@/components/common/loading-spinner";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -49,7 +48,6 @@ function SummaryCard({
 export function DashboardPage() {
   const { t } = useTranslation();
   const alerts = useActiveAlerts();
-  const sync = useSyncState();
   const audit = useAuditLogs({ limit: "8" });
 
   const alertList = alerts.data?.data ?? [];
@@ -73,24 +71,6 @@ export function DashboardPage() {
           tone="text-destructive"
         />
         <SummaryCard title="Silenced" value={alerts.isError ? "-" : silenced} icon={BellOff} />
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t("dashboard.syncState")}</CardTitle>
-            <ShieldAlert className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            {sync.data?.data.length ? (
-              sync.data.data.map((s) => (
-                <div key={s.id} className="flex items-center gap-1 text-sm">
-                  <span className="text-muted-foreground">{s.target}</span>
-                  <StatusBadge status={s.status} />
-                </div>
-              ))
-            ) : (
-              <Badge variant="secondary">no data</Badge>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       {alerts.isError && (

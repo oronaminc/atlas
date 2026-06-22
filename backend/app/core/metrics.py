@@ -120,9 +120,9 @@ class Histogram(_Metric):
             base = dict(zip(self.labelnames, key, strict=False))
             for i, edge in enumerate(self._buckets):
                 le = repr(edge) if not math.isinf(edge) else "+Inf"
-                lines.append(f'{self.name}_bucket{_fmt_labels({**base, "le": le})} {counts[i]}')
+                lines.append(f"{self.name}_bucket{_fmt_labels({**base, 'le': le})} {counts[i]}")
             total = counts[-1]
-            lines.append(f'{self.name}_bucket{_fmt_labels({**base, "le": "+Inf"})} {total}')
+            lines.append(f"{self.name}_bucket{_fmt_labels({**base, 'le': '+Inf'})} {total}")
             lines.append(f"{self.name}_sum{_fmt_labels(base)} {sums[key]}")
             lines.append(f"{self.name}_count{_fmt_labels(base)} {total}")
         return lines

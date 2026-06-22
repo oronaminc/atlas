@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import apply_tenant_param
+from app.core.deps import get_current_user
 from app.core.envelope import envelope
 from app.db import get_db
 from app.models import User
@@ -79,7 +79,7 @@ async def _alert_counts(
 @router.get("/overview")
 async def overview(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(apply_tenant_param),
+    _: User = Depends(get_current_user),
 ):
     incident_counts = dict(
         (await db.execute(select(Incident.status, func.count()).group_by(Incident.status))).all()
@@ -117,7 +117,7 @@ async def overview(
 async def trend(
     hours: int = Query(default=24, ge=1, le=24 * 7),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(apply_tenant_param),
+    _: User = Depends(get_current_user),
 ):
     """Alert volume by severity: hourly buckets up to 48h, daily beyond.
     Reads pre-aggregated alert_stats_hourly for closed hours + a live scan
@@ -148,7 +148,7 @@ async def trend(
 async def hosts(
     limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(apply_tenant_param),
+    _: User = Depends(get_current_user),
 ):
     """Incidents grouped by group_key (host=...) — which servers are noisy.
     Folded in Python for SQLite/PG portability."""

@@ -14,13 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import apply_tenant_param, get_current_user
+from app.core.deps import get_current_user
 from app.core.envelope import envelope
 from app.db import get_db
 from app.models import User
 from app.models.alerting import AlertEvent, Incident, IncidentStatus
 from app.models.base import utcnow
-from app.services.correlation.config import get_config
+from app.services.grouping_config import get_active_rule
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -37,7 +37,7 @@ async def graph(
     status: str = Query(default="open,acknowledged"),
     max_nodes: int = Query(default=2000, ge=2, le=5000),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(apply_tenant_param),
+    _: User = Depends(get_current_user),
 ):
     statuses = [IncidentStatus(s.strip()) for s in status.split(",") if s.strip()]
     since = utcnow() - timedelta(hours=window_hours)
@@ -107,8 +107,8 @@ async def graph(
                 }
             )
 
-    config = await get_config(db)
-    window = config.correlation_window_seconds
+    rule = await get_active_rule(db)
+    window = rule.window_seconds
     # temporal proximity + same dominant name (O(n^2) over capped, windowed set)
     temporal_count: dict[uuid.UUID, int] = {}
     for i, a in enumerate(incidents):

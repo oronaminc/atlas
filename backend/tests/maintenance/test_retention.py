@@ -21,7 +21,7 @@ from tests.conftest import auth_headers, make_user
 NOW = datetime(2026, 6, 13, 12, 30, 0, tzinfo=UTC)
 
 
-def event(received_at, severity="warning", tenant_id=None, fp="f1"):
+def event(received_at, severity="warning", l2="L2TEST", fp="f1"):
     return AlertEvent(
         fingerprint=fp,
         source="alertmanager",
@@ -32,8 +32,7 @@ def event(received_at, severity="warning", tenant_id=None, fp="f1"):
         annotations={},
         starts_at=received_at,
         received_at=received_at,
-        tenant_id=tenant_id,
-        cmdb_service_l2_code="L2TEST",
+        cmdb_service_l2_code=l2,
     )
 
 
@@ -70,17 +69,6 @@ async def test_retention_config_defaults_and_hq_admin_update(client, admin, view
     # viewer cannot read; non-admin cannot write
     res = await client.get("/api/v1/retention-config", headers=auth_headers(viewer))
     assert res.status_code == 403
-
-
-async def test_retention_update_is_hq_admin_only(client, db, admin, tenant_a, a_admin):
-    res = await client.patch(
-        "/api/v1/retention-config",
-        json={"audit_days": 1},
-        headers=auth_headers(a_admin),
-    )
-    assert res.status_code == 403  # tenant-admin blocked
-    res = await client.get("/api/v1/retention-config", headers=auth_headers(a_admin))
-    assert res.status_code == 200  # read-only visibility
 
 
 # --- retention deletes ---
@@ -151,23 +139,23 @@ async def test_zero_days_means_keep_forever(db):
 # --- rollups + stats ---
 
 
-async def test_rollup_hourly_is_idempotent_and_tenant_tagged(db, tenant_a, tenant_b):
+async def test_rollup_hourly_is_idempotent_and_severity_grouped(db):
     base = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(hours=2)
     for i in range(3):
-        db.add(event(base + timedelta(minutes=i), "critical", tenant_a.id, fp=f"a{i}"))
-    db.add(event(base + timedelta(minutes=5), "warning", tenant_b.id, fp="b0"))
+        db.add(event(base + timedelta(minutes=i), "critical", fp=f"a{i}"))
+    db.add(event(base + timedelta(minutes=5), "warning", fp="b0"))
     await db.commit()
 
     n1 = await rollup_hourly(db)
     await db.commit()
     n2 = await rollup_hourly(db)  # rerun must not duplicate
     await db.commit()
-    assert n1 == n2 == 2
+    assert n1 == n2 == 2  # (bucket, critical) + (bucket, warning)
 
     rows = (await db.execute(select(AlertStatsHourly))).scalars().all()
-    by_tenant = {(r.tenant_id, r.severity): r.count for r in rows}
-    assert by_tenant[(tenant_a.id, "critical")] == 3
-    assert by_tenant[(tenant_b.id, "warning")] == 1
+    by_severity = {r.severity: r.count for r in rows}
+    assert by_severity["critical"] == 3
+    assert by_severity["warning"] == 1
 
 
 async def test_stats_read_rollups_plus_live_tail(client, db, viewer):
@@ -200,15 +188,3 @@ async def test_stats_read_rollups_plus_live_tail(client, db, viewer):
     buckets = res.json()["data"]["buckets"]
     assert sum(b["critical"] for b in buckets) == 5
     assert sum(b["info"] for b in buckets) == 2
-
-
-async def test_stats_rollups_tenant_isolated(client, db, tenant_a, tenant_b, a_viewer):
-    base = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timedelta(hours=2)
-    db.add(event(base, "critical", tenant_a.id, fp="ta"))
-    db.add(event(base, "critical", tenant_b.id, fp="tb"))
-    await db.commit()
-    await rollup_hourly(db)
-    await db.commit()
-
-    res = await client.get("/api/v1/stats/overview", headers=auth_headers(a_viewer))
-    assert res.json()["data"]["alerts_24h"] == 1  # only A's rollup row

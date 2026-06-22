@@ -16,7 +16,7 @@ from app.services.audit import record_audit, snapshot
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-USER_AUDIT_FIELDS = ["email", "username", "role", "is_active", "tenant_id"]
+USER_AUDIT_FIELDS = ["email", "username", "role", "is_active"]
 
 
 @router.get("")
@@ -28,8 +28,6 @@ async def list_users(
     admin: User = Depends(require_admin),
 ):
     stmt = select(User).order_by(User.created_at.desc(), User.id.desc())
-    if admin.tenant_id is not None:
-        stmt = stmt.where(User.tenant_id == admin.tenant_id)
     if q:
         pattern = f"%{q}%"
         stmt = stmt.where(or_(User.email.ilike(pattern), User.username.ilike(pattern)))
@@ -55,9 +53,6 @@ async def create_user(
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Email or username already exists")
-    if admin.tenant_id is not None:
-        # tenant-admins create users only inside their own tenant
-        body.tenant_id = admin.tenant_id
     if body.auth_provider.value == "local" and not body.password:
         raise HTTPException(status_code=400, detail="Local accounts require a password")
 
@@ -67,7 +62,6 @@ async def create_user(
         hashed_password=hash_password(body.password) if body.password else None,
         role=body.role,
         auth_provider=body.auth_provider,
-        tenant_id=body.tenant_id,
         created_by=admin.id,
     )
     db.add(user)
@@ -128,7 +122,7 @@ async def get_user(
     admin: User = Depends(require_admin),
 ):
     user = await db.get(User, user_id)
-    if user is None or (admin.tenant_id is not None and user.tenant_id != admin.tenant_id):
+    if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return envelope(user_to_out(user).model_dump(mode="json"))
 
@@ -142,7 +136,7 @@ async def update_user(
     admin: User = Depends(require_admin),
 ):
     user = await db.get(User, user_id)
-    if user is None or (admin.tenant_id is not None and user.tenant_id != admin.tenant_id):
+    if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     before = snapshot(user, USER_AUDIT_FIELDS)
     if body.username is not None:
@@ -153,11 +147,6 @@ async def update_user(
         user.is_active = body.is_active
     if body.telegram_chat_id is not None:
         user.telegram_chat_id = body.telegram_chat_id
-    if "tenant_id" in body.model_fields_set:
-        # tenant reassignment (incl. null = promote to HQ) is HQ-admin only
-        if admin.tenant_id is not None:
-            raise HTTPException(status_code=403, detail="HQ admin only")
-        user.tenant_id = body.tenant_id
     user.updated_by = admin.id
     await record_audit(
         db,
@@ -182,7 +171,7 @@ async def delete_user(
     admin: User = Depends(require_admin),
 ):
     user = await db.get(User, user_id)
-    if user is None or (admin.tenant_id is not None and user.tenant_id != admin.tenant_id):
+    if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     if user.id == admin.id:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")

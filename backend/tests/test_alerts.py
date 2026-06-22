@@ -16,7 +16,7 @@ async def test_active_alerts_proxy(client, viewer_headers):
                 }
             ]
 
-    app.dependency_overrides[get_am_factory] = lambda: (lambda org=None: FakeAM())
+    app.dependency_overrides[get_am_factory] = lambda: lambda org=None: FakeAM()
     try:
         res = await client.get("/api/v1/alerts/active", headers=viewer_headers)
         assert res.status_code == 200
@@ -30,7 +30,7 @@ async def test_active_alerts_unreachable_returns_502(client, viewer_headers):
         async def get_active_alerts(self):
             raise RuntimeError("connection refused")
 
-    app.dependency_overrides[get_am_factory] = lambda: (lambda org=None: DownAM())
+    app.dependency_overrides[get_am_factory] = lambda: lambda org=None: DownAM()
     try:
         res = await client.get("/api/v1/alerts/active", headers=viewer_headers)
         assert res.status_code == 502

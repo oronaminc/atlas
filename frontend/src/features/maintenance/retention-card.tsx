@@ -1,5 +1,5 @@
-/** HQ-only retention policy: days per data class (0 = keep forever) +
- *  archive toggle. Partition drops are cross-tenant, hence HQ-gated. */
+/** Retention policy: days per data class (0 = keep forever) + archive toggle.
+ *  Admin-only (the /settings route is admin-gated). */
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
