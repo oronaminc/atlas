@@ -5,8 +5,11 @@ from datetime import UTC, datetime
 from app.core.security import hash_password
 from app.models import Group, User, UserGroup
 from app.models.alerting import Incident, IncidentStatus
-from app.models.delivery import NotificationRoute
+from app.models.group import GroupServiceCode
 from app.models.user import GlobalRole
+
+# every test incident routes to this l2; seed_route maps a group to it
+L2 = "L2TEST"
 
 NOW = datetime(2026, 6, 11, 12, 0, 0, tzinfo=UTC)
 
@@ -40,20 +43,30 @@ async def seed_route(
     min_severity: str = "warning",
     channels: list[str] | None = None,
     enabled: bool = True,
-) -> NotificationRoute:
-    route = NotificationRoute(
-        group_id=group.id,
-        min_severity=min_severity,
-        channels=channels or ["telegram"],
-        enabled=enabled,
-    )
-    db.add(route)
+) -> GroupServiceCode:
+    """IMP: maps a user-group to the test l2 (channels/min_severity are now
+    per-incident toggles, so those args are accepted but inert)."""
+    mapping = GroupServiceCode(group_id=group.id, cmdb_service_l2_code=L2)
+    db.add(mapping)
     await db.flush()
-    return route
+    return mapping
+
+
+def _toggles(channels):
+    chans = set(["telegram"] if channels is None else channels)
+    return {
+        "notify_email": "email" in chans,
+        "notify_telegram": "telegram" in chans,
+        "notify_oncall": "oncall" in chans,
+    }
 
 
 async def seed_incident(
-    db, severity: str = "critical", title: str = "HighCPU on web-01"
+    db,
+    severity: str = "critical",
+    title: str = "HighCPU on web-01",
+    channels: list[str] | None = None,
+    l2: str = L2,
 ) -> Incident:
     incident = Incident(
         title=title,
@@ -63,6 +76,8 @@ async def seed_incident(
         first_seen=NOW,
         last_seen=NOW,
         alert_count=1,
+        cmdb_service_l2_code=l2,
+        **_toggles(channels),
     )
     db.add(incident)
     await db.flush()
@@ -85,6 +100,7 @@ async def seed_incident_with_events(
         last_seen=NOW,
         alert_count=len(pairs),
         tenant_id=tenant_id,
+        cmdb_service_l2_code=L2,
     )
     db.add(incident)
     await db.flush()
