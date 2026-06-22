@@ -33,7 +33,8 @@
     "servers": "서버",
     "rules": "알림 룰",
     "ruleGroups": "룰 그룹",
-    "alerts": "활성 알림",
+    "alerts": "알림",
+    "incidents": "인시던트",
     "notifications": "알림 설정",
     "groups": "그룹 관리",
     "users": "사용자 관리",
@@ -43,11 +44,54 @@
     "settings": "엔진 설정",
     "ops": "운영 대시보드",
     "graph": "인시던트 그래프",
-    "mutes": "알림 차단",
     "thresholds": "임계값",
+    "groupingRules": "그룹핑 룰",
+    "notificationDefaults": "알림 기본값",
     "sectionMonitor": "모니터링",
     "sectionConfigure": "설정",
     "sectionAdmin": "관리"
+  },
+  "alerts": {
+    "description": "수집된 모든 알림 (인시던트 포함 여부 무관), 라벨 기반",
+    "hostname": "호스트명...",
+    "zone": "존...",
+    "allSeverities": "모든 심각도",
+    "anyIncident": "전체",
+    "inIncident": "인시던트 포함",
+    "free": "미연결",
+    "groupBy": "그룹 기준...",
+    "noGrouping": "그룹 없음",
+    "none": "알림 없음",
+    "promote": "승격",
+    "promoted": "인시던트로 승격됨",
+    "suppressed": "억제됨"
+  },
+  "incidents": {
+    "description": "인시던트 컨테이너 — 내부에 묶인 알림들",
+    "origin": "생성 방식",
+    "none": "인시던트 없음",
+    "detach": "분리",
+    "notify_email": "이메일",
+    "notify_telegram": "텔레그램",
+    "notify_oncall": "OnCall"
+  },
+  "groupingRules": {
+    "description": "토폴로지 그룹핑 기준 (관리자)",
+    "labelKeys": "라벨 키",
+    "window": "윈도우 (초)",
+    "minGroupSize": "최소 그룹 크기",
+    "criticalImmediate": "Critical 즉시 생성"
+  },
+  "notificationDefaults": {
+    "description": "신규 인시던트에 적용되는 기본 채널 (관리자)",
+    "title": "기본 채널",
+    "default_email": "이메일",
+    "default_telegram": "텔레그램",
+    "default_oncall": "OnCall"
+  },
+  "groups": {
+    "serviceCodes": "서비스 코드 (l2)",
+    "serviceCodesHelp": "이 그룹이 보고/알림받는 cmdb_service_l2_code 값 (한 줄에 하나)"
   },
   "mutes": {
     "title": "알림 차단 / 대상 그룹",

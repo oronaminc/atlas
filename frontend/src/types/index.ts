@@ -198,6 +198,31 @@ export interface Recipient {
 
 export type IncidentStatus = "open" | "acknowledged" | "resolved" | "suppressed";
 
+// IMP: a stored alert (every inbound alert, browsable on its own)
+export interface StoredAlert {
+  id: string;
+  fingerprint: string;
+  source: string;
+  name: string;
+  severity: string;
+  status: string;
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  starts_at: string;
+  received_at: string;
+  dedup_count: number;
+  incident_id: string | null;
+  cmdb_ci: string | null;
+  cmdb_hostname: string | null;
+  cmdb_zone: string | null;
+  client_address: string | null;
+  cmdb_service_l1_code: string | null;
+  cmdb_service_l2_code: string | null;
+  value: number | null;
+  suppressed: boolean;
+  correlated: boolean;
+}
+
 export interface Incident {
   id: string;
   title: string;
@@ -209,20 +234,42 @@ export interface Incident {
   last_seen: string;
   alert_count: number;
   created_at: string;
+  origin: string;
+  cmdb_service_l2_code: string | null;
+  cmdb_service_l1_code: string | null;
+  cmdb_zone: string | null;
+  notify_email: boolean;
+  notify_telegram: boolean;
+  notify_oncall: boolean;
+  grouping_rule_id: string | null;
 }
 
 export interface IncidentDetail extends Incident {
-  alerts: {
-    id: string;
-    name: string;
-    source: string;
-    severity: string;
-    status: string;
-    labels: Record<string, string>;
-    received_at: string;
-    dedup_count: number;
-  }[];
+  alerts: StoredAlert[];
   timeline: { id: string; kind: string; payload: Record<string, unknown>; created_at: string }[];
+}
+
+export interface GroupingRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  label_keys: string[];
+  window_seconds: number;
+  min_group_size: number;
+  critical_immediate: boolean;
+  dedup_window_seconds: number;
+}
+
+export interface NotificationDefaults {
+  default_email: boolean;
+  default_telegram: boolean;
+  default_oncall: boolean;
+}
+
+export interface AlertGroupCount {
+  value: string;
+  count: number;
 }
 
 export interface NotificationRow {
