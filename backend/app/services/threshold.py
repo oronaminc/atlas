@@ -1,8 +1,9 @@
 """Ingest-time threshold filter (PR #2, Model 2).
 
-Precedence: per-server (cmdb_ci) > the server's single group > default. The
-default tier means "no override" -> never suppress. For an overridden target we
-fetch the CURRENT metric value from Mimir (catalog.value_query with the cmdb_ci
+Precedence (IMP, label-based — no server table): per-server cmdb_ci override >
+label-scoped override (target_label_key matches one of the alert's labels, e.g.
+cmdb_service_l2_code) > none = never suppress. For an overridden target we fetch
+the CURRENT metric value from Mimir (catalog.value_query with the cmdb_ci
 substituted) and suppress the alert iff it's *less severe* than the override.
 
 FAIL-OPEN is absolute: missing cmdb_ci / no override / no catalog value_query /
@@ -19,8 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alerting import AlertEvent
-from app.models.server import Server
-from app.models.threshold import Comparator, OverrideTier, RuleCatalog, ThresholdOverride
+from app.models.threshold import Comparator, RuleCatalog, ThresholdOverride
 
 # fetch_value(tenant_id, filled_promql) -> current value, or None on any failure
 FetchValue = Callable[[uuid.UUID | None, str], Awaitable[float | None]]
@@ -55,42 +55,46 @@ def parse_instant_value(resp: dict[str, Any]) -> float | None:
 
 
 async def resolve_threshold(
-    db: AsyncSession, tenant_id: uuid.UUID | None, cmdb_ci: str, alertname: str
+    db: AsyncSession,
+    tenant_id: uuid.UUID | None,
+    labels: dict[str, str],
+    alertname: str,
 ) -> tuple[str, float] | None:
-    """server override > the server's group override > None (default)."""
-    server_ovr = (
-        await db.execute(
-            select(ThresholdOverride.value).where(
-                ThresholdOverride.tenant_id == tenant_id,
-                ThresholdOverride.alertname == alertname,
-                ThresholdOverride.tier == OverrideTier.server.value,
-                ThresholdOverride.target_cmdb_ci == cmdb_ci,
-            )
-        )
-    ).scalar_one_or_none()
-    if server_ovr is not None:
-        return (OverrideTier.server.value, server_ovr)
-
-    group_id = (
-        await db.execute(
-            select(Server.server_group_id).where(
-                Server.tenant_id == tenant_id, Server.cmdb_ci == cmdb_ci
-            )
-        )
-    ).scalar_one_or_none()
-    if group_id is not None:
-        group_ovr = (
+    """Label-based precedence (IMP): per-server cmdb_ci override > label-scoped
+    override (target_label_key matches a label value, e.g. cmdb_service_l2_code)
+    > None (default = never suppress). No server table — everything is matched
+    against the alert's own labels."""
+    cmdb_ci = labels.get("cmdb_ci")
+    if cmdb_ci:
+        server_ovr = (
             await db.execute(
                 select(ThresholdOverride.value).where(
                     ThresholdOverride.tenant_id == tenant_id,
                     ThresholdOverride.alertname == alertname,
-                    ThresholdOverride.tier == OverrideTier.group.value,
-                    ThresholdOverride.target_group_id == group_id,
+                    ThresholdOverride.target_cmdb_ci == cmdb_ci,
                 )
             )
         ).scalar_one_or_none()
-        if group_ovr is not None:
-            return (OverrideTier.group.value, group_ovr)
+        if server_ovr is not None:
+            return ("cmdb_ci", server_ovr)
+
+    # label-scoped overrides: first whose (key, value) the alert's labels satisfy
+    rows = (
+        await db.execute(
+            select(
+                ThresholdOverride.target_label_key,
+                ThresholdOverride.target_label_value,
+                ThresholdOverride.value,
+            ).where(
+                ThresholdOverride.tenant_id == tenant_id,
+                ThresholdOverride.alertname == alertname,
+                ThresholdOverride.target_label_key.isnot(None),
+            )
+        )
+    ).all()
+    for key, value, threshold in rows:
+        if key and labels.get(key) == value:
+            return ("label", threshold)
     return None
 
 
@@ -115,13 +119,14 @@ async def should_suppress(
 ) -> tuple[bool, float | None]:
     """Returns (suppress, fetched_value). Fail-open everywhere."""
     now = now if now is not None else time.monotonic()
-    cmdb_ci = (event.labels or {}).get("cmdb_ci")
+    labels = event.labels or {}
+    cmdb_ci = labels.get("cmdb_ci")
     if not cmdb_ci:
         return (False, None)
 
-    resolved = await resolve_threshold(db, event.tenant_id, cmdb_ci, event.name)
+    resolved = await resolve_threshold(db, event.tenant_id, labels, event.name)
     if resolved is None:
-        return (False, None)  # default tier -> never suppress
+        return (False, None)  # no override -> never suppress
     _tier, threshold = resolved
 
     catalog = (

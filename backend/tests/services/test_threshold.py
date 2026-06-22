@@ -6,7 +6,6 @@ precedence (server>group>default, single group), tenancy."""
 import uuid
 
 from app.models.alerting import AlertEvent
-from app.models.server import Server, ServerGroup
 from app.models.threshold import RuleCatalog, ThresholdOverride
 from app.services.threshold import (
     ValueCache,
@@ -44,14 +43,22 @@ async def cat(
 
 
 async def ovr(
-    db, name="HostOutOfMemory", tier="server", cmdb="X", group_id=None, value=95.0, tenant_id=None
+    db,
+    name="HostOutOfMemory",
+    tier="server",
+    cmdb="X",
+    label_key=None,
+    label_value=None,
+    value=95.0,
+    tenant_id=None,
 ):
     db.add(
         ThresholdOverride(
             alertname=name,
             tier=tier,
             target_cmdb_ci=(cmdb if tier == "server" else None),
-            target_group_id=group_id,
+            target_label_key=label_key,
+            target_label_value=label_value,
             value=value,
             tenant_id=tenant_id,
         )
@@ -83,36 +90,34 @@ def test_parse_instant_value():
     assert parse_instant_value({"data": {"result": [{"value": [1, "NaNx"]}]}}) is None
 
 
-# ---------- resolve precedence ----------
-async def test_resolve_server_beats_group(db):
-    g = ServerGroup(name="g")
-    db.add(g)
-    await db.flush()
-    db.add(Server(name="X", cmdb_ci="X", server_group_id=g.id))
-    await db.flush()
-    await ovr(db, tier="group", group_id=g.id, value=80)
+# ---------- resolve precedence (label-based: cmdb_ci > label > none) ----------
+LBL = {"cmdb_ci": "X", "cmdb_service_l2_code": "L2"}
+
+
+async def test_resolve_cmdb_beats_label(db):
+    await ovr(db, tier="label", label_key="cmdb_service_l2_code", label_value="L2", value=80)
     await ovr(db, tier="server", cmdb="X", value=70)
-    assert await resolve_threshold(db, None, "X", "HostOutOfMemory") == ("server", 70.0)
+    assert await resolve_threshold(db, None, LBL, "HostOutOfMemory") == ("cmdb_ci", 70.0)
 
 
-async def test_resolve_falls_to_group(db):
-    g = ServerGroup(name="g")
-    db.add(g)
-    await db.flush()
-    db.add(Server(name="X", cmdb_ci="X", server_group_id=g.id))
-    await db.flush()
-    await ovr(db, tier="group", group_id=g.id, value=80)
-    assert await resolve_threshold(db, None, "X", "HostOutOfMemory") == ("group", 80.0)
+async def test_resolve_falls_to_label(db):
+    await ovr(db, tier="label", label_key="cmdb_service_l2_code", label_value="L2", value=80)
+    assert await resolve_threshold(db, None, LBL, "HostOutOfMemory") == ("label", 80.0)
+
+
+async def test_resolve_label_value_must_match(db):
+    await ovr(db, tier="label", label_key="cmdb_service_l2_code", label_value="OTHER", value=80)
+    assert await resolve_threshold(db, None, LBL, "HostOutOfMemory") is None
 
 
 async def test_resolve_default_none(db):
-    assert await resolve_threshold(db, None, "X", "HostOutOfMemory") is None
+    assert await resolve_threshold(db, None, LBL, "HostOutOfMemory") is None
 
 
 async def test_resolve_tenant_isolated(db):
     a, b = uuid.uuid4(), uuid.uuid4()
     await ovr(db, tier="server", cmdb="X", value=70, tenant_id=a)
-    assert await resolve_threshold(db, b, "X", "HostOutOfMemory") is None  # B can't see A's
+    assert await resolve_threshold(db, b, LBL, "HostOutOfMemory") is None  # B can't see A's
 
 
 # ---------- suppress (gt) ----------
