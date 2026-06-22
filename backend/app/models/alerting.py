@@ -18,6 +18,7 @@ from sqlalchemy import (
     Text,
     Uuid,
     false,
+    true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -50,6 +51,17 @@ class AlertEvent(TenantScoped, TimestampedBase):
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     dedup_count: Mapped[int] = mapped_column(Integer, default=1)
+    # Denormalized topology/identity labels (IMP redesign): extracted from
+    # `labels` at ingest so the label-based query model (filter cmdb_zone/
+    # cmdb_hostname, group by client_address/l1_code/l2_code, identity cmdb_ci)
+    # and the l2-visibility choke point get partition-local btree indexes
+    # instead of slow jsonb-expression scans. NULL = label absent on the alert.
+    cmdb_ci: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    cmdb_hostname: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    cmdb_zone: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    client_address: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    cmdb_service_l1_code: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    cmdb_service_l2_code: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     # Value fetched from Mimir by the ingest-time threshold filter (PR #2);
     # recorded for audit (e.g. "suppressed: 92 < 95"). NULL = never evaluated.
     value: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -85,6 +97,17 @@ class Incident(TenantScoped, TimestampedBase):
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     alert_count: Mapped[int] = mapped_column(Integer, default=0)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # IMP redesign: per-incident channel toggles (default from notification_defaults
+    # at creation), denormalized topology (l2_code drives routing + visibility),
+    # provenance, and which grouping rule formed it (NULL for manual).
+    notify_email: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    notify_telegram: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    notify_oncall: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    cmdb_service_l2_code: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    cmdb_service_l1_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cmdb_zone: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    origin: Mapped[str] = mapped_column(String(10), default="auto", server_default="auto")
+    grouping_rule_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
 
     alerts: Mapped[list[AlertEvent]] = relationship(back_populates="incident")
     timeline: Mapped[list["IncidentEvent"]] = relationship(

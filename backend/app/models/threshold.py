@@ -58,4 +58,8 @@ class ThresholdOverride(TenantScoped, TimestampedBase):
     tier: Mapped[str] = mapped_column(String(10), index=True)  # OverrideTier value
     target_cmdb_ci: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     target_group_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
+    # IMP redesign: label-scoped override target (replaces server-group tier in a
+    # later stage). Precedence at resolve time: target_cmdb_ci > (key,value) > none.
+    target_label_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    target_label_value: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     value: Mapped[float] = mapped_column(Float)

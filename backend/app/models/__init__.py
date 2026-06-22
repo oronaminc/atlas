@@ -3,11 +3,13 @@ from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.delivery import (
     Notification,
+    NotificationDefault,
     NotificationMute,
     NotificationRoute,
     NotificationSettings,
 )
-from app.models.group import Group, UserGroup
+from app.models.group import Group, GroupServiceCode, UserGroup
+from app.models.grouping import GroupingRule
 from app.models.llm import IncidentAnalysis, LLMConfig
 from app.models.maintenance import AlertStatsHourly, RetentionConfig
 from app.models.notification import NotificationPolicy, Receiver, Silence
@@ -26,10 +28,13 @@ __all__ = [
     "CorrelationConfig",
     "AlertStatsHourly",
     "Group",
+    "GroupServiceCode",
+    "GroupingRule",
     "Incident",
     "IncidentAnalysis",
     "LLMConfig",
     "Notification",
+    "NotificationDefault",
     "NotificationMute",
     "NotificationRoute",
     "NotificationSettings",
