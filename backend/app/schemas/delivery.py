@@ -12,7 +12,8 @@ class NotificationOut(BaseModel):
     id: uuid.UUID
     incident_id: uuid.UUID
     channel: str
-    recipient_user_id: uuid.UUID
+    # NULL for OnCall team-webhook rows (one row per incident, no user recipient)
+    recipient_user_id: uuid.UUID | None = None
     recipient_address: str
     group_id: uuid.UUID | None
     status: str
