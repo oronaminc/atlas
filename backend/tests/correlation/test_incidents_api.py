@@ -19,6 +19,7 @@ async def incident(db):
         first_seen=NOW,
         last_seen=NOW,
         alert_count=1,
+        cmdb_service_l2_code="L2TEST",  # visible to non-admin editor/viewer (IMP)
     )
     db.add(inc)
     await db.flush()
@@ -34,6 +35,7 @@ async def incident(db):
             starts_at=NOW,
             received_at=NOW,
             incident_id=inc.id,
+            cmdb_service_l2_code="L2TEST",
         )
     )
     db.add(IncidentEvent(incident_id=inc.id, kind="created", payload={}))
@@ -154,6 +156,7 @@ async def test_active_status_filter_excludes_suppressed(client, db, incident, ed
         first_seen=NOW,
         last_seen=NOW,
         alert_count=1,
+        cmdb_service_l2_code="L2TEST",
     )
     db.add(suppressed)
     await db.commit()

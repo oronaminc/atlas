@@ -47,6 +47,7 @@ async def seed_dashboard_data(db):
                 annotations={},
                 starts_at=now - timedelta(hours=hours_ago),
                 received_at=now - timedelta(hours=hours_ago),
+                cmdb_service_l2_code="L2TEST",  # visible to non-admin viewer (IMP)
             )
         )
     await db.commit()

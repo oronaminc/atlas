@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_token
 from app.core.tenancy import resolve_tenant_slug, set_tenant_scope
+from app.core.visibility import allowed_l2_codes, set_l2_scope
 from app.db import get_db
 from app.models import User
 from app.models.group import GroupRole
@@ -42,6 +43,12 @@ async def get_current_user(
     # Tenancy choke point: every authenticated request scopes its DB session
     # here. HQ users (tenant_id NULL) get an unscoped (= all tenants) session.
     set_tenant_scope(db, user.tenant_id)
+    # Visibility choke point (IMP §6): admins see everything (None = bypass);
+    # non-admins see only alerts/incidents whose l2_code their groups map to.
+    if user.role == GlobalRole.admin:
+        set_l2_scope(db, None)
+    else:
+        set_l2_scope(db, await allowed_l2_codes(db, user.id))
     return user
 
 
