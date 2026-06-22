@@ -70,9 +70,11 @@ export interface GroupMember {
 export interface Server {
   id: string;
   name: string;
+  cmdb_ci: string | null;
   labels: Record<string, string>;
   description: string | null;
   owner_group_id: string | null;
+  server_group_id: string | null;
   created_at: string;
   updated_at: string;
 }
