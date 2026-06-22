@@ -1,19 +1,19 @@
-"""Admin notification management: settings (bot token/quotas), per-group
-routes, read-only recipients list, and delivery-status listing."""
+"""Admin notification management: settings (bot token/quotas), read-only
+recipients list, and delivery-status listing. (Per-group routes were removed
+in the IMP redesign — routing is by the incident's l2 -> user-group mapping.)"""
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import client_ip, get_current_user, require_admin
 from app.core.envelope import envelope
 from app.core.security import encrypt_secret
-from app.core.tenancy import resolve_tenant_slug
 from app.db import get_db
-from app.models import Group, User
-from app.models.delivery import Notification, NotificationRoute
+from app.models import User
+from app.models.delivery import Notification
 from app.notifications.settings import get_notification_settings
 from app.schemas.delivery import (
     MASKED,
@@ -21,9 +21,6 @@ from app.schemas.delivery import (
     NotificationSettingsOut,
     NotificationSettingsUpdate,
     RecipientOut,
-    RouteCreate,
-    RouteOut,
-    RouteUpdate,
 )
 from app.services.audit import record_audit
 
@@ -35,23 +32,6 @@ SETTINGS_AUDIT_FIELDS = [
     "quota_global_per_day",
     "pending_softcap",
 ]
-
-
-async def settings_tenant_id(
-    tenant: str | None = None,
-    db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
-) -> uuid.UUID | None:
-    """Which tenant's notification settings row to read/write. Tenant-admins
-    always get their own; HQ picks via ?tenant=<slug> (none = legacy row)."""
-    if admin.tenant_id is not None:
-        return admin.tenant_id
-    if tenant:
-        target = await resolve_tenant_slug(db, tenant)
-        if target is None:
-            raise HTTPException(status_code=404, detail="Unknown tenant")
-        return target.id
-    return None
 
 
 def settings_out(row) -> dict:
@@ -74,9 +54,8 @@ def _settings_snapshot(row) -> dict:
 async def read_settings(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
-    tenant_id: uuid.UUID | None = Depends(settings_tenant_id),
 ):
-    row = await get_notification_settings(db, tenant_id)
+    row = await get_notification_settings(db)
     await db.commit()
     return envelope(settings_out(row))
 
@@ -87,9 +66,8 @@ async def update_settings(
     request: Request,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
-    tenant_id: uuid.UUID | None = Depends(settings_tenant_id),
 ):
-    row = await get_notification_settings(db, tenant_id)
+    row = await get_notification_settings(db)
     before = _settings_snapshot(row)
     data = body.model_dump(exclude_unset=True)
     token = data.pop("telegram_bot_token", MASKED)
@@ -111,101 +89,6 @@ async def update_settings(
     await db.commit()
     await db.refresh(row)
     return envelope(settings_out(row))
-
-
-# --- routes (one per group) ---
-
-
-@router.get("/notification-routes")
-async def list_routes(
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
-):
-    res = await db.execute(select(NotificationRoute).order_by(NotificationRoute.created_at))
-    return envelope([RouteOut.model_validate(r).model_dump(mode="json") for r in res.scalars()])
-
-
-@router.post("/notification-routes", status_code=201)
-async def create_route(
-    body: RouteCreate,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
-):
-    group = await db.get(Group, body.group_id)
-    if group is None:
-        raise HTTPException(status_code=404, detail="Group not found")
-    dup = await db.execute(
-        select(NotificationRoute).where(NotificationRoute.group_id == body.group_id)
-    )
-    if dup.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Route for this group already exists")
-    # route belongs to the target group's tenant (fanout matches on it)
-    route = NotificationRoute(**body.model_dump(), tenant_id=group.tenant_id, created_by=admin.id)
-    db.add(route)
-    await db.flush()
-    await record_audit(
-        db,
-        actor_id=admin.id,
-        action="create",
-        resource_type="notification_route",
-        resource_id=route.id,
-        after={"group_id": str(body.group_id), "channels": body.channels},
-        ip=client_ip(request),
-    )
-    await db.commit()
-    await db.refresh(route)
-    return envelope(RouteOut.model_validate(route).model_dump(mode="json"))
-
-
-@router.patch("/notification-routes/{route_id}")
-async def update_route(
-    route_id: uuid.UUID,
-    body: RouteUpdate,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
-):
-    route = await db.get(NotificationRoute, route_id)
-    if route is None:
-        raise HTTPException(status_code=404, detail="Route not found")
-    for field, value in body.model_dump(exclude_unset=True).items():
-        setattr(route, field, value)
-    route.updated_by = admin.id
-    await record_audit(
-        db,
-        actor_id=admin.id,
-        action="update",
-        resource_type="notification_route",
-        resource_id=route.id,
-        ip=client_ip(request),
-    )
-    await db.commit()
-    await db.refresh(route)
-    return envelope(RouteOut.model_validate(route).model_dump(mode="json"))
-
-
-@router.delete("/notification-routes/{route_id}")
-async def delete_route(
-    route_id: uuid.UUID,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
-):
-    route = await db.get(NotificationRoute, route_id)
-    if route is None:
-        raise HTTPException(status_code=404, detail="Route not found")
-    await db.delete(route)
-    await record_audit(
-        db,
-        actor_id=admin.id,
-        action="delete",
-        resource_type="notification_route",
-        resource_id=route_id,
-        ip=client_ip(request),
-    )
-    await db.commit()
-    return envelope({"ok": True})
 
 
 # --- recipients (admin, view-only) ---

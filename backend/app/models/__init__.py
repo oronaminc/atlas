@@ -1,11 +1,9 @@
-from app.models.alerting import AlertEvent, CorrelationConfig, Incident, IncidentEvent
+from app.models.alerting import AlertEvent, Incident, IncidentEvent
 from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.delivery import (
     Notification,
     NotificationDefault,
-    NotificationMute,
-    NotificationRoute,
     NotificationSettings,
 )
 from app.models.group import Group, GroupServiceCode, UserGroup
@@ -13,19 +11,13 @@ from app.models.grouping import GroupingRule
 from app.models.llm import IncidentAnalysis, LLMConfig
 from app.models.maintenance import AlertStatsHourly, RetentionConfig
 from app.models.notification import NotificationPolicy, Receiver, Silence
-from app.models.rule import AlertRule, RuleGroup, RuleGroupRule
-from app.models.server import Server, ServerGroup
-from app.models.sync import SyncState
-from app.models.tenant import MimirOrgMap, Tenant
-from app.models.threshold import Comparator, OverrideTier, RuleCatalog, ThresholdOverride
+from app.models.threshold import Comparator, RuleCatalog, ThresholdOverride
 from app.models.user import User
 
 __all__ = [
     "AlertEvent",
-    "AlertRule",
     "AuditLog",
     "Base",
-    "CorrelationConfig",
     "AlertStatsHourly",
     "Group",
     "GroupServiceCode",
@@ -35,25 +27,15 @@ __all__ = [
     "LLMConfig",
     "Notification",
     "NotificationDefault",
-    "NotificationMute",
-    "NotificationRoute",
     "NotificationSettings",
     "IncidentEvent",
     "NotificationPolicy",
     "Receiver",
     "RetentionConfig",
-    "RuleGroup",
-    "RuleGroupRule",
     "Comparator",
-    "OverrideTier",
     "RuleCatalog",
-    "Server",
-    "ServerGroup",
     "Silence",
     "ThresholdOverride",
-    "MimirOrgMap",
-    "SyncState",
-    "Tenant",
     "User",
     "UserGroup",
 ]

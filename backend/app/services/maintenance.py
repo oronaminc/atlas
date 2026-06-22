@@ -17,7 +17,6 @@ carry tenant_id so dashboard reads stay choke-point-filtered.
 import gzip
 import logging
 import re
-import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -195,10 +194,7 @@ async def _archive_partition(db: AsyncSession, name: str) -> Path:
     target = archive_dir / f"{name}.csv.gz"
     schema = (await db.execute(text("SELECT current_schema()"))).scalar_one()
     url = db.bind.url
-    dsn = (
-        f"postgresql://{url.username}:{url.password}@{url.host}:{url.port or 5432}"
-        f"/{url.database}"
-    )
+    dsn = f"postgresql://{url.username}:{url.password}@{url.host}:{url.port or 5432}/{url.database}"
     conn = await asyncpg.connect(dsn, timeout=10)
     try:
         with gzip.open(target, "wb") as fh:
@@ -326,23 +322,19 @@ async def rollup_hourly(db: AsyncSession, lookback_hours: int = 26) -> int:
     rows = (
         await db.execute(
             text(
-                f"SELECT tenant_id, {bucket_expr} AS bucket, severity, count(*) AS n "  # noqa: S608
+                f"SELECT {bucket_expr} AS bucket, severity, count(*) AS n "  # noqa: S608
                 "FROM alert_events WHERE received_at >= :since AND received_at < :until "
-                "GROUP BY tenant_id, bucket, severity"
+                "GROUP BY bucket, severity"
             ),
             {"since": since, "until": current_hour},
         )
     ).all()
-    for tenant_id, bucket, severity, n in rows:
-        if isinstance(tenant_id, str):  # SQLite returns raw hex from text() SQL
-            tenant_id = uuid.UUID(tenant_id)
+    for bucket, severity, n in rows:
         if isinstance(bucket, str):
             bucket = datetime.strptime(bucket, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
         elif bucket.tzinfo is None:
             bucket = bucket.replace(tzinfo=UTC)
-        db.add(
-            AlertStatsHourly(tenant_id=tenant_id, bucket_start=bucket, severity=severity, count=n)
-        )
+        db.add(AlertStatsHourly(bucket_start=bucket, severity=severity, count=n))
     await db.flush()
     return len(rows)
 

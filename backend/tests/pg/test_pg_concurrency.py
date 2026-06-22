@@ -83,7 +83,6 @@ async def test_pg_concurrent_workers_send_exactly_once(pg_factory):
 
         db.add(
             NotificationSettings(
-                tenant_id=None,
                 telegram_bot_token=None,
                 telegram_rate_per_second=25,
                 quota_group_per_hour=10_000,
@@ -133,40 +132,42 @@ async def test_pg_concurrent_workers_send_exactly_once(pg_factory):
 
 
 async def test_pg_concurrent_correlation_single_incident(pg_factory):
-    from app.services.correlation.config import get_config
-    from app.services.correlation.dedup import InMemoryDedupStore
-    from app.services.correlation.engine import CorrelationEngine, build_event
-    from app.services.correlation.strategy import AttributeTimeStrategy
-    from app.workers.correlation_worker import claim_events, to_normalized
+    from app.services.correlation.engine import build_event
+    from app.services.grouping_config import get_active_rule
+    from app.services.incident_service import group_alert
+    from app.workers.correlation_worker import claim_events
     from tests.correlation.helpers import alert
 
     n_events = 20
+    l2_labels = {"host": "web-01", "cmdb_service_l2_code": "L2X"}
     async with pg_factory() as db:
         for i in range(n_events):
-            # distinct names (no dedup) sharing host -> one incident expected
-            db.add(build_event(alert(name=f"Alert{i}"), received_at=NOW))
+            # distinct names (no dedup) sharing l2 topology key -> one incident
+            db.add(build_event(alert(name=f"Alert{i}", labels=l2_labels), received_at=NOW))
         await db.commit()
 
     async def worker(worker_id: str):
         async with pg_factory() as db:
-            engine = CorrelationEngine(
-                dedup_store=InMemoryDedupStore(), strategies=[AttributeTimeStrategy()]
-            )
-            config = await get_config(db)
+            rule = await get_active_rule(db)
             processed = 0
             while True:
                 events = await claim_events(db, worker_id=worker_id, now=NOW, limit=3)
                 if not events:
                     break
                 for event in events:
-                    await engine.correlate(db, event, to_normalized(event), config, now=NOW)
+                    await group_alert(db, event, rule, NOW)
+                    event.correlated = True
                     await asyncio.sleep(0)  # interleave mid-batch
                 await db.commit()
                 processed += len(events)
             return processed
 
     totals = await asyncio.gather(*[worker(f"pod-{i}") for i in range(N_WORKERS)])
-    assert sum(totals) == n_events  # every event processed exactly once
+    # IMP: forming the incident retro-attaches all free in-window siblings via a
+    # bulk UPDATE, so most events are absorbed WITHOUT being individually claimed
+    # — explicit claims are a subset of n_events. Correctness is the incident
+    # invariants below (single incident, every event attached exactly once).
+    assert 0 < sum(totals) <= n_events
 
     async with pg_factory() as db:
         n_incidents = (await db.execute(select(func.count()).select_from(Incident))).scalar_one()

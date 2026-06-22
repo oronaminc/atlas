@@ -44,6 +44,15 @@ class MimirRulerClient(BaseIntegrationClient):
         response.raise_for_status()
         return yaml.safe_load(response.text) or {}
 
+    async def get_all_rules(self) -> dict[str, Any]:
+        """GET the ruler root → {namespace: [rule_group, ...]} (YAML).
+        Read-only view of every rule group across namespaces (single org)."""
+        response = await self.request("GET", "")
+        if response.status_code == 404:
+            return {}
+        response.raise_for_status()
+        return yaml.safe_load(response.text) or {}
+
 
 class MimirQueryClient(BaseIntegrationClient):
     """Prometheus-compatible query API (instant queries for rule previews and

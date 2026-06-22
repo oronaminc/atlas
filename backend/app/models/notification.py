@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import JsonType, TenantScoped, TimestampedBase
+from app.models.base import JsonType, TimestampedBase
 
 
 class ReceiverType(enum.StrEnum):
@@ -16,7 +16,7 @@ class ReceiverType(enum.StrEnum):
     pagerduty = "pagerduty"
 
 
-class Receiver(TenantScoped, TimestampedBase):
+class Receiver(TimestampedBase):
     __tablename__ = "receivers"
 
     name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
@@ -25,7 +25,7 @@ class Receiver(TenantScoped, TimestampedBase):
     config: Mapped[dict[str, Any]] = mapped_column(JsonType, default=dict)
 
 
-class NotificationPolicy(TenantScoped, TimestampedBase):
+class NotificationPolicy(TimestampedBase):
     __tablename__ = "notification_policies"
 
     matcher: Mapped[dict[str, Any]] = mapped_column(JsonType, default=dict)
@@ -36,7 +36,7 @@ class NotificationPolicy(TenantScoped, TimestampedBase):
     repeat_interval: Mapped[str] = mapped_column(String(20), default="4h")
 
 
-class Silence(TenantScoped, TimestampedBase):
+class Silence(TimestampedBase):
     __tablename__ = "silences"
 
     matchers: Mapped[dict[str, Any]] = mapped_column(JsonType, default=dict)

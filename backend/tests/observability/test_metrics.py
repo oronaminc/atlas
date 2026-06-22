@@ -64,16 +64,9 @@ async def test_api_metrics_endpoint_exposes_instruments(client):
 
 
 async def test_ingest_increments_counter(client, db):
-    from app.models.tenant import MimirOrgMap, Tenant
-
-    t = Tenant(slug="svc-a", name="svc-a", is_active=True)
-    db.add(t)
-    await db.flush()
-    db.add(MimirOrgMap(mimir_org="org-a", tenant_id=t.id))
-    await db.commit()
     before = _counter_val(m.ingest_events, provider="alertmanager")
     res = await client.post(
-        "/api/v1/ingest/alertmanager/org-a",
+        "/api/v1/ingest/alertmanager",
         json={"alerts": [{"status": "firing", "labels": {"alertname": "X", "host": "h"}}]},
         headers={"X-Atlas-Ingest-Key": "test-ingest-key"},
     )
@@ -130,73 +123,50 @@ async def test_queue_depth_gauge_rises_with_backlog(db):
     assert _gauge_val(m.notifications_oldest_pending_seconds) >= 0
 
 
-async def test_softcap_breach_is_breach_only_and_per_service(db, tenant_a, tenant_b):
-    # service A floods past a low cap; B stays under -> only A gets a series
-    a_settings = NotificationSettings(
-        tenant_id=tenant_a.id,
-        telegram_bot_token=None,
-        telegram_rate_per_second=25,
-        quota_group_per_hour=30,
-        quota_global_per_day=500,
-        pending_softcap=3,
+async def test_softcap_breach_is_breach_only_global(db):
+    # global pending exceeds the single settings cap -> exactly one series,
+    # keyed service="global". No per-service cardinality (multi-tenancy gone).
+    db.add(
+        NotificationSettings(
+            telegram_bot_token=None,
+            telegram_rate_per_second=25,
+            quota_group_per_hour=30,
+            quota_global_per_day=500,
+            pending_softcap=3,
+        )
     )
-    db.add(a_settings)
-    inc_a = Incident(
+    inc = Incident(
         title="a",
         status=IncidentStatus.open,
         severity="critical",
-        tenant_id=tenant_a.id,
         group_key="h",
         first_seen=datetime.now(UTC),
         last_seen=datetime.now(UTC),
         alert_count=1,
     )
-    inc_b = Incident(
-        title="b",
-        status=IncidentStatus.open,
-        severity="critical",
-        tenant_id=tenant_b.id,
-        group_key="h",
-        first_seen=datetime.now(UTC),
-        last_seen=datetime.now(UTC),
-        alert_count=1,
-    )
-    db.add_all([inc_a, inc_b])
+    db.add(inc)
     await db.flush()
-    for i in range(5):  # A: 5 > cap 3
+    for i in range(5):  # 5 > cap 3
         u = await make_user(db, f"sa{i}@x.io", GlobalRole.viewer)
         db.add(
             Notification(
-                incident_id=inc_a.id,
+                incident_id=inc.id,
                 channel="telegram",
                 recipient_user_id=u.id,
                 recipient_address=f"a{i}",
                 status="pending",
-                tenant_id=tenant_a.id,
             )
         )
-    ub = await make_user(db, "sb0@x.io", GlobalRole.viewer)
-    db.add(
-        Notification(
-            incident_id=inc_b.id,
-            channel="telegram",
-            recipient_user_id=ub.id,
-            recipient_address="b0",
-            status="pending",
-            tenant_id=tenant_b.id,
-        )
-    )
     await db.commit()
 
     await collect_db_gauges(db)
     series = dict(_gauge_series(m.tenant_pending_softcap_breached))
-    assert series == {("sub-a",): 1}  # ONLY breaching service; B absent (bound holds)
+    assert series == {("global",): 1}  # single global breach series
 
 
-async def test_softcap_clears_when_resolved(db, tenant_a):
+async def test_softcap_clears_when_resolved(db):
     db.add(
         NotificationSettings(
-            tenant_id=tenant_a.id,
             telegram_bot_token=None,
             telegram_rate_per_second=25,
             quota_group_per_hour=30,
@@ -206,7 +176,7 @@ async def test_softcap_clears_when_resolved(db, tenant_a):
     )
     await db.commit()
     await collect_db_gauges(db)
-    # no breaches -> zero per-service series (cardinality bound in steady state)
+    # no breach -> zero series (cardinality bound in steady state)
     assert list(_gauge_series(m.tenant_pending_softcap_breached)) == []
 
 

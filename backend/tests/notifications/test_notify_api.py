@@ -111,57 +111,6 @@ async def test_settings_forbidden_for_non_admin(client, editor_headers):
     ).status_code == 403
 
 
-# --- routes (admin) ---
-
-
-async def test_route_crud_admin_only(client, db, admin_headers, editor_headers):
-    group, _ = await seed_basic(db)
-
-    created = await client.post(
-        "/api/v1/notification-routes",
-        json={
-            "group_id": str(group.id),
-            "min_severity": "warning",
-            "channels": ["telegram"],
-        },
-        headers=admin_headers,
-    )
-    assert created.status_code == 201
-    route_id = created.json()["data"]["id"]
-
-    dup = await client.post(
-        "/api/v1/notification-routes",
-        json={"group_id": str(group.id), "min_severity": "info", "channels": ["email"]},
-        headers=admin_headers,
-    )
-    assert dup.status_code == 409  # one route per group
-
-    listed = await client.get("/api/v1/notification-routes", headers=admin_headers)
-    assert len(listed.json()["data"]) == 1
-
-    patched = await client.patch(
-        f"/api/v1/notification-routes/{route_id}",
-        json={"enabled": False},
-        headers=admin_headers,
-    )
-    assert patched.json()["data"]["enabled"] is False
-
-    assert (
-        await client.post(
-            "/api/v1/notification-routes",
-            json={
-                "group_id": str(group.id),
-                "min_severity": "info",
-                "channels": ["email"],
-            },
-            headers=editor_headers,
-        )
-    ).status_code == 403
-
-    deleted = await client.delete(f"/api/v1/notification-routes/{route_id}", headers=admin_headers)
-    assert deleted.status_code == 200
-
-
 # --- recipients (admin, view-only) ---
 
 

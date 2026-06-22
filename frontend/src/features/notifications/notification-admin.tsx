@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
 import {
   useApiMutation,
-  useGroups,
-  useNotificationRoutes,
   useNotificationSettings,
   useRecipients,
 } from "@/api/queries";
@@ -22,14 +19,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import {
   Table,
   TableBody,
   TableCell,
@@ -38,7 +27,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import type { NotificationRoute } from "@/types";
 
 export function NotificationSettingsCard() {
   const { t } = useTranslation();
@@ -150,136 +138,6 @@ export function NotificationSettingsCard() {
         {save.isError && (
           <p className="text-sm text-destructive">
             {save.error instanceof Error ? save.error.message : t("common.error")}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-export function NotificationRoutesCard() {
-  const { t } = useTranslation();
-  const routes = useNotificationRoutes();
-  const groups = useGroups({ limit: "100" });
-
-  const [groupId, setGroupId] = useState("");
-  const [minSeverity, setMinSeverity] = useState("warning");
-  const [telegram, setTelegram] = useState(true);
-  const [email, setEmail] = useState(false);
-
-  const groupName = (id: string) =>
-    groups.data?.data.find((g) => g.id === id)?.name ?? id.slice(0, 8);
-
-  const create = useApiMutation(
-    () =>
-      api.post("/notification-routes", {
-        group_id: groupId,
-        min_severity: minSeverity,
-        channels: [...(telegram ? ["telegram"] : []), ...(email ? ["email"] : [])],
-      }),
-    ["notification-routes"],
-    () => setGroupId(""),
-  );
-
-  const toggle = useApiMutation(
-    (route: NotificationRoute) =>
-      api.patch(`/notification-routes/${route.id}`, { enabled: !route.enabled }),
-    ["notification-routes"],
-  );
-
-  const remove = useApiMutation(
-    (route: NotificationRoute) => api.delete(`/notification-routes/${route.id}`),
-    ["notification-routes"],
-  );
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{t("notify.routes")}</CardTitle>
-        <CardDescription>{t("notify.routesHelp")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t("nav.groups")}</TableHead>
-              <TableHead>{t("notify.minSeverity")}</TableHead>
-              <TableHead>{t("notify.channels")}</TableHead>
-              <TableHead>{t("common.enabled")}</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(routes.data?.data ?? []).map((route) => (
-              <TableRow key={route.id}>
-                <TableCell className="font-medium">{groupName(route.group_id)}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">{route.min_severity}</Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    {route.channels.map((c) => (
-                      <Badge key={c} variant="secondary">
-                        {c}
-                      </Badge>
-                    ))}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Switch
-                    checked={route.enabled}
-                    onCheckedChange={() => toggle.mutate(route)}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" onClick={() => remove.mutate(route)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-
-        <div className="flex flex-wrap items-end gap-2">
-          <Select value={groupId} onValueChange={setGroupId}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder={t("notify.selectGroup")} />
-            </SelectTrigger>
-            <SelectContent>
-              {(groups.data?.data ?? []).map((g) => (
-                <SelectItem key={g.id} value={g.id}>
-                  {g.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={minSeverity} onValueChange={setMinSeverity}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="critical">critical</SelectItem>
-              <SelectItem value="warning">warning</SelectItem>
-              <SelectItem value="info">info</SelectItem>
-            </SelectContent>
-          </Select>
-          <label className="flex items-center gap-1 text-sm">
-            <Switch checked={telegram} onCheckedChange={setTelegram} /> Telegram
-          </label>
-          <label className="flex items-center gap-1 text-sm">
-            <Switch checked={email} onCheckedChange={setEmail} /> Email
-          </label>
-          <Button
-            onClick={() => create.mutate(undefined)}
-            disabled={!groupId || (!telegram && !email) || create.isPending}
-          >
-            {t("common.create")}
-          </Button>
-        </div>
-        {create.isError && (
-          <p className="text-sm text-destructive">
-            {create.error instanceof Error ? create.error.message : t("common.error")}
           </p>
         )}
       </CardContent>

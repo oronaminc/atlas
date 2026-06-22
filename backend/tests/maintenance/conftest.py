@@ -1,6 +1,6 @@
-"""Reuse the two-tenant world fixtures from the tenancy suite."""
+"""Reuse the two-world l2 fixtures."""
 
-from tests.tenancy.conftest import (  # noqa: F401
+from tests.world_fixtures import (  # noqa: F401
     a_admin,
     a_editor,
     a_viewer,

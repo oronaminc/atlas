@@ -98,23 +98,19 @@ async def test_crash_mid_delivery_is_resumed_by_other_worker(file_db):
 
 
 async def test_two_correlation_workers_claim_exclusively_no_duplicate_incident(file_db):
-    from app.services.correlation.config import get_config
-    from app.services.correlation.dedup import InMemoryDedupStore
-    from app.services.correlation.engine import CorrelationEngine, build_event
-    from app.services.correlation.strategy import AttributeTimeStrategy
-    from app.workers.correlation_worker import claim_events, to_normalized
+    from app.services.correlation.engine import build_event
+    from app.services.grouping_config import get_active_rule
+    from app.services.incident_service import group_alert
+    from app.workers.correlation_worker import claim_events
     from tests.correlation.helpers import alert
 
-    # two uncorrelated events sharing host -> must end in ONE incident
+    # two criticals on the SAME l2 (topology key) -> must end in ONE incident
+    # (first forms immediately, second attaches to the open incident).
+    l2_labels = {"host": "web-01", "cmdb_service_l2_code": "L2X"}
     async with file_db() as db:
-        db.add(build_event(alert(name="HighCPU"), received_at=NOW))
-        db.add(build_event(alert(name="DiskFull"), received_at=NOW))
+        db.add(build_event(alert(name="HighCPU", labels=l2_labels), received_at=NOW))
+        db.add(build_event(alert(name="DiskFull", labels=l2_labels), received_at=NOW))
         await db.commit()
-
-    def make_engine():
-        return CorrelationEngine(
-            dedup_store=InMemoryDedupStore(), strategies=[AttributeTimeStrategy()]
-        )
 
     async with file_db() as db_a, file_db() as db_b:
         claimed_a = await claim_events(db_a, worker_id="pod-a", now=NOW, limit=1)
@@ -126,16 +122,14 @@ async def test_two_correlation_workers_claim_exclusively_no_duplicate_incident(f
         assert len(claimed_a) == 1 and len(claimed_b) == 1
         assert claimed_a[0].id != claimed_b[0].id
 
-        config_a = await get_config(db_a)
-        await make_engine().correlate(
-            db_a, claimed_a[0], to_normalized(claimed_a[0]), config_a, now=NOW
-        )
+        rule_a = await get_active_rule(db_a)
+        await group_alert(db_a, claimed_a[0], rule_a, NOW)
+        claimed_a[0].correlated = True
         await db_a.commit()
 
-        config_b = await get_config(db_b)
-        await make_engine().correlate(
-            db_b, claimed_b[0], to_normalized(claimed_b[0]), config_b, now=NOW
-        )
+        rule_b = await get_active_rule(db_b)
+        await group_alert(db_b, claimed_b[0], rule_b, NOW)
+        claimed_b[0].correlated = True
         await db_b.commit()
 
     async with file_db() as db:

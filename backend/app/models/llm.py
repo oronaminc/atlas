@@ -14,10 +14,10 @@ from datetime import datetime
 from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import AwareDateTime, TenantScoped, TimestampedBase
+from app.models.base import AwareDateTime, TimestampedBase
 
 
-class LLMConfig(TenantScoped, TimestampedBase):
+class LLMConfig(TimestampedBase):
     """OpenAI-compatible endpoint config; one row per service (+ NULL default)."""
 
     __tablename__ = "llm_config"
@@ -36,7 +36,7 @@ class LLMConfig(TenantScoped, TimestampedBase):
     redact_external_strict: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
-class IncidentAnalysis(TenantScoped, TimestampedBase):
+class IncidentAnalysis(TimestampedBase):
     """Job-as-row: pending -> (claim) -> running -> done|failed. One current
     analysis per incident; re-analyze upserts (new prompt_hash on change)."""
 

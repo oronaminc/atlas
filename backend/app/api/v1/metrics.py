@@ -23,7 +23,6 @@ from app.db import async_session_factory
 from app.models.alerting import AlertEvent
 from app.models.base import utcnow
 from app.models.delivery import Notification, NotificationSettings
-from app.models.tenant import Tenant
 from app.services.maintenance import default_partition_count
 
 router = APIRouter(tags=["metrics"])
@@ -41,7 +40,6 @@ async def collect_db_gauges(db) -> None:
     """Recompute the DB-derived gauges on the given (unscoped) session."""
     now = utcnow()
     if True:
-
         # correlation backlog (uncorrelated within claim lookback)
         backlog = (
             await db.execute(
@@ -89,35 +87,24 @@ async def collect_db_gauges(db) -> None:
         # default-partition rows (PG only; should be 0)
         m.default_partition_rows.set(await default_partition_count(db))
 
-        # per-service soft-cap breaches — BREACH-ONLY series (cardinality bound)
+        # pending soft-cap breach — BREACH-ONLY series (cardinality bound)
         await _refresh_softcap(db)
 
 
 async def _refresh_softcap(db) -> None:
-    # per-service pending counts joined to slug + that service's cap
-    rows = (
+    pending = (
         await db.execute(
-            select(Tenant.slug, Notification.tenant_id, func.count())
+            select(func.count())
             .select_from(Notification)
-            .join(Tenant, Tenant.id == Notification.tenant_id, isouter=True)
             .where(Notification.status.in_(("pending", "failed")))
-            .group_by(Tenant.slug, Notification.tenant_id)
         )
-    ).all()
-    caps = {
-        tid: cap
-        for tid, cap in (
-            await db.execute(
-                select(NotificationSettings.tenant_id, NotificationSettings.pending_softcap)
-            )
-        ).all()
-    }
-    default_cap = settings.NOTIFY_PENDING_SOFTCAP
-    m.tenant_pending_softcap_breached.clear()  # only re-emit current breaches
-    for slug, tenant_id, count in rows:
-        cap = caps.get(tenant_id, default_cap) or default_cap
-        if count > cap:
-            m.tenant_pending_softcap_breached.set(1, service=slug or "(none)")
+    ).scalar_one()
+    cap = (
+        await db.execute(select(NotificationSettings.pending_softcap).limit(1))
+    ).scalar_one_or_none() or settings.NOTIFY_PENDING_SOFTCAP
+    m.tenant_pending_softcap_breached.clear()  # only re-emit current breach
+    if pending > cap:
+        m.tenant_pending_softcap_breached.set(1, service="global")
 
 
 def _age(now, ts) -> float:

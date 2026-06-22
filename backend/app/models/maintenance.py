@@ -11,7 +11,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import TenantScoped, TimestampedBase
+from app.models.base import TimestampedBase
 
 
 class RetentionConfig(TimestampedBase):
@@ -26,15 +26,11 @@ class RetentionConfig(TimestampedBase):
     archive_enabled: Mapped[bool] = mapped_column(default=False)
 
 
-class AlertStatsHourly(TenantScoped, TimestampedBase):
-    """Closed-hour alert counts: (tenant, bucket_start, severity) -> count.
-    TenantScoped so the choke point auto-filters dashboard reads."""
+class AlertStatsHourly(TimestampedBase):
+    """Closed-hour alert counts: (bucket_start, severity) -> count."""
 
     __tablename__ = "alert_stats_hourly"
-    __table_args__ = (
-        Index("ix_alert_stats_hourly_bucket", "bucket_start"),
-        Index("ix_alert_stats_hourly_tenant_bucket", "tenant_id", "bucket_start"),
-    )
+    __table_args__ = (Index("ix_alert_stats_hourly_bucket", "bucket_start"),)
 
     bucket_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     severity: Mapped[str] = mapped_column(String(20))

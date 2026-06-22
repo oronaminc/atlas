@@ -1,5 +1,5 @@
-"""Phase 4 notification scale: per-incident dedup, priority ordering,
-cross-tenant fairness, pipelined sends, quota-defer visibility."""
+"""Phase 4 notification scale: per-incident dedup, priority ordering, single
+global claim queue, pipelined sends, quota-defer visibility."""
 
 from datetime import timedelta
 
@@ -93,7 +93,7 @@ async def test_priority_set_from_severity_at_fanout(db):
 
 
 async def test_claim_orders_critical_before_info(db):
-    """Within a tenant, the claim drains higher priority (critical) first."""
+    """The global claim queue drains higher priority (critical) first."""
     users = [await seed_user(db, f"u{i}@x.io", chat_id=f"c{i}") for i in range(6)]
     await seed_group(db, "g", users)
     # 3 info incidents (older) + 3 critical (newer): priority must win over age
@@ -137,71 +137,13 @@ async def test_claim_orders_critical_before_info(db):
     assert all(n.priority == 0 for n in batch)
 
 
-# --- cross-tenant fairness ---
+# --- single global claim queue (multi-tenancy removed) ---
 
 
-async def _tenant(db, slug):
-    from app.models.tenant import Tenant
-
-    t = Tenant(slug=slug, name=slug, is_active=True)
-    db.add(t)
-    await db.flush()
-    return t
-
-
-async def test_round_robin_claim_no_tenant_starves(db):
-    """Tenant A storm (100 pending) must not starve tenant B (3 pending):
-    a single claim batch includes B's rows."""
-    a = await _tenant(db, "ta")
-    b = await _tenant(db, "tb")
-    inc_a = await seed_incident(db, title="a")
-    inc_a.tenant_id = a.id
-    inc_b = await seed_incident(db, title="b")
-    inc_b.tenant_id = b.id
-    inc_b.group_key = "host=b"
-    await db.flush()
-    # distinct users per row (UNIQUE(incident, channel, user))
-    for i in range(100):
-        u = await seed_user(db, f"a{i}@x.io", chat_id=f"ca{i}")
-        db.add(
-            Notification(
-                incident_id=inc_a.id,
-                channel="telegram",
-                recipient_user_id=u.id,
-                recipient_address=f"ca{i}",
-                status="pending",
-                priority=1,
-                tenant_id=a.id,
-                created_at=NOW - timedelta(hours=1),  # older -> would win FIFO
-            )
-        )
-    for i in range(3):
-        u = await seed_user(db, f"b{i}@x.io", chat_id=f"cb{i}")
-        db.add(
-            Notification(
-                incident_id=inc_b.id,
-                channel="telegram",
-                recipient_user_id=u.id,
-                recipient_address=f"cb{i}",
-                status="pending",
-                priority=1,
-                tenant_id=b.id,
-                created_at=NOW,
-            )
-        )
-    await db.commit()
-
-    batch = await claim_batch(db, worker_id="w", now=NOW, limit=10)
-    tenants = {n.tenant_id for n in batch}
-    assert a.id in tenants and b.id in tenants  # B not starved
-    # B's 3 all make it (fair share = 10//2 = 5 >= 3)
-    assert sum(1 for n in batch if n.tenant_id == b.id) == 3
-
-
-async def test_one_tenant_fills_batch_when_alone(db):
-    a = await _tenant(db, "ta")
+async def test_claim_fills_batch_up_to_limit(db):
+    """The claim is a single global queue: a backlog larger than the limit
+    yields exactly `limit` rows, ordered by (priority, created_at)."""
     inc = await seed_incident(db, title="a")
-    inc.tenant_id = a.id
     await db.flush()
     for i in range(80):
         u = await seed_user(db, f"a{i}@x.io", chat_id=f"ca{i}")
@@ -213,13 +155,24 @@ async def test_one_tenant_fills_batch_when_alone(db):
                 recipient_address=f"ca{i}",
                 status="pending",
                 priority=1,
-                tenant_id=a.id,
                 created_at=NOW,
             )
         )
     await db.commit()
     batch = await claim_batch(db, worker_id="w", now=NOW, limit=50)
-    assert len(batch) == 50  # pass-2 refill gives the lone tenant the whole batch
+    assert len(batch) == 50  # claim caps at the limit; rest stay pending
+    remaining = (
+        (
+            await db.execute(
+                select(Notification).where(
+                    Notification.status == "pending", Notification.claimed_at.is_(None)
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(remaining) == 30
 
 
 # --- quota defer visibility + pipelined send ---
@@ -232,7 +185,6 @@ async def test_quota_defer_sets_reason_and_stays_pending(db):
     await seed_incident(db, severity="critical")
     db.add(
         NotificationSettings(
-            tenant_id=None,
             telegram_bot_token=None,
             telegram_rate_per_second=100,
             quota_group_per_hour=2,  # only 2 of 5 may send

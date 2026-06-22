@@ -1,9 +1,7 @@
 """Threshold resolve + ingest-time filter. FAIL-OPEN is exhaustively covered:
 missing cmdb_ci / no override / no catalog / no value_query / empty / query
 error -> PASS (never suppress). Plus boundary, comparator direction, cache,
-precedence (server>group>default, single group), tenancy."""
-
-import uuid
+precedence (cmdb_ci > label > default)."""
 
 from app.models.alerting import AlertEvent
 from app.models.threshold import RuleCatalog, ThresholdOverride
@@ -16,7 +14,7 @@ from app.services.threshold import (
 from tests.notifications.helpers import NOW
 
 
-def ev(name="HostOutOfMemory", cmdb="X", tenant_id=None):
+def ev(name="HostOutOfMemory", cmdb="X"):
     return AlertEvent(
         fingerprint="fp",
         source="am",
@@ -27,47 +25,36 @@ def ev(name="HostOutOfMemory", cmdb="X", tenant_id=None):
         annotations={},
         starts_at=NOW,
         received_at=NOW,
-        tenant_id=tenant_id,
     )
 
 
-async def cat(
-    db, name="HostOutOfMemory", comparator=">", vq='m{cmdb_ci="{{cmdb_ci}}"}', tenant_id=None
-):
-    db.add(
-        RuleCatalog(
-            alertname=name, comparator=comparator, unit="%", value_query=vq, tenant_id=tenant_id
-        )
-    )
+async def cat(db, name="HostOutOfMemory", comparator=">", vq='m{cmdb_ci="{{cmdb_ci}}"}'):
+    db.add(RuleCatalog(alertname=name, comparator=comparator, unit="%", value_query=vq))
     await db.flush()
 
 
 async def ovr(
     db,
     name="HostOutOfMemory",
-    tier="server",
     cmdb="X",
     label_key=None,
     label_value=None,
     value=95.0,
-    tenant_id=None,
 ):
     db.add(
         ThresholdOverride(
             alertname=name,
-            tier=tier,
-            target_cmdb_ci=(cmdb if tier == "server" else None),
+            target_cmdb_ci=(cmdb if label_key is None else None),
             target_label_key=label_key,
             target_label_value=label_value,
             value=value,
-            tenant_id=tenant_id,
         )
     )
     await db.flush()
 
 
 def const_fetch(value, counter=None):
-    async def f(_tid, _q):
+    async def f(_q):
         if counter is not None:
             counter.append(1)
         return value
@@ -76,7 +63,7 @@ def const_fetch(value, counter=None):
 
 
 def raising_fetch():
-    async def f(_tid, _q):
+    async def f(_q):
         raise RuntimeError("mimir down")
 
     return f
@@ -95,29 +82,23 @@ LBL = {"cmdb_ci": "X", "cmdb_service_l2_code": "L2"}
 
 
 async def test_resolve_cmdb_beats_label(db):
-    await ovr(db, tier="label", label_key="cmdb_service_l2_code", label_value="L2", value=80)
-    await ovr(db, tier="server", cmdb="X", value=70)
-    assert await resolve_threshold(db, None, LBL, "HostOutOfMemory") == ("cmdb_ci", 70.0)
+    await ovr(db, label_key="cmdb_service_l2_code", label_value="L2", value=80)
+    await ovr(db, cmdb="X", value=70)
+    assert await resolve_threshold(db, LBL, "HostOutOfMemory") == ("cmdb_ci", 70.0)
 
 
 async def test_resolve_falls_to_label(db):
-    await ovr(db, tier="label", label_key="cmdb_service_l2_code", label_value="L2", value=80)
-    assert await resolve_threshold(db, None, LBL, "HostOutOfMemory") == ("label", 80.0)
+    await ovr(db, label_key="cmdb_service_l2_code", label_value="L2", value=80)
+    assert await resolve_threshold(db, LBL, "HostOutOfMemory") == ("label", 80.0)
 
 
 async def test_resolve_label_value_must_match(db):
-    await ovr(db, tier="label", label_key="cmdb_service_l2_code", label_value="OTHER", value=80)
-    assert await resolve_threshold(db, None, LBL, "HostOutOfMemory") is None
+    await ovr(db, label_key="cmdb_service_l2_code", label_value="OTHER", value=80)
+    assert await resolve_threshold(db, LBL, "HostOutOfMemory") is None
 
 
 async def test_resolve_default_none(db):
-    assert await resolve_threshold(db, None, LBL, "HostOutOfMemory") is None
-
-
-async def test_resolve_tenant_isolated(db):
-    a, b = uuid.uuid4(), uuid.uuid4()
-    await ovr(db, tier="server", cmdb="X", value=70, tenant_id=a)
-    assert await resolve_threshold(db, b, LBL, "HostOutOfMemory") is None  # B can't see A's
+    assert await resolve_threshold(db, LBL, "HostOutOfMemory") is None
 
 
 # ---------- suppress (gt) ----------

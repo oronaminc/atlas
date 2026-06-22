@@ -74,7 +74,7 @@ async def _worker(factory):
                 if ev.incident_id is not None:
                     ev.correlated = True
                     continue
-                key = f"{ev.tenant_id}:{ev.fingerprint}"
+                key = ev.fingerprint
                 if await dedup.seen_within(key, rule.dedup_window_seconds):
                     pass  # distinct fingerprints here; dedup not exercised
                 await group_alert(db, ev, rule, NOW)

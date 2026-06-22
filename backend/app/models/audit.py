@@ -4,10 +4,10 @@ from typing import Any
 from sqlalchemy import Boolean, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import JsonType, TenantScoped, TimestampedBase
+from app.models.base import JsonType, TimestampedBase
 
 
-class AuditLog(TenantScoped, TimestampedBase):
+class AuditLog(TimestampedBase):
     __tablename__ = "audit_logs"
 
     actor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)

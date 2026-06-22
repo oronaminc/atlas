@@ -8,7 +8,6 @@ import hashlib
 import ipaddress
 import logging
 import re
-import uuid
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 
@@ -44,16 +43,9 @@ _EXTERNAL_LABEL_ALLOWLIST = {
 }
 
 
-async def get_llm_config(db: AsyncSession, tenant_id: uuid.UUID | None) -> LLMConfig | None:
-    """The service's own row, else the platform-default (NULL) row. Returns
-    None if neither exists or the resolved row is disabled."""
-    row = (
-        await db.execute(select(LLMConfig).where(LLMConfig.tenant_id == tenant_id).limit(1))
-    ).scalar_one_or_none()
-    if row is None and tenant_id is not None:
-        row = (
-            await db.execute(select(LLMConfig).where(LLMConfig.tenant_id.is_(None)).limit(1))
-        ).scalar_one_or_none()
+async def get_llm_config(db: AsyncSession) -> LLMConfig | None:
+    """The single global config row. Returns None if absent or disabled."""
+    row = (await db.execute(select(LLMConfig).limit(1))).scalar_one_or_none()
     if row is None or not row.enabled or not row.base_url or not row.model:
         return None
     return row
@@ -141,14 +133,13 @@ def parse_completion(text: str) -> tuple[str, str]:
     return root, summary
 
 
-async def _quota_used_today(db: AsyncSession, tenant_id: uuid.UUID | None) -> int:
+async def _quota_used_today(db: AsyncSession) -> int:
     since = datetime.now(UTC) - timedelta(days=1)
     return (
         await db.execute(
             select(func.count())
             .select_from(IncidentAnalysis)
             .where(
-                IncidentAnalysis.tenant_id == tenant_id,
                 IncidentAnalysis.status == "done",
                 IncidentAnalysis.completed_at > since,
             )
@@ -169,15 +160,15 @@ async def run_analysis(
         await db.flush()
         return
 
-    cfg = await get_llm_config(db, analysis.tenant_id)
+    cfg = await get_llm_config(db)
     if cfg is None:
         analysis.status = "failed"
-        analysis.error = "LLM not configured for this service"
+        analysis.error = "LLM not configured"
         await db.flush()
         return
 
     # quota
-    if cfg.daily_quota > 0 and await _quota_used_today(db, analysis.tenant_id) >= cfg.daily_quota:
+    if cfg.daily_quota > 0 and await _quota_used_today(db) >= cfg.daily_quota:
         analysis.status = "failed"
         analysis.error = f"daily LLM quota {cfg.daily_quota} reached"
         await db.flush()
@@ -287,44 +278,34 @@ async def enqueue_auto_analyses(db: AsyncSession, *, now: datetime, lookback_hou
     """For services with auto_analyze enabled, create a pending analysis for
     recent incidents that have none yet. Bounded (recent window, opt-in only)
     so it never touches the correlation hot path. Returns rows created."""
-    cfgs = list(
+    cfg = (
+        await db.execute(
+            select(LLMConfig)
+            .where(LLMConfig.auto_analyze.is_(True), LLMConfig.enabled.is_(True))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if cfg is None:
+        return 0
+    since = now - timedelta(hours=lookback_hours)
+    created = 0
+    incident_ids = list(
+        (await db.execute(select(Incident.id).where(Incident.created_at >= since))).scalars()
+    )
+    if not incident_ids:
+        return 0
+    have = set(
         (
             await db.execute(
-                select(LLMConfig).where(
-                    LLMConfig.auto_analyze.is_(True), LLMConfig.enabled.is_(True)
+                select(IncidentAnalysis.incident_id).where(
+                    IncidentAnalysis.incident_id.in_(incident_ids)
                 )
             )
         ).scalars()
     )
-    if not cfgs:
-        return 0
-    since = now - timedelta(hours=lookback_hours)
-    created = 0
-    for cfg in cfgs:
-        incident_ids = list(
-            (
-                await db.execute(
-                    select(Incident.id).where(
-                        Incident.tenant_id == cfg.tenant_id,
-                        Incident.created_at >= since,
-                    )
-                )
-            ).scalars()
-        )
-        if not incident_ids:
-            continue
-        have = set(
-            (
-                await db.execute(
-                    select(IncidentAnalysis.incident_id).where(
-                        IncidentAnalysis.incident_id.in_(incident_ids)
-                    )
-                )
-            ).scalars()
-        )
-        for iid in incident_ids:
-            if iid not in have:
-                db.add(IncidentAnalysis(incident_id=iid, tenant_id=cfg.tenant_id, status="pending"))
-                created += 1
+    for iid in incident_ids:
+        if iid not in have:
+            db.add(IncidentAnalysis(incident_id=iid, status="pending"))
+            created += 1
     await db.flush()
     return created

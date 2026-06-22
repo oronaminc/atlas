@@ -4,7 +4,6 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - backend.yaml
-  - sync-worker.yaml
   - correlation-worker.yaml
   - notification-worker.yaml
   - maintenance-worker.yaml
@@ -29,9 +28,8 @@ configMapGenerator:
       # host differs). Ingress strips it before the backend; ROOT_PATH only
       # drives docs/openapi + auth-cookie URL generation.
       - ROOT_PATH=/alert-hub
-      # Multi-tenancy default X-Scope-OrgID.
+      # The single Mimir org (X-Scope-OrgID) on observability-stack clients.
       - MIMIR_TENANT_ID=system
-      - SYNC_INTERVAL_SECONDS=30
 # prometheus-rules.yaml is a PrometheusRule CRD (needs the Prometheus Operator);
 # kept OUT of this kustomization so kubeconform -strict stays green. Apply with
 # `kubectl apply -f deploy/k8s/base/prometheus-rules.yaml` or load its `groups:`

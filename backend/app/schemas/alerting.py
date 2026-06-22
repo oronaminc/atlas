@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.models.alerting import IncidentStatus
 
@@ -66,7 +66,6 @@ class IncidentOut(BaseModel):
     title: str
     status: IncidentStatus
     severity: str
-    tenant_id: uuid.UUID | None = None
     group_key: str | None
     first_seen: datetime
     last_seen: datetime
@@ -86,17 +85,3 @@ class IncidentOut(BaseModel):
 class IncidentDetailOut(IncidentOut):
     alerts: list[AlertEventOut] = []
     timeline: list[IncidentEventOut] = []
-
-
-class CorrelationConfigOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    dedup_window_seconds: int
-    correlation_window_seconds: int
-    group_attrs: list[str]
-
-
-class CorrelationConfigUpdate(BaseModel):
-    dedup_window_seconds: int | None = Field(default=None, ge=1)
-    correlation_window_seconds: int | None = Field(default=None, ge=1)
-    group_attrs: list[str] | None = Field(default=None, min_length=1)

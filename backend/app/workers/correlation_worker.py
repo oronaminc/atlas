@@ -32,7 +32,6 @@ from app.services.correlation.dedup import InMemoryDedupStore, RedisDedupStore
 from app.services.correlation.engine import latest_other_event
 from app.services.grouping_config import get_active_rule
 from app.services.incident_service import group_alert
-from app.services.rule_sync import org_for_tenant
 from app.services.threshold import ValueCache, parse_instant_value, should_suppress
 from app.workers.metrics_server import heartbeat, start_metrics_server
 
@@ -111,13 +110,12 @@ async def claim_events(
 
 
 def _make_fetch_value(db: AsyncSession):
-    """Per-tenant Mimir value fetch for the threshold filter. Resolves the
-    tenant's Mimir org (X-Scope-OrgID) and runs an instant query; the caller
-    (should_suppress) treats exceptions/None as fail-open."""
+    """Mimir value fetch for the threshold filter (single default org). Runs an
+    instant query; the caller (should_suppress) treats exceptions/None as
+    fail-open."""
 
-    async def fetch_value(tenant_id, promql: str) -> float | None:
-        org = await org_for_tenant(db, tenant_id)
-        client = MimirQueryClient(org=org)
+    async def fetch_value(promql: str) -> float | None:
+        client = MimirQueryClient()
         resp = await client.instant_query(promql)
         return parse_instant_value(resp)
 
@@ -142,7 +140,7 @@ async def correlate_pending(dedup_store, cache: ValueCache) -> int:
                 processed += 1
                 continue
             # 1. dedup: collapse into a prior identical alert within the window
-            dedup_key = f"{event.tenant_id}:{event.fingerprint}"
+            dedup_key = event.fingerprint
             if await dedup_store.seen_within(dedup_key, rule.dedup_window_seconds):
                 prior = await latest_other_event(
                     db, event, window_seconds=rule.dedup_window_seconds, now=now
