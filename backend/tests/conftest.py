@@ -79,6 +79,24 @@ async def make_user(db, email: str, role: GlobalRole, password: str = "password1
     return user
 
 
+# IMP visibility: non-admins see only alerts/incidents whose cmdb_service_l2_code
+# their groups map to. Shared seed helpers stamp this l2 and the editor/viewer
+# fixtures map to it, so non-admin reads work; the scoping itself is covered by
+# tests/imp/test_visibility.py.
+VIS_L2 = "L2TEST"
+
+
+async def _grant_l2(db, user: User, l2: str = VIS_L2) -> None:
+    from app.models.group import Group, GroupServiceCode, UserGroup
+
+    group = Group(name=f"vis-{user.username}")
+    db.add(group)
+    await db.flush()
+    db.add(UserGroup(user_id=user.id, group_id=group.id))
+    db.add(GroupServiceCode(group_id=group.id, cmdb_service_l2_code=l2))
+    await db.commit()
+
+
 @pytest_asyncio.fixture
 async def admin(db):
     return await make_user(db, "admin@example.com", GlobalRole.admin)
@@ -86,12 +104,16 @@ async def admin(db):
 
 @pytest_asyncio.fixture
 async def editor(db):
-    return await make_user(db, "editor@example.com", GlobalRole.editor)
+    user = await make_user(db, "editor@example.com", GlobalRole.editor)
+    await _grant_l2(db, user)
+    return user
 
 
 @pytest_asyncio.fixture
 async def viewer(db):
-    return await make_user(db, "viewer@example.com", GlobalRole.viewer)
+    user = await make_user(db, "viewer@example.com", GlobalRole.viewer)
+    await _grant_l2(db, user)
+    return user
 
 
 def auth_headers(user: User) -> dict[str, str]:

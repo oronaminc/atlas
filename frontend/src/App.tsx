@@ -11,14 +11,15 @@ import { lazyPage } from "@/lib/lazy-page";
 const DashboardPage = lazyPage(() => import("@/pages/dashboard"), "DashboardPage");
 const OpsPage = lazyPage(() => import("@/pages/ops"), "OpsPage");
 const GraphPage = lazyPage(() => import("@/pages/graph")); // default export
-const ServersPage = lazyPage(() => import("@/pages/servers"), "ServersPage");
-const ServerDetailPage = lazyPage(() => import("@/pages/server-detail"), "ServerDetailPage");
-const RulesPage = lazyPage(() => import("@/pages/rules"), "RulesPage");
-const RuleGroupsPage = lazyPage(() => import("@/pages/rule-groups"), "RuleGroupsPage");
 const AlertsPage = lazyPage(() => import("@/pages/alerts"), "AlertsPage");
+const IncidentsPage = lazyPage(() => import("@/pages/incidents"), "IncidentsPage");
 const NotificationsPage = lazyPage(() => import("@/pages/notifications"), "NotificationsPage");
-const MutesPage = lazyPage(() => import("@/pages/mutes"), "MutesPage");
 const ThresholdsPage = lazyPage(() => import("@/pages/thresholds"), "ThresholdsPage");
+const GroupingRulesPage = lazyPage(() => import("@/pages/grouping-rules"), "GroupingRulesPage");
+const NotificationDefaultsPage = lazyPage(
+  () => import("@/pages/notification-defaults"),
+  "NotificationDefaultsPage",
+);
 const GroupsPage = lazyPage(() => import("@/pages/groups"), "GroupsPage");
 const UsersPage = lazyPage(() => import("@/pages/users"), "UsersPage");
 const SettingsPage = lazyPage(() => import("@/pages/settings"), "SettingsPage");
@@ -58,14 +59,26 @@ export default function App() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/ops" element={<OpsPage />} />
         <Route path="/graph" element={<GraphPage />} />
-        <Route path="/servers" element={<ServersPage />} />
-        <Route path="/servers/:id" element={<ServerDetailPage />} />
-        <Route path="/rules" element={<RulesPage />} />
-        <Route path="/rule-groups" element={<RuleGroupsPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/incidents" element={<IncidentsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="/mutes" element={<MutesPage />} />
         <Route path="/thresholds" element={<ThresholdsPage />} />
+        <Route
+          path="/grouping-rules"
+          element={
+            <RequireAdmin>
+              <GroupingRulesPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/notification-defaults"
+          element={
+            <RequireAdmin>
+              <NotificationDefaultsPage />
+            </RequireAdmin>
+          }
+        />
         <Route path="/groups" element={<GroupsPage />} />
         <Route
           path="/users"

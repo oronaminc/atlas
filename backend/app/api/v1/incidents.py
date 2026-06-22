@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -10,14 +11,40 @@ from app.core.envelope import envelope
 from app.core.pagination import decode_cursor, page_meta
 from app.db import get_db
 from app.models import Group, Incident, User
-from app.models.alerting import IncidentEvent, IncidentStatus
+from app.models.alerting import AlertEvent, IncidentEvent, IncidentStatus
+from app.models.base import utcnow
 from app.models.llm import IncidentAnalysis
 from app.schemas.alerting import IncidentDetailOut, IncidentOut
 from app.schemas.delivery import NotifyRequest
 from app.schemas.llm import IncidentAnalysisOut
+from app.services import incident_service
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
+
+
+class PromoteRequest(BaseModel):
+    alert_id: uuid.UUID
+    title: str | None = None
+
+
+class AttachRequest(BaseModel):
+    alert_id: uuid.UUID
+
+
+class ChannelToggles(BaseModel):
+    notify_email: bool | None = None
+    notify_telegram: bool | None = None
+    notify_oncall: bool | None = None
+
+
+async def _get_alert(db: AsyncSession, alert_id: uuid.UUID) -> AlertEvent:
+    alert = (
+        await db.execute(select(AlertEvent).where(AlertEvent.id == alert_id))
+    ).scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return alert
 
 
 @router.get("")
@@ -75,6 +102,115 @@ async def get_incident(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
+    incident = await load_incident(db, incident_id)
+    return envelope(IncidentDetailOut.model_validate(incident).model_dump(mode="json"))
+
+
+@router.post("", status_code=201)
+async def promote_alert_to_incident(
+    body: PromoteRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_editor),
+):
+    """Manual promote: a single alert -> a NEW incident (any severity, size 1)."""
+    alert = await _get_alert(db, body.alert_id)
+    try:
+        incident = await incident_service.promote_alert(db, alert, utcnow(), title=body.title)
+    except incident_service.AlreadyAttachedError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    await record_audit(
+        db,
+        actor_id=user.id,
+        action="promote",
+        resource_type="incident",
+        resource_id=incident.id,
+        after={"alert_id": str(alert.id)},
+        ip=client_ip(request),
+    )
+    await db.commit()
+    incident = await load_incident(db, incident.id)
+    return envelope(IncidentDetailOut.model_validate(incident).model_dump(mode="json"))
+
+
+@router.post("/{incident_id}/alerts")
+async def attach_alert(
+    incident_id: uuid.UUID,
+    body: AttachRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_editor),
+):
+    """Manual attach: add an existing alert into this incident."""
+    incident = await load_incident(db, incident_id)
+    alert = await _get_alert(db, body.alert_id)
+    try:
+        await incident_service.attach_to_incident(db, incident, alert, utcnow())
+    except incident_service.AlreadyAttachedError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    await record_audit(
+        db,
+        actor_id=user.id,
+        action="attach_alert",
+        resource_type="incident",
+        resource_id=incident.id,
+        after={"alert_id": str(alert.id)},
+        ip=client_ip(request),
+    )
+    await db.commit()
+    incident = await load_incident(db, incident_id)
+    return envelope(IncidentDetailOut.model_validate(incident).model_dump(mode="json"))
+
+
+@router.delete("/{incident_id}/alerts/{alert_id}")
+async def detach_alert(
+    incident_id: uuid.UUID,
+    alert_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_editor),
+):
+    """Manual detach. Emptying the incident auto-resolves it (decision D)."""
+    incident = await load_incident(db, incident_id)
+    alert = await _get_alert(db, alert_id)
+    await incident_service.detach_alert(db, incident, alert, utcnow())
+    await record_audit(
+        db,
+        actor_id=user.id,
+        action="detach_alert",
+        resource_type="incident",
+        resource_id=incident.id,
+        before={"alert_id": str(alert.id)},
+        ip=client_ip(request),
+    )
+    await db.commit()
+    return envelope({"ok": True})
+
+
+@router.patch("/{incident_id}")
+async def update_incident_channels(
+    incident_id: uuid.UUID,
+    body: ChannelToggles,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_editor),
+):
+    """Per-incident notification channel toggles (IMP §7)."""
+    incident = await load_incident(db, incident_id)
+    data = body.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        setattr(incident, k, v)
+    db.add(IncidentEvent(incident_id=incident.id, kind="channels_changed", payload=data))
+    await record_audit(
+        db,
+        actor_id=user.id,
+        action="update_channels",
+        resource_type="incident",
+        resource_id=incident.id,
+        after=data,
+        ip=client_ip(request),
+    )
+    await db.commit()
     incident = await load_incident(db, incident_id)
     return envelope(IncidentDetailOut.model_validate(incident).model_dump(mode="json"))
 

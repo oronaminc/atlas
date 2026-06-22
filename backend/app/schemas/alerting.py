@@ -38,6 +38,16 @@ class AlertEventOut(BaseModel):
     received_at: datetime
     dedup_count: int
     incident_id: uuid.UUID | None
+    # IMP denormalized topology/identity + filter flags
+    cmdb_ci: str | None = None
+    cmdb_hostname: str | None = None
+    cmdb_zone: str | None = None
+    client_address: str | None = None
+    cmdb_service_l1_code: str | None = None
+    cmdb_service_l2_code: str | None = None
+    value: float | None = None
+    suppressed: bool = False
+    correlated: bool = False
 
 
 class IncidentEventOut(BaseModel):
@@ -62,6 +72,15 @@ class IncidentOut(BaseModel):
     last_seen: datetime
     alert_count: int
     created_at: datetime
+    # IMP container fields
+    origin: str = "auto"
+    cmdb_service_l2_code: str | None = None
+    cmdb_service_l1_code: str | None = None
+    cmdb_zone: str | None = None
+    notify_email: bool = True
+    notify_telegram: bool = True
+    notify_oncall: bool = False
+    grouping_rule_id: uuid.UUID | None = None
 
 
 class IncidentDetailOut(IncidentOut):

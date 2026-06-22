@@ -21,6 +21,7 @@ async def _incident(db, tenant_id, *, title, group_key, host, name="HighCPU", wh
         first_seen=when,
         last_seen=when,
         alert_count=1,
+        cmdb_service_l2_code="L2TEST",
     )
     db.add(inc)
     await db.flush()
@@ -37,6 +38,7 @@ async def _incident(db, tenant_id, *, title, group_key, host, name="HighCPU", wh
             starts_at=when,
             received_at=when,
             incident_id=inc.id,
+            cmdb_service_l2_code="L2TEST",
         )
     )
     await db.flush()

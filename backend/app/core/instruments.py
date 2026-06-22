@@ -42,6 +42,10 @@ notifications_deferred = REGISTRY.counter(
 notifications_dead = REGISTRY.counter(
     "atlas_notifications_dead_total", "Notifications dead-lettered", ("channel",)
 )
+incidents_no_recipients = REGISTRY.counter(
+    "atlas_incidents_no_recipients_total",
+    "Incidents whose channels were on but no user-group maps their l2_code",
+)
 notification_send_seconds = REGISTRY.histogram(
     "atlas_notification_send_seconds", "Channel send latency", ("channel",)
 )

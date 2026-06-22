@@ -1,5 +1,9 @@
-"""Incident → route match → outbox rows. Idempotent via incidents.notified_at
-CAS + the unique (incident, channel, recipient) constraint."""
+"""Incident -> notification outbox (IMP §6/§7). Channels come from the
+incident's own toggles (notify_email/telegram/oncall); per-user recipients come
+from the user-groups mapped to the incident's cmdb_service_l2_code
+(group_service_codes). OnCall is a team webhook (one row, no user). Idempotent
+via incidents.notified_at CAS + the unique (incident, channel, recipient)
+constraint."""
 
 import logging
 import uuid
@@ -8,15 +12,14 @@ from datetime import datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import instruments
 from app.models import Group, User, UserGroup
 from app.models.alerting import Incident, IncidentEvent
-from app.models.delivery import Notification, NotificationRoute
-from app.services.mute import is_incident_muted
+from app.models.delivery import Notification
+from app.models.group import GroupServiceCode
 
 logger = logging.getLogger(__name__)
 
-SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2}
-# send priority: lower = sooner. critical jumps ahead of warning/info.
 SEVERITY_PRIORITY = {"critical": 0, "warning": 1, "info": 2}
 FANOUT_BATCH = 50
 
@@ -25,17 +28,44 @@ def severity_priority(severity: str | None) -> int:
     return SEVERITY_PRIORITY.get(severity or "", 1)
 
 
-async def group_member_users(db: AsyncSession, group_id: uuid.UUID) -> list[User]:
+def incident_channels(incident: Incident) -> list[str]:
+    """Per-incident user-channel toggles (oncall handled separately)."""
+    out = []
+    if incident.notify_email:
+        out.append("email")
+    if incident.notify_telegram:
+        out.append("telegram")
+    return out
+
+
+async def groups_for_l2(db: AsyncSession, l2_code: str | None) -> list[uuid.UUID]:
+    """User-groups mapped to this incident's service-l2 (IMP §6 routing)."""
+    if not l2_code:
+        return []
+    return list(
+        (
+            await db.execute(
+                select(GroupServiceCode.group_id).where(
+                    GroupServiceCode.cmdb_service_l2_code == l2_code
+                )
+            )
+        ).scalars()
+    )
+
+
+async def members_of_groups(db: AsyncSession, group_ids: list[uuid.UUID]) -> list[User]:
+    if not group_ids:
+        return []
     res = await db.execute(
         select(User)
         .join(UserGroup, UserGroup.user_id == User.id)
-        .where(UserGroup.group_id == group_id, User.is_active.is_(True))
+        .where(UserGroup.group_id.in_(group_ids), User.is_active.is_(True))
     )
     return list(res.scalars().unique())
 
 
 def build_targets(members: list[User], channels: list[str]) -> list[tuple[str, User, str]]:
-    """(channel, user, address) per deliverable target."""
+    """(channel, user, address) per deliverable per-user target."""
     targets: list[tuple[str, User, str]] = []
     for channel in channels:
         for user in members:
@@ -53,8 +83,8 @@ async def create_notifications(
     group_id: uuid.UUID | None,
     targets: list[tuple[str, User, str]],
 ) -> int:
-    """Inserts outbox rows, skipping (incident, channel, user) pairs that
-    already exist — safe to call twice."""
+    """Insert per-user outbox rows, skipping (channel, user) pairs that already
+    exist for this incident — safe to call twice."""
     existing = {
         (channel, user_id)
         for channel, user_id in (
@@ -88,9 +118,38 @@ async def create_notifications(
     return created
 
 
+async def create_oncall(db: AsyncSession, incident: Incident) -> int:
+    """One team-webhook outbox row per incident (recipient_user_id NULL).
+    Dedup: skip if an oncall row already exists for the incident."""
+    exists = (
+        await db.execute(
+            select(Notification.id).where(
+                Notification.incident_id == incident.id, Notification.channel == "oncall"
+            )
+        )
+    ).first()
+    if exists:
+        return 0
+    db.add(
+        Notification(
+            incident_id=incident.id,
+            tenant_id=incident.tenant_id,
+            channel="oncall",
+            recipient_user_id=None,
+            recipient_address=incident.cmdb_service_l2_code or "oncall",
+            group_id=None,
+            status="pending",
+            priority=severity_priority(incident.severity),
+        )
+    )
+    await db.flush()
+    return 1
+
+
 async def fan_out_pending(db: AsyncSession, *, now: datetime) -> int:
-    """Scans un-notified incidents, claims each via notified_at CAS, and
-    creates outbox rows for every enabled matching route. Returns rows created."""
+    """Claim un-notified incidents (notified_at CAS) and create outbox rows:
+    per-user channels (per the incident's toggles) to the members of the groups
+    mapped to its l2_code, plus one OnCall row if toggled."""
     stmt = select(Incident.id).where(Incident.notified_at.is_(None)).limit(FANOUT_BATCH)
     if db.bind.dialect.name == "postgresql":
         stmt = stmt.with_for_update(skip_locked=True)
@@ -108,43 +167,42 @@ async def fan_out_pending(db: AsyncSession, *, now: datetime) -> int:
             continue  # another pod won
         incident = await db.get(Incident, incident_id)
         await db.refresh(incident)
-        # Mute: if every (cmdb_ci, alertname) the incident carries is muted, skip
-        # notification entirely (incident stays claimed -> not re-fanned). The
-        # incident itself is unaffected; this only silences delivery.
-        if await is_incident_muted(db, incident):
-            db.add(
-                IncidentEvent(
-                    incident_id=incident.id,
-                    kind="notification_muted",
-                    payload={"reason": "matched notification mute"},
+
+        user_channels = incident_channels(incident)
+        group_ids = await groups_for_l2(db, incident.cmdb_service_l2_code)
+        if user_channels:
+            # per-group so each row keeps its group_id (quota is per-group); a
+            # user in several mapped groups is deduped by (channel, user) and
+            # attributed to the first group that includes them.
+            for gid in group_ids:
+                members = await members_of_groups(db, [gid])
+                targets = build_targets(members, user_channels)
+                created_total += await create_notifications(db, incident, gid, targets)
+            # decision I: a user-channel is on but no user-group maps this l2 ->
+            # no recipients. Don't drop silently — warn + metric + timeline.
+            if not group_ids:
+                instruments.incidents_no_recipients.inc()
+                logger.warning(
+                    "incident %s: channels on but no user-group maps l2=%s",
+                    incident.id,
+                    incident.cmdb_service_l2_code,
                 )
-            )
-            continue
-        severity_rank = SEVERITY_RANK.get(incident.severity, 0)
-        # routes are tenant-scoped: only the incident's own tenant's routes
-        # match (NULL-tenant incidents -> NULL-tenant/legacy routes)
-        routes = list(
-            (
-                await db.execute(
-                    select(NotificationRoute).where(
-                        NotificationRoute.enabled.is_(True),
-                        NotificationRoute.tenant_id == incident.tenant_id,
+                db.add(
+                    IncidentEvent(
+                        incident_id=incident.id,
+                        tenant_id=incident.tenant_id,
+                        kind="no_recipients",
+                        payload={"l2_code": incident.cmdb_service_l2_code},
                     )
                 )
-            ).scalars()
-        )
-        for route in routes:
-            if severity_rank < SEVERITY_RANK.get(route.min_severity, 0):
-                continue
-            members = await group_member_users(db, route.group_id)
-            targets = build_targets(members, route.channels or [])
-            created_total += await create_notifications(db, incident, route.group_id, targets)
+        if incident.notify_oncall:
+            created_total += await create_oncall(db, incident)
     await db.flush()
     return created_total
 
 
 async def fan_out_to_group(db: AsyncSession, incident: Incident, group: Group) -> int:
-    """Manual send: fan out to one group on both channels, route bypassed."""
-    members = await group_member_users(db, group.id)
+    """Manual send to one group on its members' user channels (toggles bypassed)."""
+    members = await members_of_groups(db, [group.id])
     targets = build_targets(members, ["telegram", "email"])
     return await create_notifications(db, incident, group.id, targets)

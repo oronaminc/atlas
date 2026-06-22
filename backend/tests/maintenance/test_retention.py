@@ -33,6 +33,7 @@ def event(received_at, severity="warning", tenant_id=None, fp="f1"):
         starts_at=received_at,
         received_at=received_at,
         tenant_id=tenant_id,
+        cmdb_service_l2_code="L2TEST",
     )
 
 

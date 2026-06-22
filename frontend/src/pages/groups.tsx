@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Trash2, UserPlus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, Tags, Trash2, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
@@ -7,8 +7,10 @@ import {
   useApiMutation,
   useGroupMembers,
   useGroups,
+  useGroupServiceCodes,
   useUsers,
 } from "@/api/queries";
+import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { DataTable, type Column } from "@/components/common/data-table";
 import { FormField } from "@/components/common/form-field";
@@ -45,6 +47,7 @@ export function GroupsPage() {
   const [description, setDescription] = useState("");
   const [deleting, setDeleting] = useState<Group | null>(null);
   const [membersOf, setMembersOf] = useState<Group | null>(null);
+  const [codesOf, setCodesOf] = useState<Group | null>(null);
 
   const groups = useGroups({ q: search || undefined, cursor, limit: "20" });
 
@@ -101,6 +104,20 @@ export function GroupsPage() {
               }}
             >
               <UserPlus className="h-4 w-4" />
+            </Button>
+          )}
+          {isAdmin && (
+            <Button
+              variant="ghost"
+              size="icon"
+              title={t("groups.serviceCodes")}
+              onClick={(e) => {
+                e.stopPropagation();
+                setCodesOf(g);
+              }}
+              data-testid="edit-codes"
+            >
+              <Tags className="h-4 w-4" />
             </Button>
           )}
           {isAdmin && (
@@ -182,7 +199,49 @@ export function GroupsPage() {
       {membersOf && (
         <MembersDialog group={membersOf} onClose={() => setMembersOf(null)} />
       )}
+      {codesOf && <CodesDialog group={codesOf} onClose={() => setCodesOf(null)} />}
     </div>
+  );
+}
+
+function CodesDialog({ group, onClose }: { group: Group; onClose: () => void }) {
+  const { t } = useTranslation();
+  const codes = useGroupServiceCodes(group.id);
+  const [text, setText] = useState("");
+  useEffect(() => {
+    if (codes.data) setText((codes.data.data.codes ?? []).join("\n"));
+  }, [codes.data]);
+  const save = useApiMutation(
+    () =>
+      api.put(`/groups/${group.id}/service-codes`, {
+        codes: text.split(/[\s,]+/).filter(Boolean),
+      }),
+    ["group-service-codes"],
+    onClose,
+  );
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {t("groups.serviceCodes")} — {group.name}
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground">{t("groups.serviceCodesHelp")}</p>
+        <Textarea
+          className="h-40 font-mono"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="sub20251126_1040230842"
+          data-testid="codes-input"
+        />
+        <DialogFooter>
+          <Button onClick={() => save.mutate(undefined)} disabled={save.isPending} data-testid="save-codes">
+            {t("common.save")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

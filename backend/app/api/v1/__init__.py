@@ -6,12 +6,15 @@ from app.api.v1 import (
     auth,
     correlation_config,
     graph,
+    group_codes,
+    grouping_rules,
     groups,
     incidents,
     ingest,
     llm_config,
     mutes,
     notification_admin,
+    notification_defaults,
     notifications,
     retention_config,
     rule_groups,
@@ -50,3 +53,6 @@ api_router.include_router(search.router)
 api_router.include_router(server_groups.router)
 api_router.include_router(mutes.router)
 api_router.include_router(threshold_overrides.router)
+api_router.include_router(grouping_rules.router)
+api_router.include_router(notification_defaults.router)
+api_router.include_router(group_codes.router)

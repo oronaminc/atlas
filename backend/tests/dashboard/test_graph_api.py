@@ -43,6 +43,7 @@ async def seed_graph(db):
                     starts_at=incident.first_seen,
                     received_at=incident.first_seen,
                     incident_id=incident.id,
+                    cmdb_service_l2_code="L2TEST",
                 )
             )
     await db.commit()

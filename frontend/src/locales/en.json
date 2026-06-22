@@ -33,7 +33,8 @@
     "servers": "Servers",
     "rules": "Alert Rules",
     "ruleGroups": "Rule Groups",
-    "alerts": "Active Alerts",
+    "alerts": "Alerts",
+    "incidents": "Incidents",
     "notifications": "Notifications",
     "groups": "Groups",
     "users": "Users",
@@ -43,11 +44,54 @@
     "settings": "Engine Settings",
     "ops": "Ops Dashboard",
     "graph": "Incident Graph",
-    "mutes": "Mutes",
     "thresholds": "Thresholds",
+    "groupingRules": "Grouping Rules",
+    "notificationDefaults": "Notification Defaults",
     "sectionMonitor": "Monitor",
     "sectionConfigure": "Configure",
     "sectionAdmin": "Admin"
+  },
+  "alerts": {
+    "description": "Every inbound alert (in an incident or not), label-based",
+    "hostname": "Hostname...",
+    "zone": "Zone...",
+    "allSeverities": "All severities",
+    "anyIncident": "Any",
+    "inIncident": "In incident",
+    "free": "Free",
+    "groupBy": "Group by...",
+    "noGrouping": "No grouping",
+    "none": "No alerts",
+    "promote": "Promote",
+    "promoted": "Promoted to incident",
+    "suppressed": "Suppressed"
+  },
+  "incidents": {
+    "description": "Incident containers — the alerts grouped inside each",
+    "origin": "Origin",
+    "none": "No incidents",
+    "detach": "Detach",
+    "notify_email": "Email",
+    "notify_telegram": "Telegram",
+    "notify_oncall": "OnCall"
+  },
+  "groupingRules": {
+    "description": "Topology grouping criteria (admin)",
+    "labelKeys": "Label keys",
+    "window": "Window (seconds)",
+    "minGroupSize": "Min group size",
+    "criticalImmediate": "Critical forms immediately"
+  },
+  "notificationDefaults": {
+    "description": "Default channels applied to new incidents (admin)",
+    "title": "Default channels",
+    "default_email": "Email",
+    "default_telegram": "Telegram",
+    "default_oncall": "OnCall"
+  },
+  "groups": {
+    "serviceCodes": "Service codes (l2)",
+    "serviceCodesHelp": "cmdb_service_l2_code values this group sees / is notified for (one per line)"
   },
   "mutes": {
     "title": "Mutes / Target Groups",

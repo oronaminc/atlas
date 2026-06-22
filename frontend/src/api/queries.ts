@@ -152,6 +152,34 @@ export const useNotificationRows = (params?: Params) =>
     queryFn: () => api.get<NotificationRow[]>("/notifications", params),
     refetchInterval: OPS_REFRESH_MS,
   });
+
+// --- IMP: alerts browse, grouping rules, notification defaults, l2 maps ---
+export const useAlertsBrowse = (params?: Params) =>
+  useQuery({
+    queryKey: ["alerts-browse", params],
+    queryFn: () => api.get<import("@/types").StoredAlert[]>("/alerts", params),
+  });
+export const useAlertGroups = (params?: Params) =>
+  useQuery({
+    queryKey: ["alert-groups", params],
+    queryFn: () => api.get<import("@/types").AlertGroupCount[]>("/alerts", params),
+  });
+export const useGroupingRules = () =>
+  useQuery({
+    queryKey: ["grouping-rules"],
+    queryFn: () => api.get<import("@/types").GroupingRule[]>("/grouping-rules"),
+  });
+export const useNotificationDefaults = () =>
+  useQuery({
+    queryKey: ["notification-defaults"],
+    queryFn: () => api.get<import("@/types").NotificationDefaults>("/notification-defaults"),
+  });
+export const useGroupServiceCodes = (groupId: string | null) =>
+  useQuery({
+    queryKey: ["group-service-codes", groupId],
+    queryFn: () => api.get<{ codes: string[] }>(`/groups/${groupId}/service-codes`),
+    enabled: !!groupId,
+  });
 export const useStatsOverview = (tenant?: string) =>
   useQuery({
     queryKey: ["stats", "overview", tenant],

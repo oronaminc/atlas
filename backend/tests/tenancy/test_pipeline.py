@@ -98,17 +98,22 @@ async def test_same_host_two_tenants_no_merge(db, tenant_a, tenant_b):
     assert {e.tenant_id for e in events} == {tenant_a.id, tenant_b.id}
 
 
-async def test_fanout_only_matches_own_tenant_routes(db, world_a, world_b, tenant_a, tenant_b):
-    """A fresh un-notified incident in tenant A must create outbox rows ONLY
-    for A's route/members even though B has an enabled route too."""
+async def test_fanout_routes_by_l2_mapping(db, world_a, world_b, tenant_a, tenant_b):
+    """IMP: an incident fans out ONLY to the user-group mapped to its l2_code
+    (group A is mapped to l2-a; group B is not), even though both groups exist."""
     from app.models.alerting import IncidentStatus
+    from app.models.group import GroupServiceCode
 
+    db.add(GroupServiceCode(group_id=world_a["group"].id, cmdb_service_l2_code="l2-a"))
     incident = Incident(
         tenant_id=tenant_a.id,
         title="storm a",
         status=IncidentStatus.open,
         severity="critical",
-        group_key="host=db-01",
+        group_key="cmdb_service_l2_code=l2-a",
+        cmdb_service_l2_code="l2-a",
+        notify_email=False,
+        notify_telegram=True,
         first_seen=NOW,
         last_seen=NOW,
         alert_count=1,
@@ -121,7 +126,7 @@ async def test_fanout_only_matches_own_tenant_routes(db, world_a, world_b, tenan
 
     created = await fan_out_pending(db, now=NOW)
     await db.commit()
-    assert created == 1  # only A's single member
+    assert created == 1  # only group A (mapped to l2-a) -> its single member
 
     rows = list(
         (
@@ -129,7 +134,6 @@ async def test_fanout_only_matches_own_tenant_routes(db, world_a, world_b, tenan
         ).scalars()
     )
     assert len(rows) == 1
-    assert rows[0].tenant_id == tenant_a.id
     assert rows[0].recipient_address == "chat-a"
 
 

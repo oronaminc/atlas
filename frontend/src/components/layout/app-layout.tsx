@@ -2,18 +2,16 @@ import { Suspense, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Activity,
-  BellOff,
   BellRing,
   ClipboardList,
+  Flame,
   Gauge,
   LayoutDashboard,
   Layers,
   LogOut,
   Menu,
   Network,
-  Server,
   Settings,
-  ShieldAlert,
   SlidersHorizontal,
   User as UserIcon,
   Users,
@@ -56,19 +54,23 @@ const navSections: NavSection[] = [
     items: [
       { to: "/", labelKey: "nav.dashboard", icon: LayoutDashboard },
       { to: "/ops", labelKey: "nav.ops", icon: Gauge },
-      { to: "/graph", labelKey: "nav.graph", icon: Network },
       { to: "/alerts", labelKey: "nav.alerts", icon: Activity },
+      { to: "/incidents", labelKey: "nav.incidents", icon: Flame },
+      { to: "/graph", labelKey: "nav.graph", icon: Network },
     ],
   },
   {
     labelKey: "nav.sectionConfigure",
     items: [
-      { to: "/servers", labelKey: "nav.servers", icon: Server },
-      { to: "/rules", labelKey: "nav.rules", icon: ShieldAlert },
-      { to: "/rule-groups", labelKey: "nav.ruleGroups", icon: Layers },
       { to: "/notifications", labelKey: "nav.notifications", icon: BellRing },
-      { to: "/mutes", labelKey: "nav.mutes", icon: BellOff },
       { to: "/thresholds", labelKey: "nav.thresholds", icon: SlidersHorizontal },
+      { to: "/grouping-rules", labelKey: "nav.groupingRules", icon: Layers, adminOnly: true },
+      {
+        to: "/notification-defaults",
+        labelKey: "nav.notificationDefaults",
+        icon: BellRing,
+        adminOnly: true,
+      },
     ],
   },
   {

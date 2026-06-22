@@ -41,4 +41,21 @@ class UserGroup(TimestampedBase):
     group: Mapped[Group] = relationship(back_populates="memberships", lazy="joined")
 
 
+class GroupServiceCode(TimestampedBase):
+    """IMP redesign §6: a user group maps to many cmdb_service_l2_codes (1:N).
+    This is the ONE managed list — it governs visibility (which alerts/incidents
+    a group's members see) and notification routing (an incident's l2_code →
+    the groups mapped to it → their members). Not tenant-scoped."""
+
+    __tablename__ = "group_service_codes"
+    __table_args__ = (
+        UniqueConstraint("group_id", "cmdb_service_l2_code", name="uq_group_service_code"),
+    )
+
+    group_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("groups.id", ondelete="CASCADE"), index=True
+    )
+    cmdb_service_l2_code: Mapped[str] = mapped_column(String(255), index=True)
+
+
 from app.models.user import User  # noqa: E402,F401

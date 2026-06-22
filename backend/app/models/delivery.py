@@ -41,8 +41,10 @@ class Notification(TenantScoped, TimestampedBase):
         Uuid, ForeignKey("incidents.id", ondelete="CASCADE"), index=True
     )
     channel: Mapped[str] = mapped_column(String(50))
-    recipient_user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("users.id", ondelete="CASCADE")
+    # nullable: an OnCall (team-webhook) notification has no per-user recipient
+    # (IMP §7/J) — one row per incident, recipient_user_id NULL.
+    recipient_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     recipient_address: Mapped[str] = mapped_column(String(255))  # chat_id / email snapshot
     group_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -86,6 +88,21 @@ class NotificationSettings(TenantScoped, TimestampedBase):
     # Phase 5: per-service pending-queue alarm threshold (alert, never shed).
     # Breach -> atlas_tenant_pending_softcap_breached{service=slug}=1 at scrape.
     pending_softcap: Mapped[int] = mapped_column(Integer, default=50000)
+    # IMP redesign §7/J: OnCall = a team webhook (not per-user). Token Fernet-
+    # encrypted at the service layer like telegram_bot_token.
+    oncall_webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    oncall_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class NotificationDefault(TimestampedBase):
+    """IMP redesign §7: admin-managed default channel toggles applied to each new
+    incident at creation. Single row."""
+
+    __tablename__ = "notification_defaults"
+
+    default_email: Mapped[bool] = mapped_column(Boolean, default=True)
+    default_telegram: Mapped[bool] = mapped_column(Boolean, default=True)
+    default_oncall: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class NotificationMute(TenantScoped, TimestampedBase):

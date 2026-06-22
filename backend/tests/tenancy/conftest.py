@@ -39,6 +39,7 @@ async def seed_tenant_world(db, tenant: Tenant, tag: str) -> dict:
         first_seen=NOW,
         last_seen=NOW,
         alert_count=1,
+        cmdb_service_l2_code="L2TEST",
     )
     db.add(incident)
     await db.flush()
@@ -54,6 +55,7 @@ async def seed_tenant_world(db, tenant: Tenant, tag: str) -> dict:
         starts_at=NOW,
         received_at=NOW,
         incident_id=incident.id,
+        cmdb_service_l2_code="L2TEST",
     )
     db.add(event)
     group = Group(tenant_id=tenant.id, name=f"oncall-{tag}")
@@ -117,6 +119,12 @@ async def tenant_user(db, tenant: Tenant, role: GlobalRole, tag: str):
     user.tenant_id = tenant.id
     await db.commit()
     await db.refresh(user)
+    # IMP visibility: non-admins need an l2 mapping to see the L2TEST-stamped
+    # seed data (tenant isolation is still enforced by tenant_id underneath).
+    if role != GlobalRole.admin:
+        from tests.conftest import _grant_l2
+
+        await _grant_l2(db, user)
     return user
 
 
