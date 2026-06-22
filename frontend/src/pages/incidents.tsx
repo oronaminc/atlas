@@ -42,7 +42,10 @@ const statusVariant: Record<IncidentStatus, "critical" | "warning" | "success" |
 export function IncidentsPage() {
   const { t } = useTranslation();
   const [detailId, setDetailId] = useState<string | null>(null);
-  const incidents = useIncidents({ limit: "50", status: "__all__" });
+  // No status filter → the container list shows incidents in every state
+  // (open/acknowledged/resolved/suppressed); the backend treats an absent
+  // status as "all" (a sentinel like __all__ is not a valid IncidentStatus).
+  const incidents = useIncidents({ limit: "50" });
 
   return (
     <div data-testid="incidents-page" className="space-y-4">
