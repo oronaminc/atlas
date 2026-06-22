@@ -69,6 +69,11 @@ class AlertEvent(TenantScoped, TimestampedBase):
     # override -> stored but NOT escalated to an incident, and excluded from
     # re-claim (incident_id stays NULL).
     suppressed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # IMP stage 3 terminal marker: this alert's ARRIVAL has been processed by the
+    # topology engine (formed/attached an incident, or left FREE). Excluded from
+    # re-claim once True — but a FREE alert (correlated=True, incident_id=NULL) is
+    # still retro-attachable by a later sibling via a direct UPDATE (not a claim).
+    correlated: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     claimed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     incident_id: Mapped[uuid.UUID | None] = mapped_column(

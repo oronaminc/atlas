@@ -62,6 +62,27 @@ def build_event(
     )
 
 
+async def latest_other_event(
+    db: AsyncSession, event: AlertEvent, *, window_seconds: int, now: datetime
+) -> AlertEvent | None:
+    """Most recent other alert with the same fingerprint within the dedup window
+    (the dedup collapse target). received_at lower bound enables PG partition
+    pruning. Module-level so the IMP worker can reuse it without the legacy
+    CorrelationEngine class."""
+    res = await db.execute(
+        select(AlertEvent)
+        .where(
+            AlertEvent.fingerprint == event.fingerprint,
+            AlertEvent.id != event.id,
+            AlertEvent.tenant_id == event.tenant_id,
+            AlertEvent.received_at >= now - timedelta(seconds=window_seconds),
+        )
+        .order_by(AlertEvent.received_at.desc())
+        .limit(1)
+    )
+    return res.scalar_one_or_none()
+
+
 class CorrelationEngine:
     def __init__(self, dedup_store: DedupStore, strategies: list[CorrelationStrategy]):
         self.dedup_store = dedup_store
