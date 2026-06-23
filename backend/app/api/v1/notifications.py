@@ -9,7 +9,7 @@ from app.core.envelope import envelope
 from app.core.pagination import decode_cursor, page_meta
 from app.core.security import decrypt_secret, encrypt_secret
 from app.db import get_db
-from app.models import NotificationPolicy, Receiver, Silence, User
+from app.models import NotificationPolicy, Receiver, User
 from app.schemas.notification import (
     PolicyCreate,
     PolicyOut,
@@ -17,8 +17,6 @@ from app.schemas.notification import (
     ReceiverCreate,
     ReceiverOut,
     ReceiverUpdate,
-    SilenceCreate,
-    SilenceOut,
 )
 from app.services.audit import record_audit
 
@@ -322,99 +320,6 @@ async def delete_policy(
         action="delete",
         resource_type="notification_policy",
         resource_id=policy_id,
-        ip=client_ip(request),
-    )
-    await db.commit()
-    return envelope({"ok": True})
-
-
-# --- Silences ---
-
-
-@router.get("/silences")
-async def list_silences(
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
-):
-    res = await db.execute(select(Silence).order_by(Silence.created_at.desc()))
-    return envelope(
-        [SilenceOut.model_validate(s).model_dump(mode="json") for s in res.scalars().unique()]
-    )
-
-
-@router.post("/silences", status_code=201)
-async def create_silence(
-    body: SilenceCreate,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_editor),
-    am=Depends(get_alertmanager_client),
-):
-    if body.ends_at <= body.starts_at:
-        raise HTTPException(status_code=400, detail="ends_at must be after starts_at")
-    silence = Silence(
-        matchers=body.matchers,
-        starts_at=body.starts_at,
-        ends_at=body.ends_at,
-        comment=body.comment,
-        created_by=user.id,
-    )
-    db.add(silence)
-    await db.flush()
-    # Push to Alertmanager (best effort: stored even if AM is unreachable).
-    try:
-        external_id = await am.create_silence(
-            {
-                "matchers": [
-                    {"name": k, "value": v, "isRegex": False, "isEqual": True}
-                    for k, v in body.matchers.items()
-                ],
-                "startsAt": body.starts_at.isoformat(),
-                "endsAt": body.ends_at.isoformat(),
-                "comment": body.comment,
-                "createdBy": user.username,
-            }
-        )
-        silence.external_id = external_id
-    except Exception:
-        pass
-    await record_audit(
-        db,
-        actor_id=user.id,
-        action="create",
-        resource_type="silence",
-        resource_id=silence.id,
-        after={"matchers": silence.matchers, "comment": silence.comment},
-        ip=client_ip(request),
-    )
-    await db.commit()
-    await db.refresh(silence)
-    return envelope(SilenceOut.model_validate(silence).model_dump(mode="json"))
-
-
-@router.delete("/silences/{silence_id}")
-async def delete_silence(
-    silence_id: uuid.UUID,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_editor),
-    am=Depends(get_alertmanager_client),
-):
-    silence = await db.get(Silence, silence_id)
-    if silence is None:
-        raise HTTPException(status_code=404, detail="Silence not found")
-    if silence.external_id:
-        try:
-            await am.delete_silence(silence.external_id)
-        except Exception:
-            pass
-    await db.delete(silence)
-    await record_audit(
-        db,
-        actor_id=user.id,
-        action="delete",
-        resource_type="silence",
-        resource_id=silence_id,
         ip=client_ip(request),
     )
     await db.commit()

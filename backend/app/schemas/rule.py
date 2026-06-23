@@ -1,6 +1,7 @@
 """Read-only schemas for the Mimir read-cache (rules + silences)."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -47,3 +48,14 @@ class SilenceOut(BaseModel):
     comment: str | None = None
     created_by_label: str | None = None
     state: str | None = None
+
+
+class SilenceCreate(BaseModel):
+    """The user picks WHAT to silence (a service or a server) + a window +
+    description — never a query/matcher. atlas builds the AM label matcher."""
+
+    target_kind: Literal["service", "server"]
+    target_value: str  # the cmdb_service_l2_code (service) or cmdb_ci (server)
+    starts_at: datetime
+    ends_at: datetime
+    comment: str = ""

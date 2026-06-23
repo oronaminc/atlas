@@ -100,14 +100,21 @@ export interface NotificationPolicy {
   created_at: string;
 }
 
+export interface SilenceMatcher {
+  name: string;
+  value: string;
+  isRegex?: boolean;
+  isEqual?: boolean;
+}
+
 export interface Silence {
-  id: string;
-  matchers: Record<string, string>;
-  starts_at: string;
-  ends_at: string;
-  comment: string;
-  created_by: string | null;
-  created_at: string;
+  silence_id: string;
+  matchers: SilenceMatcher[];
+  starts_at: string | null;
+  ends_at: string | null;
+  comment: string | null;
+  created_by_label: string | null;
+  state: string | null;
 }
 
 export interface AuditLog {

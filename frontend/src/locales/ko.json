@@ -51,7 +51,9 @@
     "sectionMonitor": "모니터링",
     "sectionConfigure": "설정",
     "sectionAlertRules": "알림 룰",
-    "sectionAdmin": "관리"
+    "sectionAdmin": "관리",
+    "sectionSilence": "사일런스",
+    "silence": "사일런스"
   },
   "dateRange": {
     "preset_1h": "최근 1시간",
@@ -344,5 +346,20 @@
     "label": "라벨",
     "text": "텍스트",
     "noResults": "결과 없음"
+  },
+  "silence": {
+    "description": "Mimir Alertmanager 사일런스 (조회는 전체; 생성/만료는 편집자 이상). 서비스 또는 서버 + 기간을 선택하면 매처가 자동 생성됩니다.",
+    "target": "대상",
+    "state": "상태",
+    "starts": "시작",
+    "ends": "종료",
+    "comment": "설명",
+    "createdBy": "생성자",
+    "expire": "만료",
+    "none": "사일런스 없음",
+    "kind": "사일런스",
+    "service": "서비스 (l2)",
+    "server": "서버 (cmdb_ci)",
+    "create": "사일런스 생성"
   }
 }

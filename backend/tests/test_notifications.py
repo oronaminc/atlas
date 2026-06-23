@@ -97,46 +97,5 @@ async def test_policy_crud(client, admin_headers):
     assert deleted.status_code == 200
 
 
-async def test_silence_crud(client, editor_headers):
-    from app.api.v1.notifications import get_alertmanager_client
-    from app.main import app
-
-    class FakeAM:
-        async def create_silence(self, silence):
-            return "ext-123"
-
-        async def delete_silence(self, silence_id):
-            assert silence_id == "ext-123"
-
-    app.dependency_overrides[get_alertmanager_client] = lambda: FakeAM()
-    try:
-        created = await client.post(
-            "/api/v1/silences",
-            json={
-                "matchers": {"alertname": "HighCPU"},
-                "starts_at": "2026-06-10T00:00:00Z",
-                "ends_at": "2026-06-11T00:00:00Z",
-                "comment": "maintenance window",
-            },
-            headers=editor_headers,
-        )
-        assert created.status_code == 201
-        silence_id = created.json()["data"]["id"]
-
-        deleted = await client.delete(f"/api/v1/silences/{silence_id}", headers=editor_headers)
-        assert deleted.status_code == 200
-    finally:
-        app.dependency_overrides.pop(get_alertmanager_client, None)
-
-
-async def test_silence_rejects_inverted_window(client, editor_headers):
-    res = await client.post(
-        "/api/v1/silences",
-        json={
-            "matchers": {},
-            "starts_at": "2026-06-11T00:00:00Z",
-            "ends_at": "2026-06-10T00:00:00Z",
-        },
-        headers=editor_headers,
-    )
-    assert res.status_code == 400
+# Silence API (cache-read + server-built matchers) is covered by
+# tests/api/test_silences.py — the legacy matcher-authoring endpoints were removed.

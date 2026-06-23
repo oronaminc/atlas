@@ -16,6 +16,7 @@ const IncidentsPage = lazyPage(() => import("@/pages/incidents"), "IncidentsPage
 const NotificationsPage = lazyPage(() => import("@/pages/notifications"), "NotificationsPage");
 const ThresholdsPage = lazyPage(() => import("@/pages/thresholds"), "ThresholdsPage");
 const RulesViewerPage = lazyPage(() => import("@/pages/rules-viewer"), "RulesViewerPage");
+const SilencesPage = lazyPage(() => import("@/pages/silences"), "SilencesPage");
 const GroupingRulesPage = lazyPage(() => import("@/pages/grouping-rules"), "GroupingRulesPage");
 const NotificationDefaultsPage = lazyPage(
   () => import("@/pages/notification-defaults"),
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/ops" element={<OpsPage />} />
         <Route path="/graph" element={<GraphPage />} />
+        <Route path="/silences" element={<SilencesPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/incidents" element={<IncidentsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />

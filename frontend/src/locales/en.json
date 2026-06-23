@@ -51,7 +51,9 @@
     "sectionMonitor": "Monitor",
     "sectionConfigure": "Configure",
     "sectionAlertRules": "Alert Rules",
-    "sectionAdmin": "Admin"
+    "sectionAdmin": "Admin",
+    "sectionSilence": "Silence",
+    "silence": "Silences"
   },
   "dateRange": {
     "preset_1h": "Last 1 hour",
@@ -344,5 +346,20 @@
     "label": "Label",
     "text": "Text",
     "noResults": "No results"
+  },
+  "silence": {
+    "description": "Mimir Alertmanager silences (view all; create/expire = editor+). Pick a service or server + window — the matcher is built for you.",
+    "target": "Target",
+    "state": "State",
+    "starts": "Starts",
+    "ends": "Ends",
+    "comment": "Description",
+    "createdBy": "Created by",
+    "expire": "Expire",
+    "none": "No silences",
+    "kind": "Silence",
+    "service": "Service (l2)",
+    "server": "Server (cmdb_ci)",
+    "create": "Create silence"
   }
 }

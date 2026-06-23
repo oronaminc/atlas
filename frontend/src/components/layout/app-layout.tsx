@@ -2,6 +2,7 @@ import { Suspense, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Activity,
+  BellOff,
   BellRing,
   ClipboardList,
   Flame,
@@ -66,6 +67,10 @@ const navSections: NavSection[] = [
       { to: "/alert-rules", labelKey: "nav.rulesViewer", icon: ScrollText },
       { to: "/thresholds", labelKey: "nav.thresholds", icon: SlidersHorizontal },
     ],
+  },
+  {
+    labelKey: "nav.sectionSilence",
+    items: [{ to: "/silences", labelKey: "nav.silence", icon: BellOff }],
   },
   {
     labelKey: "nav.sectionConfigure",
