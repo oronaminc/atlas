@@ -339,6 +339,18 @@
     "help": "범위를 지정하지 않은 레이블 자동완성의 조회 기간. 짧은 범위는 전체 보존 기간에 걸친 오래된 버킷 인덱스로 인한 Mimir 422 오류를 방지합니다.",
     "lookbackHours": "조회 기간 (시간)"
   },
+  "saml": {
+    "title": "SAML SSO",
+    "help": "SP 키/인증서, IdP 메타데이터, 속성 매핑. 활성화하면 'SSO로 로그인' 버튼으로 로그인합니다.",
+    "enabled": "사용",
+    "spPrivateKey": "SP 개인 키",
+    "spPrivateKeyHelp": "저장된 키를 유지하려면 ******** 그대로 두세요",
+    "spCertificate": "SP 인증서",
+    "idpMetadata": "IdP 메타데이터 XML",
+    "displayNameAttr": "표시 이름 속성",
+    "uidAttr": "사용자/UID 속성",
+    "emailAttr": "이메일 속성"
+  },
   "llm": {
     "title": "LLM 분석",
     "help": "인시던트 근본원인 분석용 OpenAI 호환 엔드포인트. 자체 호스팅(vLLM/Ollama/게이트웨이)이 기본; 외부 OpenAI는 외부 송신 허용 시에만.",

@@ -72,7 +72,7 @@ export function LoginPage() {
             variant="outline"
             className="w-full"
             onClick={() => {
-              window.location.href = `${API_BASE}/auth/oidc/login`;
+              window.location.href = `${API_BASE}/auth/saml/login`;
             }}
           >
             <KeyRound className="h-4 w-4" />

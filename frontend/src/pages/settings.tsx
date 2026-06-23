@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { SamlConfigCard } from "@/features/auth/saml-config-card";
 import { LLMConfigCard } from "@/features/llm/llm-config-card";
 import { MimirQueryCard } from "@/features/maintenance/mimir-query-card";
 import { RetentionCard } from "@/features/maintenance/retention-card";
@@ -18,6 +19,7 @@ export function SettingsPage() {
         <ChannelAssignmentCard />
         <RetentionCard />
         <MimirQueryCard />
+        <SamlConfigCard />
         <LLMConfigCard />
         <RecipientsCard />
       </div>
