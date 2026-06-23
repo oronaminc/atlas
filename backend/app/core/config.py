@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     COOKIE_SAMESITE: str = "strict"
 
     SYNC_INTERVAL_SECONDS: int = 30
+    MIMIR_SYNC_INTERVAL_SECONDS: int = 60  # ruler-rules + AM-silences read-cache refresh
     INGEST_API_KEY: str = ""
     SMTP_HOST: str = "localhost"
     SMTP_PORT: int = 25

@@ -133,30 +133,3 @@ def editor_headers(editor):
 @pytest.fixture
 def viewer_headers(viewer):
     return auth_headers(viewer)
-
-
-class FakeRuler:
-    """In-memory stand-in for MimirRulerClient used in sync tests."""
-
-    def __init__(self, fail: bool = False):
-        self.pushed: list[tuple[str, dict]] = []
-        self.deleted: list[tuple[str, str]] = []
-        self.fail = fail
-
-    async def set_rule_group(self, namespace: str, payload: dict) -> None:
-        if self.fail:
-            raise RuntimeError("ruler down")
-        self.pushed.append((namespace, payload))
-
-    async def delete_rule_group(self, namespace: str, name: str) -> None:
-        self.deleted.append((namespace, name))
-
-
-@pytest.fixture
-def fake_ruler():
-    from app.api.v1.rules import get_ruler_client
-
-    ruler = FakeRuler()
-    app.dependency_overrides[get_ruler_client] = lambda: ruler
-    yield ruler
-    app.dependency_overrides.pop(get_ruler_client, None)

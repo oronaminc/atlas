@@ -10,6 +10,7 @@ from app.api.v1 import (
     groups,
     incidents,
     ingest,
+    labels,
     llm_config,
     notification_admin,
     notification_defaults,
@@ -17,6 +18,7 @@ from app.api.v1 import (
     retention_config,
     rules,
     search,
+    silences,
     stats,
     threshold_overrides,
     users,
@@ -27,6 +29,8 @@ api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(groups.router)
 api_router.include_router(rules.router)
+api_router.include_router(labels.router)
+api_router.include_router(silences.router)
 api_router.include_router(notifications.router)
 api_router.include_router(alerts.router)
 api_router.include_router(ingest.router)
