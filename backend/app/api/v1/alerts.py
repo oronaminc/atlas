@@ -5,7 +5,7 @@ Live views (/active, /history) read the single default-org Alertmanager
 visibility choke point."""
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
@@ -46,6 +46,8 @@ async def list_alerts(
     status: str | None = None,
     in_incident: bool | None = None,
     since_hours: int | None = Query(default=None, ge=1, le=720),
+    start: datetime | None = Query(default=None, description="received_at >= start (ISO)"),
+    end: datetime | None = Query(default=None, description="received_at < end (ISO)"),
     group_by: str | None = Query(default=None, description="client_address|l1_code|l2_code"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
@@ -69,6 +71,10 @@ async def list_alerts(
         )
     if since_hours is not None:
         filters.append(AlertEvent.received_at >= utcnow() - timedelta(hours=since_hours))
+    if start is not None:
+        filters.append(AlertEvent.received_at >= start)
+    if end is not None:
+        filters.append(AlertEvent.received_at < end)
 
     if group_by is not None:
         if group_by not in _GROUP_BY:

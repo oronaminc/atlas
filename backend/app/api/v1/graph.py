@@ -1,13 +1,12 @@
-"""Graph endpoint for the 3D alert-relationship view (read-only, any auth).
+"""Incident swimlane graph (read-only, any auth).
 
-Nodes: incidents (primary) + hosts (anchors from group_key).
-Edges: host membership, temporal proximity (within the correlation window),
-same dominant alert name across incidents. "llm_similar" edge kind is
-reserved for the future LLM strategy — emitted nowhere yet.
+One lane per INCIDENT (its title); inside each lane its member alerts plotted
+over time. IMP: the old host-keyed lanes broke once group_key became the l2
+service code, so the model is now incident-centric — an incident IS the lane,
+its alerts are the pills.
 """
 
 import uuid
-from collections import Counter
 from datetime import UTC, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,22 +19,33 @@ from app.db import get_db
 from app.models import User
 from app.models.alerting import AlertEvent, Incident, IncidentStatus
 from app.models.base import utcnow
-from app.services.grouping_config import get_active_rule
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
-TEMPORAL_EDGES_PER_NODE = 5  # cap fan-out so dense windows stay readable
+ALERTS_PER_INCIDENT = 200  # cap pills per lane so dense incidents stay readable
 
 
 def _aware(dt):
     return dt.replace(tzinfo=UTC) if dt is not None and dt.tzinfo is None else dt
 
 
+def _alert_node(e: AlertEvent) -> dict:
+    return {
+        "id": str(e.id),
+        "name": e.name,
+        "severity": e.severity,
+        "status": e.status,
+        "received_at": _aware(e.received_at).isoformat(),
+        "cmdb_hostname": e.cmdb_hostname,
+        "dedup_count": e.dedup_count,
+    }
+
+
 @router.get("")
 async def graph(
     window_hours: int = Query(default=24, ge=1, le=24 * 30),
     status: str = Query(default="open,acknowledged"),
-    max_nodes: int = Query(default=2000, ge=2, le=5000),
+    max_lanes: int = Query(default=200, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -46,103 +56,47 @@ async def graph(
         select(Incident)
         .where(Incident.last_seen >= since, Incident.status.in_(statuses))
         .order_by(Incident.last_seen.desc())
-        .limit(max_nodes + 1)
+        .limit(max_lanes + 1)
     )
     incidents = list((await db.execute(stmt)).scalars())
-    truncated = len(incidents) > max_nodes
-    incidents = incidents[:max_nodes]
+    truncated = len(incidents) > max_lanes
+    incidents = incidents[:max_lanes]
 
-    # dominant alert name per incident (factual, from correlated events)
     incident_ids = [i.id for i in incidents]
-    dominant: dict[uuid.UUID, str] = {}
+    alerts_by_incident: dict[uuid.UUID, list[dict]] = {}
     if incident_ids:
-        rows = (
-            await db.execute(
-                select(AlertEvent.incident_id, AlertEvent.name).where(
-                    AlertEvent.incident_id.in_(incident_ids)
+        rows = list(
+            (
+                await db.execute(
+                    select(AlertEvent)
+                    .where(AlertEvent.incident_id.in_(incident_ids))
+                    .order_by(AlertEvent.received_at.asc())
                 )
-            )
-        ).all()
-        names_by_incident: dict[uuid.UUID, Counter] = {}
-        for incident_id, name in rows:
-            names_by_incident.setdefault(incident_id, Counter())[name] += 1
-        dominant = {
-            incident_id: counter.most_common(1)[0][0]
-            for incident_id, counter in names_by_incident.items()
-        }
-
-    nodes = []
-    hosts: set[str] = set()
-    for incident in incidents:
-        if incident.group_key:
-            hosts.add(incident.group_key)
-        nodes.append(
-            {
-                "id": str(incident.id),
-                "kind": "incident",
-                "label": incident.title,
-                "severity": incident.severity,
-                "status": incident.status.value,
-                "alert_count": incident.alert_count,
-                "group_key": incident.group_key,
-                "first_seen": _aware(incident.first_seen).isoformat(),
-                "last_seen": _aware(incident.last_seen).isoformat(),
-                "dominant_name": dominant.get(incident.id),
-            }
+            ).scalars()
         )
-    nodes.extend(
-        {"id": host, "kind": "host", "label": host, "severity": None, "status": None}
-        for host in sorted(hosts)
-    )
+        for e in rows:
+            bucket = alerts_by_incident.setdefault(e.incident_id, [])
+            if len(bucket) < ALERTS_PER_INCIDENT:
+                bucket.append(_alert_node(e))
 
-    edges = []
-    for incident in incidents:
-        if incident.group_key:
-            edges.append(
-                {
-                    "source": str(incident.id),
-                    "target": incident.group_key,
-                    "kind": "host",
-                    "weight": 1.0,
-                }
-            )
-
-    rule = await get_active_rule(db)
-    window = rule.window_seconds
-    # temporal proximity + same dominant name (O(n^2) over capped, windowed set)
-    temporal_count: dict[uuid.UUID, int] = {}
-    for i, a in enumerate(incidents):
-        for b in incidents[i + 1 :]:
-            gap = abs((_aware(a.first_seen) - _aware(b.first_seen)).total_seconds())
-            if gap <= window and (
-                temporal_count.get(a.id, 0) < TEMPORAL_EDGES_PER_NODE
-                and temporal_count.get(b.id, 0) < TEMPORAL_EDGES_PER_NODE
-            ):
-                edges.append(
-                    {
-                        "source": str(a.id),
-                        "target": str(b.id),
-                        "kind": "temporal",
-                        "weight": round(max(0.0, 1 - gap / window), 3),
-                    }
-                )
-                temporal_count[a.id] = temporal_count.get(a.id, 0) + 1
-                temporal_count[b.id] = temporal_count.get(b.id, 0) + 1
-            name_a, name_b = dominant.get(a.id), dominant.get(b.id)
-            if name_a and name_a == name_b and a.group_key != b.group_key:
-                edges.append(
-                    {
-                        "source": str(a.id),
-                        "target": str(b.id),
-                        "kind": "same_name",
-                        "weight": 1.0,
-                    }
-                )
+    lanes = [
+        {
+            "id": str(inc.id),
+            "title": inc.title,
+            "severity": inc.severity,
+            "status": inc.status.value,
+            "alert_count": inc.alert_count,
+            "first_seen": _aware(inc.first_seen).isoformat(),
+            "last_seen": _aware(inc.last_seen).isoformat(),
+            "cmdb_service_l2_code": inc.cmdb_service_l2_code,
+            "alerts": alerts_by_incident.get(inc.id, []),
+        }
+        for inc in incidents
+    ]
 
     return envelope(
         {
-            "nodes": nodes,
-            "edges": edges,
+            "incidents": lanes,
             "meta": {"truncated": truncated, "total_incidents": len(incidents)},
         }
     )
@@ -154,7 +108,7 @@ async def expand_incident(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """On-demand expansion: alert-event nodes for one incident."""
+    """Full member-alert list for one incident (uncapped)."""
     incident = await db.get(Incident, incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
@@ -167,25 +121,4 @@ async def expand_incident(
             )
         ).scalars()
     )
-    nodes = [
-        {
-            "id": str(e.id),
-            "kind": "alert",
-            "label": e.name,
-            "source": e.source,
-            "severity": e.severity,
-            "dedup_count": e.dedup_count,
-            "received_at": _aware(e.received_at).isoformat(),
-        }
-        for e in events
-    ]
-    edges = [
-        {
-            "source": str(e.id),
-            "target": str(incident_id),
-            "kind": "member",
-            "weight": 1.0,
-        }
-        for e in events
-    ]
-    return envelope({"nodes": nodes, "edges": edges})
+    return envelope({"alerts": [_alert_node(e) for e in events]})
