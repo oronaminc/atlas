@@ -1,0 +1,13 @@
+# Prod per-env MIMIR_* override. Strategic-merge: only these keys merge into the
+# base atlas-config ConfigMap (matched by kind/name/namespace). Identical to the
+# base default today; this file exists so future dev/prod divergence is a
+# one-line value change here (point dev at a different Mimir gateway).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atlas-config
+  namespace: atlas
+data:
+  MIMIR_RULER_URL: "http://mimir-gateway.mimir.svc:80/prometheus/config/v1/rules"
+  MIMIR_ALERTMANAGER_URL: "http://mimir-gateway.mimir.svc:80"
+  MIMIR_QUERY_URL: "http://mimir-gateway.mimir.svc:80/prometheus"

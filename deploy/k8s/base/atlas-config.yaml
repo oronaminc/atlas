@@ -1,0 +1,30 @@
+# Plain ConfigMap (NOT a generator) named exactly `atlas-config`. Every pod
+# (backend + all workers, incl. mimir-sync-worker) references it by this static
+# name via envFrom.configMapRef — no content-hash suffix, no ref rewriting.
+#
+# Tradeoff (intentional, per design decision): without the generator's hash,
+# editing this ConfigMap does NOT roll pods automatically — a live pod keeps the
+# old value until it is restarted (`kubectl rollout restart deploy -n atlas`).
+#
+# Holds env-AGNOSTIC defaults + the MIMIR_* endpoints (defaulted to the current
+# dev/prod values, which are identical today). Per-env divergence is applied by
+# each overlay's atlas-config-patch.yaml (strategic merge over the MIMIR_* keys)
+# and the overlays' JSON6902 patch (host-bearing CORS/FRONTEND/APP_ENV/etc.).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atlas-config
+  namespace: atlas
+data:
+  APP_ENV: "prod"
+  # Subpath deploy: atlas served under /alert-hub (same dev+prod; only the host
+  # differs). Ingress strips it before the backend; ROOT_PATH only drives
+  # docs/openapi + auth-cookie URL generation.
+  ROOT_PATH: "/alert-hub"
+  # The single Mimir org (X-Scope-OrgID) on observability-stack clients.
+  MIMIR_TENANT_ID: "system"
+  # Mimir endpoints — all traffic (ruler/query/alertmanager) shares the one
+  # mimir-gateway host on port 80. Overridable per overlay (atlas-config-patch).
+  MIMIR_RULER_URL: "http://mimir-gateway.mimir.svc:80/prometheus/config/v1/rules"
+  MIMIR_ALERTMANAGER_URL: "http://mimir-gateway.mimir.svc:80"
+  MIMIR_QUERY_URL: "http://mimir-gateway.mimir.svc:80/prometheus"
