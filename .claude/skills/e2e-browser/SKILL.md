@@ -61,15 +61,9 @@ PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node .claude/skills/e2e-browser/rbac_s
 Success prints `RBAC_SUPPRESS_E2E_OK` + screenshots per role and per
 suppression step.
 
-For multi-tenancy (HQ vs subsidiary isolation, tenant filter, tenant CRUD +
-user reassignment — see the script header for the curl prep that creates
-tenants/users and ingests via org-qualified routes):
-
-```bash
-PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers node .claude/skills/e2e-browser/tenancy_e2e.mjs
-```
-
-Success prints `TENANCY_E2E_OK`.
+For l2 visibility (a non-admin sees only alerts/incidents whose
+`cmdb_service_l2_code` their groups map to via `group_service_codes`; admins see
+all), drive a viewer mapped to one l2 and assert rows outside it are absent.
 
 ## 3. Header verification (X-Scope-OrgID)
 
