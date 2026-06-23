@@ -76,6 +76,12 @@ export const useLabelValues = (name: string | null) =>
 
 // --- Groups / Users ---
 export const useGroups = (params?: Params) => useList<Group>(["groups"], "/groups", params);
+export const useGroup = (id: string | null) =>
+  useQuery({
+    queryKey: ["groups", id, "detail"],
+    queryFn: () => api.get<Group>(`/groups/${id}`),
+    enabled: !!id,
+  });
 export const useGroupMembers = (id: string) =>
   useQuery({
     queryKey: ["groups", id, "members"],

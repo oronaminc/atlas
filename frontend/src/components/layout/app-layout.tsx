@@ -54,7 +54,6 @@ const navSections: NavSection[] = [
   {
     labelKey: "nav.sectionMonitor",
     items: [
-      { to: "/", labelKey: "nav.dashboard", icon: LayoutDashboard },
       { to: "/ops", labelKey: "nav.ops", icon: Gauge },
       { to: "/alerts", labelKey: "nav.alerts", icon: Activity },
       { to: "/incidents", labelKey: "nav.incidents", icon: Flame },
@@ -86,8 +85,9 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    labelKey: "nav.sectionAdmin",
+    labelKey: "nav.sectionManage",
     items: [
+      { to: "/", labelKey: "nav.dashboard", icon: LayoutDashboard },
       { to: "/groups", labelKey: "nav.groups", icon: UsersRound },
       { to: "/users", labelKey: "nav.users", icon: Users, adminOnly: true },
       { to: "/settings", labelKey: "nav.settings", icon: Settings, adminOnly: true },

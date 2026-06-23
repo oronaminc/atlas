@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, BellOff } from "lucide-react";
+import { Activity, AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { useActiveAlerts, useAuditLogs } from "@/api/queries";
@@ -52,30 +52,28 @@ export function DashboardPage() {
 
   const alertList = alerts.data?.data ?? [];
   const critical = alertList.filter((a) => a.labels.severity === "critical").length;
-  const silenced = alertList.filter((a) => a.status.state === "suppressed").length;
 
   return (
     <div>
-      <PageHeader title={t("nav.dashboard")} />
+      <PageHeader title={t("nav.dashboard")} description={t("dashboard.description")} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <SummaryCard
           title={t("dashboard.activeAlerts")}
           value={alerts.isError ? "-" : alertList.length}
           icon={Activity}
         />
         <SummaryCard
-          title="Critical"
+          title={t("dashboard.criticalAlerts")}
           value={alerts.isError ? "-" : critical}
           icon={AlertTriangle}
           tone="text-destructive"
         />
-        <SummaryCard title="Silenced" value={alerts.isError ? "-" : silenced} icon={BellOff} />
       </div>
 
       {alerts.isError && (
         <p className="mt-4 text-sm text-muted-foreground">
-          Alertmanager에 연결할 수 없습니다 — 알림 요약을 표시할 수 없습니다.
+          {t("dashboard.alertmanagerUnavailable")}
         </p>
       )}
 

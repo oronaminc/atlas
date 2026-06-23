@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { Plus, Tags, Trash2, UserPlus } from "lucide-react";
+import { Pencil, Plus, Tags, Trash2, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
 import {
   useApiMutation,
+  useGroup,
   useGroupMembers,
   useGroups,
   useGroupServiceCodes,
+  useLabelNames,
   useUsers,
 } from "@/api/queries";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +19,7 @@ import { FormField } from "@/components/common/form-field";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
-import type { Group } from "@/types";
+import type { Group, GroupMember } from "@/types";
 
 export function GroupsPage() {
   const { t } = useTranslation();
@@ -48,6 +51,7 @@ export function GroupsPage() {
   const [deleting, setDeleting] = useState<Group | null>(null);
   const [membersOf, setMembersOf] = useState<Group | null>(null);
   const [codesOf, setCodesOf] = useState<Group | null>(null);
+  const [editing, setEditing] = useState<Group | null>(null);
 
   const groups = useGroups({ q: search || undefined, cursor, limit: "20" });
 
@@ -85,8 +89,27 @@ export function GroupsPage() {
       render: (g) => <span className="text-muted-foreground">{g.description ?? "-"}</span>,
     },
     {
+      key: "labels",
+      header: t("groups.labels"),
+      render: (g) =>
+        g.labels && g.labels.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {g.labels.slice(0, 3).map((l) => (
+              <Badge key={l} variant="outline">
+                {l}
+              </Badge>
+            ))}
+            {g.labels.length > 3 && (
+              <Badge variant="outline">+{g.labels.length - 3}</Badge>
+            )}
+          </div>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
       key: "members",
-      header: "Members",
+      header: t("groups.members"),
       render: (g) => <Badge variant="secondary">{g.member_count ?? 0}</Badge>,
     },
     {
@@ -98,12 +121,27 @@ export function GroupsPage() {
             <Button
               variant="ghost"
               size="icon"
+              title={t("groups.members")}
               onClick={(e) => {
                 e.stopPropagation();
                 setMembersOf(g);
               }}
             >
               <UserPlus className="h-4 w-4" />
+            </Button>
+          )}
+          {canManage(g) && (
+            <Button
+              variant="ghost"
+              size="icon"
+              title={t("common.edit")}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditing(g);
+              }}
+              data-testid="edit-group"
+            >
+              <Pencil className="h-4 w-4" />
             </Button>
           )}
           {isAdmin && (
@@ -200,7 +238,112 @@ export function GroupsPage() {
         <MembersDialog group={membersOf} onClose={() => setMembersOf(null)} />
       )}
       {codesOf && <CodesDialog group={codesOf} onClose={() => setCodesOf(null)} />}
+      {editing && <EditGroupDialog group={editing} onClose={() => setEditing(null)} />}
     </div>
+  );
+}
+
+function EditGroupDialog({ group, onClose }: { group: Group; onClose: () => void }) {
+  const { t } = useTranslation();
+  // The list row may not carry labels; fetch the detail which is guaranteed to.
+  const detail = useGroup(group.id);
+  const labelNames = useLabelNames();
+
+  const [description, setDescription] = useState(group.description ?? "");
+  const [labels, setLabels] = useState<string[]>(group.labels ?? []);
+  const [labelFilter, setLabelFilter] = useState("");
+
+  useEffect(() => {
+    if (detail.data) {
+      setDescription(detail.data.data.description ?? "");
+      setLabels(detail.data.data.labels ?? []);
+    }
+  }, [detail.data]);
+
+  const save = useApiMutation(
+    () =>
+      api.patch(`/groups/${group.id}`, {
+        description: description || null,
+        labels,
+      }),
+    ["groups"],
+    onClose,
+  );
+
+  const toggleLabel = (name: string) =>
+    setLabels((prev) =>
+      prev.includes(name) ? prev.filter((l) => l !== name) : [...prev, name],
+    );
+
+  const available = (labelNames.data?.data ?? []).filter((n) =>
+    n.toLowerCase().includes(labelFilter.toLowerCase()),
+  );
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {t("common.edit")} — {group.name}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <FormField label={t("common.description")} htmlFor="edit-grp-desc">
+            <Textarea
+              id="edit-grp-desc"
+              className="h-20"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              data-testid="group-description"
+            />
+          </FormField>
+          <div className="space-y-2">
+            <span className="text-sm font-medium">{t("groups.labels")}</span>
+            <p className="text-xs text-muted-foreground">{t("groups.labelsHelp")}</p>
+            {labels.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {labels.map((l) => (
+                  <Badge key={l} variant="secondary">
+                    {l}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <Input
+              placeholder={t("common.search")}
+              value={labelFilter}
+              onChange={(e) => setLabelFilter(e.target.value)}
+            />
+            <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
+              {available.length === 0 && (
+                <p className="px-1 text-sm text-muted-foreground">{t("common.empty")}</p>
+              )}
+              {available.map((name) => (
+                <label
+                  key={name}
+                  className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-accent/50"
+                >
+                  <Checkbox
+                    checked={labels.includes(name)}
+                    onCheckedChange={() => toggleLabel(name)}
+                  />
+                  {name}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            onClick={() => save.mutate(undefined)}
+            disabled={save.isPending}
+            data-testid="save-group"
+          >
+            {t("common.save")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -252,6 +395,7 @@ function MembersDialog({ group, onClose }: { group: Group; onClose: () => void }
   const { hasRole } = useAuth();
   const [selectedUser, setSelectedUser] = useState("");
   const [role, setRole] = useState("member");
+  const [viewing, setViewing] = useState<GroupMember | null>(null);
 
   const addMember = useApiMutation(
     () =>
@@ -276,7 +420,9 @@ function MembersDialog({ group, onClose }: { group: Group; onClose: () => void }
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{group.name} — Members</DialogTitle>
+          <DialogTitle>
+            {group.name} — {t("groups.members")}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-2">
@@ -285,21 +431,28 @@ function MembersDialog({ group, onClose }: { group: Group; onClose: () => void }
               key={m.user_id}
               className="flex items-center justify-between rounded-md border px-3 py-2"
             >
-              <div>
+              <button
+                type="button"
+                className="flex-1 cursor-pointer text-left hover:underline"
+                onClick={() => setViewing(m)}
+                data-testid="member-row"
+              >
                 <span className="text-sm font-medium">{m.username}</span>
                 <span className="ml-2 text-xs text-muted-foreground">{m.email}</span>
-              </div>
+              </button>
               <div className="flex items-center gap-2">
                 <Badge variant={m.role_in_group === "manager" ? "default" : "secondary"}>
                   {m.role_in_group}
                 </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeMember.mutate(m.user_id)}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                {hasRole("admin") && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeMember.mutate(m.user_id)}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
               </div>
             </div>
           ))}
@@ -339,6 +492,30 @@ function MembersDialog({ group, onClose }: { group: Group; onClose: () => void }
             </Button>
           </div>
         )}
+
+        <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{viewing?.username}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("common.name")}</span>
+                <span className="font-medium">{viewing?.username}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("auth.email")}</span>
+                <span>{viewing?.email}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{t("groups.roleInGroup")}</span>
+                <Badge variant={viewing?.role_in_group === "manager" ? "default" : "secondary"}>
+                  {viewing?.role_in_group}
+                </Badge>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

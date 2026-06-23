@@ -1,5 +1,6 @@
-/** IMP admin: view/configure the topology grouping criteria (v1: single rule —
- *  group by cmdb_service_l2_code, severity-aware formation). */
+/** IMP admin: view/configure the incident-formation criteria (v1: single rule —
+ *  group by cmdb_service_l2_code, severity-aware formation). label_keys are
+ *  display-only; only the timing/size knobs are editable. */
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -7,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "@/api/client";
 import { useApiMutation, useGroupingRules } from "@/api/queries";
 import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,17 +24,17 @@ export function GroupingRulesPage() {
   const rules = useGroupingRules();
   const rule = rules.data?.data?.[0];
 
-  const [labelKeys, setLabelKeys] = useState("");
   const [windowSeconds, setWindowSeconds] = useState("");
   const [minGroupSize, setMinGroupSize] = useState("");
+  const [dedupWindowSeconds, setDedupWindowSeconds] = useState("");
   const [criticalImmediate, setCriticalImmediate] = useState(true);
   const [enabled, setEnabled] = useState(true);
 
   useEffect(() => {
     if (!rule) return;
-    setLabelKeys(rule.label_keys.join(", "));
     setWindowSeconds(String(rule.window_seconds));
     setMinGroupSize(String(rule.min_group_size));
+    setDedupWindowSeconds(String(rule.dedup_window_seconds));
     setCriticalImmediate(rule.critical_immediate);
     setEnabled(rule.enabled);
   }, [rule]);
@@ -41,9 +43,9 @@ export function GroupingRulesPage() {
     () =>
       api.patch(`/grouping-rules/${rule!.id}`, {
         enabled,
-        label_keys: labelKeys.split(",").map((s) => s.trim()).filter(Boolean),
         window_seconds: Number(windowSeconds),
         min_group_size: Number(minGroupSize),
+        dedup_window_seconds: Number(dedupWindowSeconds),
         critical_immediate: criticalImmediate,
       }),
     ["grouping-rules"],
@@ -60,12 +62,17 @@ export function GroupingRulesPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <Field label={t("groupingRules.labelKeys")}>
-              <Input
-                value={labelKeys}
-                onChange={(e) => setLabelKeys(e.target.value)}
-                disabled={!canEdit}
-                data-testid="label-keys"
-              />
+              <div className="flex flex-wrap gap-1" data-testid="label-keys">
+                {rule.label_keys.length === 0 ? (
+                  <span className="text-sm text-muted-foreground">-</span>
+                ) : (
+                  rule.label_keys.map((k) => (
+                    <Badge key={k} variant="outline">
+                      {k}
+                    </Badge>
+                  ))
+                )}
+              </div>
             </Field>
             <Field label={t("groupingRules.window")}>
               <Input
@@ -83,6 +90,15 @@ export function GroupingRulesPage() {
                 onChange={(e) => setMinGroupSize(e.target.value)}
                 disabled={!canEdit}
                 data-testid="min-group-size"
+              />
+            </Field>
+            <Field label={t("groupingRules.dedupWindow")}>
+              <Input
+                type="number"
+                value={dedupWindowSeconds}
+                onChange={(e) => setDedupWindowSeconds(e.target.value)}
+                disabled={!canEdit}
+                data-testid="dedup-window-seconds"
               />
             </Field>
             <label className="flex items-center gap-2 text-sm">

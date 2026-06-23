@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus } from "lucide-react";
+import { History, KeyRound, Plus } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
 
 import { api } from "@/api/client";
-import { useApiMutation, useUsers } from "@/api/queries";
+import { useApiMutation, useAuditLogs, useUsers } from "@/api/queries";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { DataTable, type Column } from "@/components/common/data-table";
 import { FormField } from "@/components/common/form-field";
+import { Pager } from "@/components/common/pager";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/utils";
 import type { User } from "@/types";
 
@@ -43,11 +45,18 @@ type UserForm = z.infer<typeof userSchema>;
 export function UsersPage() {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
-  const [cursor, setCursor] = useState<string | undefined>();
+  const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleting, setDeleting] = useState<User | null>(null);
+  const [resetting, setResetting] = useState<User | null>(null);
+  const [history, setHistory] = useState<User | null>(null);
 
-  const users = useUsers({ q: search || undefined, cursor, limit: "20" });
+  const users = useUsers({
+    q: search || undefined,
+    page: String(page),
+    page_size: "20",
+  });
+  const meta = users.data?.meta;
 
   const setRole = useApiMutation(
     ({ user, role }: { user: User; role: string }) =>
@@ -130,17 +139,43 @@ export function UsersPage() {
       key: "actions",
       header: "",
       render: (u) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive"
-          onClick={(e) => {
-            e.stopPropagation();
-            setDeleting(u);
-          }}
-        >
-          {t("common.delete")}
-        </Button>
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            title={t("users.history")}
+            onClick={(e) => {
+              e.stopPropagation();
+              setHistory(u);
+            }}
+            data-testid="user-history"
+          >
+            <History className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title={t("users.resetPassword")}
+            onClick={(e) => {
+              e.stopPropagation();
+              setResetting(u);
+            }}
+            data-testid="user-reset-pw"
+          >
+            <KeyRound className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleting(u);
+            }}
+          >
+            {t("common.delete")}
+          </Button>
+        </div>
       ),
     },
   ];
@@ -161,12 +196,16 @@ export function UsersPage() {
         rows={users.data?.data ?? []}
         rowKey={(u) => u.id}
         loading={users.isLoading}
-        search={{ value: search, onChange: (v) => { setSearch(v); setCursor(undefined); } }}
-        pagination={{
-          hasMore: users.data?.meta?.has_more ?? false,
-          onNext: () => setCursor(users.data?.meta?.next_cursor ?? undefined),
-        }}
+        search={{ value: search, onChange: (v) => { setSearch(v); setPage(1); } }}
       />
+      <div className="mt-4">
+        <Pager
+          page={meta?.page ?? page}
+          pages={meta?.pages ?? 1}
+          total={meta?.total}
+          onPage={setPage}
+        />
+      </div>
       <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ConfirmDialog
         open={!!deleting}
@@ -176,7 +215,107 @@ export function UsersPage() {
         loading={remove.isPending}
         onConfirm={() => deleting && remove.mutate(deleting)}
       />
+      {resetting && (
+        <ResetPasswordDialog user={resetting} onClose={() => setResetting(null)} />
+      )}
+      {history && (
+        <UserHistoryDialog user={history} onClose={() => setHistory(null)} />
+      )}
     </div>
+  );
+}
+
+function ResetPasswordDialog({ user, onClose }: { user: User; onClose: () => void }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [password, setPassword] = useState("");
+
+  const reset = useApiMutation(
+    () => api.post(`/users/${user.id}/reset-password`, { new_password: password }),
+    ["users"],
+    () => {
+      toast({ title: t("users.resetPasswordDone") });
+      onClose();
+    },
+  );
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {t("users.resetPassword")} — {user.username}
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground">{t("users.resetPasswordHelp")}</p>
+        <FormField label={t("auth.newPassword")} htmlFor="reset-pw" required>
+          <Input
+            id="reset-pw"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            data-testid="reset-pw-input"
+          />
+        </FormField>
+        <DialogFooter>
+          <Button
+            onClick={() =>
+              reset.mutate(undefined, {
+                onError: (e) =>
+                  toast({
+                    variant: "destructive",
+                    title: t("common.failed"),
+                    description: e instanceof Error ? e.message : String(e),
+                  }),
+              })
+            }
+            disabled={password.length < 8 || reset.isPending}
+            data-testid="reset-pw-save"
+          >
+            {t("common.save")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function UserHistoryDialog({ user, onClose }: { user: User; onClose: () => void }) {
+  const { t } = useTranslation();
+  const logs = useAuditLogs({ actor_id: user.id, page_size: "25" });
+  const rows = logs.data?.data ?? [];
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {t("users.history")} — {user.username}
+          </DialogTitle>
+        </DialogHeader>
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("common.empty")}</p>
+        ) : (
+          <div className="space-y-1">
+            {rows.map((l) => (
+              <div
+                key={l.id}
+                className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{l.action}</span>
+                  <Badge variant="outline">{l.resource_type}</Badge>
+                  {l.emergency && <Badge variant="destructive">emergency</Badge>}
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {formatDate(l.created_at)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

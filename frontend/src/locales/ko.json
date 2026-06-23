@@ -20,7 +20,8 @@
     "test": "테스트",
     "validate": "검증",
     "success": "성공",
-    "failed": "실패"
+    "failed": "실패",
+    "totalCount": "총 {{count}}건"
   },
   "theme": {
     "toggle": "테마 변경",
@@ -36,7 +37,7 @@
     "alerts": "알림",
     "incidents": "인시던트",
     "notifications": "알림 설정",
-    "groups": "그룹 관리",
+    "groups": "사용자 그룹 관리",
     "users": "사용자 관리",
     "audit": "감사 로그",
     "profile": "프로필",
@@ -45,13 +46,13 @@
     "ops": "운영 대시보드",
     "graph": "인시던트 그래프",
     "thresholds": "임계값",
-    "groupingRules": "그룹핑 룰",
+    "groupingRules": "인시던트 형성 룰",
     "notificationDefaults": "알림 기본값",
     "rulesViewer": "룰 뷰어",
     "sectionMonitor": "모니터링",
     "sectionConfigure": "설정",
     "sectionAlertRules": "알림 룰",
-    "sectionAdmin": "관리",
+    "sectionManage": "관리",
     "sectionSilence": "사일런스",
     "silence": "사일런스"
   },
@@ -122,10 +123,11 @@
     "deleteConfirm": "이 인시던트를 삭제할까요? 알림은 해제되며 삭제되지 않습니다."
   },
   "groupingRules": {
-    "description": "토폴로지 그룹핑 기준 (관리자)",
-    "labelKeys": "라벨 키",
-    "window": "윈도우 (초)",
+    "description": "수집된 알림을 인시던트로 묶는 기준 (관리자)",
+    "labelKeys": "라벨 키 (읽기 전용)",
+    "window": "형성 윈도우 (초)",
     "minGroupSize": "최소 그룹 크기",
+    "dedupWindow": "중복 제거 윈도우 (초)",
     "criticalImmediate": "Critical 즉시 생성"
   },
   "notificationDefaults": {
@@ -137,7 +139,17 @@
   },
   "groups": {
     "serviceCodes": "서비스 코드 (l2)",
-    "serviceCodesHelp": "이 그룹이 보고/알림받는 cmdb_service_l2_code 값 (한 줄에 하나)"
+    "serviceCodesHelp": "이 그룹이 보고/알림받는 cmdb_service_l2_code 값 (한 줄에 하나)",
+    "members": "멤버",
+    "roleInGroup": "그룹 내 역할",
+    "labels": "라벨",
+    "labelsHelp": "설명용 메타데이터입니다 — Mimir의 라벨 이름. 이 그룹에 해당하는 라벨을 선택하세요."
+  },
+  "users": {
+    "resetPassword": "비밀번호 재설정",
+    "resetPasswordHelp": "새 비밀번호를 직접 설정합니다 (최소 8자). 이메일은 발송되지 않습니다.",
+    "resetPasswordDone": "비밀번호가 재설정되었습니다",
+    "history": "활동 이력"
   },
   "mutes": {
     "title": "알림 차단 / 대상 그룹",
@@ -222,8 +234,11 @@
     "lastSynced": "마지막 동기화"
   },
   "dashboard": {
+    "description": "관리자 개요 — 활성 알림 및 최근 활동",
     "activeAlerts": "활성 알림",
+    "criticalAlerts": "Critical",
     "recentAudit": "최근 감사 로그",
+    "alertmanagerUnavailable": "Alertmanager에 연결할 수 없습니다 — 알림 요약을 표시할 수 없습니다.",
     "syncState": "동기화 상태"
   },
   "settings": {

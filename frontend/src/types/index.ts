@@ -13,6 +13,11 @@ export interface ApiError {
 export interface Meta {
   next_cursor: string | null;
   has_more?: boolean;
+  // numbered pagination (audit-logs, users with ?page=)
+  total?: number;
+  page?: number;
+  pages?: number;
+  page_size?: number;
 }
 
 export type GlobalRole = "admin" | "editor" | "viewer";
@@ -72,6 +77,7 @@ export interface Group {
   id: string;
   name: string;
   description: string | null;
+  labels?: string[];
   member_count?: number;
   created_at: string;
 }

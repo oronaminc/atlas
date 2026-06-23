@@ -20,7 +20,8 @@
     "test": "Test",
     "validate": "Validate",
     "success": "Success",
-    "failed": "Failed"
+    "failed": "Failed",
+    "totalCount": "{{count}} total"
   },
   "theme": {
     "toggle": "Toggle theme",
@@ -36,8 +37,8 @@
     "alerts": "Alerts",
     "incidents": "Incidents",
     "notifications": "Notifications",
-    "groups": "Groups",
-    "users": "Users",
+    "groups": "User Group Management",
+    "users": "User Management",
     "audit": "Audit Log",
     "profile": "Profile",
     "logout": "Log out",
@@ -45,13 +46,13 @@
     "ops": "Ops Dashboard",
     "graph": "Incident Graph",
     "thresholds": "Thresholds",
-    "groupingRules": "Grouping Rules",
+    "groupingRules": "Incident Formation Rules",
     "notificationDefaults": "Notification Defaults",
     "rulesViewer": "Rules Viewer",
     "sectionMonitor": "Monitor",
     "sectionConfigure": "Configure",
     "sectionAlertRules": "Alert Rules",
-    "sectionAdmin": "Admin",
+    "sectionManage": "Manage",
     "sectionSilence": "Silence",
     "silence": "Silences"
   },
@@ -122,10 +123,11 @@
     "deleteConfirm": "Delete this incident? Its alerts are freed (not deleted)."
   },
   "groupingRules": {
-    "description": "Topology grouping criteria (admin)",
-    "labelKeys": "Label keys",
-    "window": "Window (seconds)",
+    "description": "Criteria that group inbound alerts into incidents (admin)",
+    "labelKeys": "Label keys (read-only)",
+    "window": "Formation window (seconds)",
     "minGroupSize": "Min group size",
+    "dedupWindow": "Dedup window (seconds)",
     "criticalImmediate": "Critical forms immediately"
   },
   "notificationDefaults": {
@@ -137,7 +139,17 @@
   },
   "groups": {
     "serviceCodes": "Service codes (l2)",
-    "serviceCodesHelp": "cmdb_service_l2_code values this group sees / is notified for (one per line)"
+    "serviceCodesHelp": "cmdb_service_l2_code values this group sees / is notified for (one per line)",
+    "members": "Members",
+    "roleInGroup": "Role in group",
+    "labels": "Labels",
+    "labelsHelp": "Descriptive metadata only — label names from Mimir. Select any that apply to this group."
+  },
+  "users": {
+    "resetPassword": "Reset password",
+    "resetPasswordHelp": "Set a new password directly (min 8 characters). No email is sent.",
+    "resetPasswordDone": "Password reset",
+    "history": "Activity history"
   },
   "mutes": {
     "title": "Mutes / Target Groups",
@@ -222,8 +234,11 @@
     "lastSynced": "Last synced"
   },
   "dashboard": {
+    "description": "Admin overview — active alerts and recent activity",
     "activeAlerts": "Active alerts",
+    "criticalAlerts": "Critical",
     "recentAudit": "Recent audit log",
+    "alertmanagerUnavailable": "Cannot reach Alertmanager — alert summary unavailable.",
     "syncState": "Sync state"
   },
   "settings": {
