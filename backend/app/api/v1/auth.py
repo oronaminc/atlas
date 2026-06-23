@@ -1,3 +1,4 @@
+import logging
 import secrets
 import uuid
 
@@ -18,7 +19,11 @@ from app.models.base import utcnow
 from app.models.user import AuthProvider, GlobalRole
 from app.schemas.auth import LoginRequest, PasswordChangeRequest
 from app.schemas.user import GroupMembershipOut, UserOut
+from app.services import saml_auth
 from app.services.audit import record_audit
+from app.services.saml_config import get_saml_config
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -234,3 +239,85 @@ async def oidc_callback(
     set_refresh_cookie(redirect, user.id)
     redirect.delete_cookie(OIDC_STATE_COOKIE, path=COOKIE_PATH)
     return redirect
+
+
+# --- SAML 2.0 (SP-side; config is admin-managed in saml_config) ---
+
+
+def _saml_enabled(cfg) -> bool:
+    return bool(cfg.enabled and cfg.idp_metadata_xml)
+
+
+@router.get("/saml/login")
+async def saml_login(db: AsyncSession = Depends(get_db)):
+    """Build an AuthnRequest and redirect to the IdP SSO URL (HTTP-Redirect)."""
+    from onelogin.saml2.auth import OneLogin_Saml2_Auth
+
+    cfg = await get_saml_config(db)
+    if not _saml_enabled(cfg):
+        raise HTTPException(status_code=503, detail="SAML is not configured")
+    auth = OneLogin_Saml2_Auth(
+        saml_auth.login_request_data(), old_settings=saml_auth.build_saml_settings(cfg)
+    )
+    return RedirectResponse(auth.login(return_to=settings.FRONTEND_URL))
+
+
+@router.post("/saml/acs")
+async def saml_acs(request: Request, db: AsyncSession = Depends(get_db)):
+    """Assertion Consumer Service. python3-saml validates the assertion signature
+    (against the IdP cert in the metadata), audience, NotOnOrAfter, and
+    destination; then JIT-provision the user (role=viewer on first login)."""
+    from onelogin.saml2.auth import OneLogin_Saml2_Auth
+
+    cfg = await get_saml_config(db)
+    if not _saml_enabled(cfg) or not cfg.sp_private_key:
+        raise HTTPException(status_code=503, detail="SAML is not configured")
+
+    form = await request.form()
+    saml_response = str(form.get("SAMLResponse") or "")
+    relay_state = str(form.get("RelayState") or "")
+    auth = OneLogin_Saml2_Auth(
+        saml_auth.acs_request_data(saml_response, relay_state),
+        old_settings=saml_auth.build_saml_settings(cfg),
+    )
+    auth.process_response()
+    errors = auth.get_errors()
+    if errors or not auth.is_authenticated():
+        logger.warning(
+            "SAML ACS rejected: errors=%s reason=%s", errors, auth.get_last_error_reason()
+        )
+        raise HTTPException(status_code=400, detail="SAML assertion rejected")
+
+    attrs = auth.get_attributes()
+    # Attribute dump on success (operational visibility only; NOT a verification path).
+    logger.info("SAML assertion accepted; attributes=%s", sorted(attrs.keys()))
+    try:
+        user, created = await saml_auth.jit_user(db, cfg, attrs, auth.get_nameid())
+    except saml_auth.SamlError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    await record_audit(
+        db,
+        actor_id=user.id,
+        action="saml_signup" if created else "saml_login",
+        resource_type="user",
+        resource_id=user.id,
+        ip=client_ip(request),
+    )
+    await db.commit()
+
+    redirect = RedirectResponse(settings.FRONTEND_URL)
+    set_refresh_cookie(redirect, user.id)
+    return redirect
+
+
+@router.get("/saml/metadata")
+async def saml_metadata(db: AsyncSession = Depends(get_db)):
+    """SP metadata (for handing to the IdP admin)."""
+    from onelogin.saml2.settings import OneLogin_Saml2_Settings
+
+    cfg = await get_saml_config(db)
+    saml_settings = OneLogin_Saml2_Settings(
+        saml_auth.build_saml_settings(cfg), sp_validation_only=True
+    )
+    return Response(content=saml_settings.get_sp_metadata(), media_type="application/xml")

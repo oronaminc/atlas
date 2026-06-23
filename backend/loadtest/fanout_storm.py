@@ -1,17 +1,20 @@
 """Notification fan-out under storm.
 
-Seeds: one group with --recipients members (telegram targets), a route,
---incidents un-notified critical incidents. Then runs the REAL
-fan_out_pending + deliver_once code in-process — exactly the notification
-worker loop, except TelegramChannel points at the local stub and the loop
-has no 5s sleep (measures the pipeline's own ceiling; the production
-worker adds sleep(5) on top, reported separately).
+Seeds: one group mapped to an l2 service code, with --recipients telegram
+GroupChannels (distinct chat-ids), and --incidents un-notified critical
+incidents carrying that l2. Then runs the REAL fan_out_pending + deliver_once
+in-process — exactly the notification worker loop, except TelegramChannel
+points at the local stub and the loop has no 5s sleep (measures the pipeline's
+own ceiling; the production worker adds sleep(5) on top, reported separately).
 
-Requires: telegram_stub running, DATABASE_URL set to the load PG.
+Quotas/rate are ENV now (no notification_settings row). To avoid capping the
+measurement, export high quotas before running:
 
-Usage:
+    NOTIFY_QUOTA_GROUP_PER_HOUR=1000000 NOTIFY_QUOTA_GLOBAL_PER_DAY=1000000 \
     DATABASE_URL=postgresql+asyncpg://atlas:atlas@127.0.0.1:5432/atlas \
       uv run python -m loadtest.fanout_storm --recipients 300 --incidents 10
+
+Requires: telegram_stub running, DATABASE_URL set to the load PG.
 """
 
 import argparse
@@ -21,12 +24,13 @@ import uuid
 
 from sqlalchemy import func, select, text
 
-from app.core.security import hash_password
+from app.core.security import encrypt_secret
 from app.db import async_session_factory
-from app.models import Group, User, UserGroup
+from app.models import Group
 from app.models.alerting import Incident, IncidentStatus
 from app.models.base import utcnow
-from app.models.delivery import Notification, NotificationRoute
+from app.models.delivery import GroupChannel, Notification
+from app.models.group import GroupServiceCode
 from app.notifications.channels.telegram import TelegramChannel
 from app.notifications.delivery import deliver_once
 from app.notifications.fanout import fan_out_pending
@@ -35,37 +39,28 @@ from app.notifications.throttle import TokenBucket
 STUB = "http://127.0.0.1:18082"
 
 
-async def seed(recipients: int, incidents: int) -> None:
+async def seed(recipients: int, incidents: int) -> str:
+    """Returns the l2 code the incidents + group share."""
+    l2 = f"L2-storm-{uuid.uuid4().hex[:6]}"
     async with async_session_factory() as db:
         group = Group(name=f"storm-{uuid.uuid4().hex[:6]}")
         db.add(group)
         await db.flush()
+        db.add(GroupServiceCode(group_id=group.id, cmdb_service_l2_code=l2))
+        # recipients = N telegram channels under the group (distinct chat-ids).
+        # fanout emits one notification per (incident, channel) -> recipients x incidents.
         for i in range(recipients):
-            user = User(
-                email=f"storm-{group.name}-{i}@example.com",
-                username=f"storm-{group.name}-{i}",
-                hashed_password=hash_password("password123"),
-                telegram_chat_id=str(100000 + i),
+            db.add(
+                GroupChannel(
+                    group_id=group.id,
+                    channel="telegram",
+                    enabled=True,
+                    chat_id=str(100000 + i),
+                    bot_token=encrypt_secret("stub-bot-token"),
+                )
             )
-            db.add(user)
-            await db.flush()
-            db.add(UserGroup(user_id=user.id, group_id=group.id))
-        db.add(
-            NotificationRoute(
-                group_id=group.id, min_severity="warning", channels=["telegram"], enabled=True
-            )
-        )
-        # quotas must not cap the measurement; rate stays at the configured 25/s.
-        # get_notification_settings creates the row if missing — UPDATE alone
-        # silently no-ops on a fresh DB and the default quota (30/group/h)
-        # freezes the test at exactly 30 sends.
-        from app.notifications.settings import get_notification_settings
-
-        settings_row = await get_notification_settings(db)
-        settings_row.quota_group_per_hour = 1_000_000
-        settings_row.quota_global_per_day = 1_000_000
-        # pre-existing incidents must not fan out to this route too (routes
-        # are global: every enabled route matches every un-notified incident)
+        # pre-existing incidents must not fan out too (fanout matches every
+        # un-notified incident whose l2 maps to a group).
         await db.execute(text("UPDATE incidents SET notified_at = now() WHERE notified_at IS NULL"))
 
         now = utcnow()
@@ -75,14 +70,16 @@ async def seed(recipients: int, incidents: int) -> None:
                     title=f"storm incident {i}",
                     status=IncidentStatus.open,
                     severity="critical",
-                    group_key=f"host=storm-{i:03d}",
+                    group_key=l2,
+                    cmdb_service_l2_code=l2,
                     first_seen=now,
                     last_seen=now,
                     alert_count=1,
                 )
             )
         await db.commit()
-    print(f"seeded {recipients} recipients x telegram, {incidents} incidents")
+    print(f"seeded {recipients} telegram channels on {l2}, {incidents} incidents")
+    return l2
 
 
 async def main():
@@ -97,6 +94,7 @@ async def main():
 
     await seed(args.recipients, args.incidents)
 
+    # Override the channel so sends hit the local stub, not real Telegram.
     channels = {"telegram": TelegramChannel(token="stub", api_base=STUB)}
     throttle = TokenBucket(rate_per_second=args.rate)
     expected = args.recipients * args.incidents
@@ -115,7 +113,7 @@ async def main():
                 throttle=throttle,
             )
             await db.commit()
-            sent_total += sent
+            sent_total += int(sent)  # DeliveryResult is an int (successful-send count)
             pending = (
                 await db.execute(
                     select(func.count())

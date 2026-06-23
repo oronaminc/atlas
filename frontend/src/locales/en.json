@@ -339,6 +339,18 @@
     "help": "Lookback for label autocomplete when no range is given. A short window avoids Mimir 422s from a stale bucket index over the full retention period.",
     "lookbackHours": "Lookback (hours)"
   },
+  "saml": {
+    "title": "SAML SSO",
+    "help": "SP key/cert, IdP metadata, and attribute mapping. Login uses the 'Log in with SSO' button once enabled.",
+    "enabled": "Enabled",
+    "spPrivateKey": "SP private key",
+    "spPrivateKeyHelp": "Leave ******** to keep the stored key",
+    "spCertificate": "SP certificate",
+    "idpMetadata": "IdP metadata XML",
+    "displayNameAttr": "Display name attribute",
+    "uidAttr": "Username/UID attribute",
+    "emailAttr": "Email attribute"
+  },
   "llm": {
     "title": "LLM analysis",
     "help": "OpenAI-compatible endpoint for incident root-cause analysis. Self-hosted (vLLM/Ollama/gateway) is the primary path; external OpenAI only if egress is allowed.",

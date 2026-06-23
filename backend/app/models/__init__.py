@@ -12,6 +12,7 @@ from app.models.llm import IncidentAnalysis, LLMConfig
 from app.models.maintenance import AlertStatsHourly, RetentionConfig
 from app.models.mimir import MimirQueryConfig, MimirRule, MimirSilence
 from app.models.notification import NotificationPolicy, Receiver, Silence
+from app.models.saml import SamlConfig
 from app.models.threshold import Comparator, ThresholdOverride
 from app.models.user import User
 
@@ -36,6 +37,7 @@ __all__ = [
     "NotificationPolicy",
     "Receiver",
     "RetentionConfig",
+    "SamlConfig",
     "Comparator",
     "Silence",
     "ThresholdOverride",
