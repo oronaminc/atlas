@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Standalone base component for the Mimir read-cache sync worker. Kept OUT of the
+# top-level base kustomization on purpose: the IMP overhaul is not prod-verified,
+# so the worker is gated to DEV ONLY (overlays/dev references this directory).
+# Prod adopts it later by adding `- ../../base/mimir-sync-worker` to overlays/prod.
+# Packaged as a directory base (not a raw file) so an overlay can reference it
+# without tripping kustomize's load restrictor.
+resources:
+  - mimir-sync-worker.yaml

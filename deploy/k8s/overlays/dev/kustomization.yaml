@@ -3,6 +3,12 @@ kind: Kustomization
 
 resources:
   - ../../base
+  # Dev-only: the mimir-sync-worker is a directory base under base/ that is NOT
+  # in the top-level base kustomization (the overhaul isn't prod-verified yet).
+  # Pulled in here so it runs in dev only; it still inherits the dev atlas-config
+  # (MIMIR_* URLs) via envFrom + the base configMapGenerator name-hash rewrite.
+  # Prod adopts it later by adding the same line to overlays/prod.
+  - ../../base/mimir-sync-worker
   - postgres.yaml
   - redis.yaml
 

@@ -7,7 +7,11 @@ resources:
   - correlation-worker.yaml
   - notification-worker.yaml
   - maintenance-worker.yaml
-  - mimir-sync-worker.yaml
+  # The mimir-sync-worker is intentionally NOT a base resource: the IMP overhaul
+  # is not prod-verified yet, so it is gated to dev only. It lives as a directory
+  # base at base/mimir-sync-worker/ (referenced by overlays/dev). Prod adopts it
+  # later by adding `- ../../base/mimir-sync-worker` to overlays/prod (or this
+  # list) once verified.
   - llm-worker.yaml
   - frontend.yaml
   - ingress.yaml
