@@ -36,8 +36,11 @@ class Notification(TimestampedBase):
         Index("ix_notifications_claim", "priority", "created_at"),
     )
 
-    incident_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("incidents.id", ondelete="CASCADE"), index=True
+    # nullable + SET NULL: deleting (dissolving) an incident keeps already-sent/
+    # dead notifications as the delivery record (orphaned), while pending/failed
+    # are deleted explicitly first (incident_service.delete_incident).
+    incident_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True, index=True
     )
     channel: Mapped[str] = mapped_column(String(50))
     # nullable: an OnCall (team-webhook) notification has no per-user recipient

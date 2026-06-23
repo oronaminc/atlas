@@ -10,18 +10,18 @@ INGEST_HEADERS = {"X-Atlas-Ingest-Key": "test-ingest-key"}
 
 
 async def test_ingest_persists_events_and_acks_202(client, db):
+    # AM_WEBHOOK = 1 firing (HighCPU) + 1 resolved (DiskFull). firing -> stored;
+    # resolved with no prior match -> no-op (transition semantics, Stage 5).
     res = await client.post("/api/v1/ingest/alertmanager", json=AM_WEBHOOK, headers=INGEST_HEADERS)
     assert res.status_code == 202
-    assert res.json()["data"]["accepted"] == 2
+    assert res.json()["data"] == {"accepted": 2, "stored": 1, "resolved": 1}
 
     events = list((await db.execute(select(AlertEvent))).scalars())
-    assert len(events) == 2
-    by_name = {e.name: e for e in events}
-    assert by_name["HighCPU"].source == "alertmanager"
-    assert by_name["HighCPU"].severity == "critical"
-    assert by_name["HighCPU"].fingerprint
-    # not yet correlated — that happens off the queue
-    assert all(e.incident_id is None for e in events)
+    assert len(events) == 1  # only the firing one is a new row
+    cpu = events[0]
+    assert cpu.name == "HighCPU" and cpu.source == "alertmanager"
+    assert cpu.severity == "critical" and cpu.fingerprint
+    assert cpu.incident_id is None  # not yet correlated — happens off the queue
 
 
 async def test_ingest_requires_valid_key(client):

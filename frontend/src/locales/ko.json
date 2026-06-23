@@ -115,7 +115,9 @@
     "detach": "분리",
     "notify_email": "이메일",
     "notify_telegram": "텔레그램",
-    "notify_oncall": "OnCall"
+    "notify_oncall": "OnCall",
+    "delete": "인시던트 삭제",
+    "deleteConfirm": "이 인시던트를 삭제할까요? 알림은 해제되며 삭제되지 않습니다."
   },
   "groupingRules": {
     "description": "토폴로지 그룹핑 기준 (관리자)",

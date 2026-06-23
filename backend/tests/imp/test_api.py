@@ -110,14 +110,27 @@ async def test_promote_then_attach_then_detach(client, db, alerts, editor_header
     assert res.status_code == 200
 
 
-async def test_detach_to_empty_resolves(client, db, alerts, editor_headers):
+async def test_detach_last_alert_forbidden_then_delete(client, db, alerts, editor_headers):
+    # A4: an incident can never have 0 alerts. Detaching the last alert is 409;
+    # to dissolve, DELETE the incident (frees its alert).
     res = await client.post(
         "/api/v1/incidents", json={"alert_id": str(alerts[0].id)}, headers=editor_headers
     )
     inc_id = res.json()["data"]["id"]
-    await client.delete(f"/api/v1/incidents/{inc_id}/alerts/{alerts[0].id}", headers=editor_headers)
-    res = await client.get(f"/api/v1/incidents/{inc_id}", headers=editor_headers)
-    assert res.json()["data"]["status"] == "resolved"
+    detach = await client.delete(
+        f"/api/v1/incidents/{inc_id}/alerts/{alerts[0].id}", headers=editor_headers
+    )
+    assert detach.status_code == 409  # last alert
+    deleted = await client.delete(f"/api/v1/incidents/{inc_id}", headers=editor_headers)
+    assert deleted.status_code == 200 and deleted.json()["data"]["freed_alerts"] == 1
+    assert (
+        await client.get(f"/api/v1/incidents/{inc_id}", headers=editor_headers)
+    ).status_code == 404
+    # the freed alert survives, unattached
+    alert = (await client.get(f"/api/v1/alerts/{alerts[0].id}", headers=editor_headers)).json()[
+        "data"
+    ]
+    assert alert["incident_id"] is None
 
 
 async def test_channel_toggles_patch(client, alerts, editor_headers):

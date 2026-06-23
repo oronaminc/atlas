@@ -115,7 +115,9 @@
     "detach": "Detach",
     "notify_email": "Email",
     "notify_telegram": "Telegram",
-    "notify_oncall": "OnCall"
+    "notify_oncall": "OnCall",
+    "delete": "Delete incident",
+    "deleteConfirm": "Delete this incident? Its alerts are freed (not deleted)."
   },
   "groupingRules": {
     "description": "Topology grouping criteria (admin)",

@@ -132,6 +132,11 @@ function IncidentDetailDialog({
     (alertId: string) => api.delete(`/incidents/${detailId}/alerts/${alertId}`),
     ["incidents"],
   );
+  const statusAction = useApiMutation(
+    (action: string) => api.post(`/incidents/${detailId}/${action}`),
+    ["incidents"],
+  );
+  const del = useApiMutation(() => api.delete(`/incidents/${detailId}`), ["incidents"]);
 
   return (
     <Dialog open={!!detailId} onOpenChange={(o) => !o && onClose()}>
@@ -149,6 +154,45 @@ function IncidentDetailDialog({
                 <Badge variant="secondary">{inc.cmdb_service_l2_code}</Badge>
               )}
             </div>
+
+            {/* inline status change + dissolve (editor+) */}
+            {canEdit && (
+              <div className="flex flex-wrap items-center gap-2" data-testid="incident-actions">
+                {inc.status === "open" && (
+                  <Button size="sm" variant="outline"
+                    onClick={() => statusAction.mutate("ack", { onError: fail })}>
+                    {t("ops.ack")}
+                  </Button>
+                )}
+                {inc.status === "suppressed" ? (
+                  <Button size="sm" variant="outline"
+                    onClick={() => statusAction.mutate("unsuppress", { onError: fail })}>
+                    {t("ops.unsuppress")}
+                  </Button>
+                ) : (
+                  inc.status !== "resolved" && (
+                    <Button size="sm" variant="outline"
+                      onClick={() => statusAction.mutate("suppress", { onError: fail })}>
+                      {t("ops.suppress")}
+                    </Button>
+                  )
+                )}
+                {inc.status !== "resolved" && (
+                  <Button size="sm" variant="outline"
+                    onClick={() => statusAction.mutate("resolve", { onError: fail })}>
+                    {t("ops.resolve")}
+                  </Button>
+                )}
+                <Button size="sm" variant="destructive" className="ml-auto"
+                  data-testid="delete-incident"
+                  onClick={() => {
+                    if (window.confirm(t("incidents.deleteConfirm")))
+                      del.mutate(undefined, { onError: fail, onSuccess: onClose });
+                  }}>
+                  {t("incidents.delete")}
+                </Button>
+              </div>
+            )}
 
             {/* channel toggles */}
             <div className="flex flex-wrap gap-4 rounded-lg border border-border/60 bg-muted/30 p-3" data-testid="channel-toggles">

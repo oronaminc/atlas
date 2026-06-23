@@ -236,11 +236,16 @@ async def test_manual_attach_and_already_attached_409(db):
     assert raised
 
 
-async def test_detach_to_empty_resolves(db):
+async def test_detach_last_alert_forbidden(db):
+    # A4 (replaces decision D): detaching the only alert is forbidden — an
+    # incident can never have 0 alerts; dissolve it with delete_incident instead.
+    import pytest
+
+    from app.services.incident_service import LastAlertError
+
     a = alert(sev="critical", fp="solo")
     db.add(a)
     await run_worker(db)
     inc = (await _incidents(db))[0]
-    await detach_alert(db, inc, a, NOW)
-    assert a.incident_id is None and inc.alert_count == 0
-    assert inc.status == IncidentStatus.resolved  # decision D
+    with pytest.raises(LastAlertError):
+        await detach_alert(db, inc, a, NOW)

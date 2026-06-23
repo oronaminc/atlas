@@ -20,6 +20,7 @@ from app.db import get_db
 from app.models.base import utcnow
 from app.providers.registry import get_provider
 from app.services.correlation.engine import build_event
+from app.services.incident_service import resolve_incoming
 
 logger = logging.getLogger(__name__)
 
@@ -81,12 +82,21 @@ async def ingest(
 
     alerts = provider.parse(payload)
     now = utcnow()
-    events = [build_event(alert, received_at=now) for alert in alerts]
+    # batched webhook: each alerts[] element is handled INDIVIDUALLY. firing ->
+    # stored + pushed through the pipeline; resolved -> state transition on the
+    # matching stored alert (auto-resolve by the system), not a new row.
+    firing = [a for a in alerts if a.status != "resolved"]
+    resolved = [a for a in alerts if a.status == "resolved"]
+    events = [build_event(alert, received_at=now) for alert in firing]
     db.add_all(events)
+    await db.flush()
+    for a in resolved:
+        await resolve_incoming(db, a.source, a.name, a.labels or {}, now)
     await db.commit()
 
     await _enqueue([str(e.id) for e in events])
+    accepted = len(firing) + len(resolved)
     instruments.ingest_requests.inc(provider=provider_name, status="accepted")
-    instruments.ingest_events.inc(len(events), provider=provider_name)
+    instruments.ingest_events.inc(accepted, provider=provider_name)
     instruments.ingest_duration.observe(time.perf_counter() - start, provider=provider_name)
-    return envelope({"accepted": len(events)})
+    return envelope({"accepted": accepted, "stored": len(events), "resolved": len(resolved)})
