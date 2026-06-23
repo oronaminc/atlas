@@ -44,3 +44,7 @@ class UserUpdate(BaseModel):
 
 class MeUpdate(BaseModel):
     username: str | None = Field(default=None, min_length=2, max_length=100)
+
+
+class PasswordReset(BaseModel):
+    new_password: str = Field(min_length=8)

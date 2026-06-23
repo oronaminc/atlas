@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy import Enum, ForeignKey, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import TimestampedBase
+from app.models.base import JsonType, TimestampedBase
 
 
 class GroupRole(enum.StrEnum):
@@ -17,6 +17,9 @@ class Group(TimestampedBase):
 
     name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # descriptive label tags (selected from the Mimir label API). METADATA ONLY —
+    # NOT a routing/visibility key (that stays cmdb_service_l2_code via group_service_codes).
+    labels: Mapped[list[str]] = mapped_column(JsonType, default=list)
 
     memberships: Mapped[list["UserGroup"]] = relationship(
         back_populates="group", lazy="selectin", cascade="all, delete-orphan"
