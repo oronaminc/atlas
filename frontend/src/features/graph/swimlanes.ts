@@ -1,71 +1,61 @@
-/** Pure layout logic for the 2D swimlane graph (no DOM).
+/** Pure layout logic for the incident swimlane graph (no DOM).
  *
- *  One horizontal lane per host (group_key), sorted noisiest-first.
- *  Incidents become time-positioned pills; overlapping pills stack into
- *  sub-rows. Lanes beyond `maxVisibleLanes` collapse behind a "+N hosts"
- *  expander. Temporal edges connect pills as undirected arcs — they mean
- *  "fired close together", never causality. same_name partners are
- *  resolved here so the chart can highlight them on hover/select.
+ *  One horizontal lane PER INCIDENT (the lane label is the incident title).
+ *  Inside each lane, the incident's member alerts are time-positioned pills
+ *  (x = received_at). Pills whose times collide stack into sub-rows so none is
+ *  hidden once the renderer applies its minimum pixel width. Lanes beyond
+ *  `maxVisibleLanes` collapse behind a "+N incidents" expander.
+ *
+ *  The old host-lane + temporal/same_name edge + node/edge model is GONE —
+ *  the payload is now incident-centric (GraphIncident with member alerts).
  */
 
-import type { GraphData, GraphNode } from "@/types";
+import type { GraphAlert, GraphData, GraphIncident } from "@/types";
 
-export interface LanePill {
-  node: GraphNode;
-  /** sub-row inside the lane when time ranges overlap */
+export interface AlertPill {
+  alert: GraphAlert;
+  /** sub-row inside the lane when timestamps collide */
   row: number;
-  startMs: number;
-  endMs: number;
+  atMs: number;
 }
 
 export interface Lane {
-  host: string;
-  pills: LanePill[];
+  incident: GraphIncident;
+  pills: AlertPill[];
   rowCount: number;
-}
-
-export interface TemporalEdge {
-  source: GraphNode;
-  target: GraphNode;
-  weight: number;
 }
 
 export interface SwimlaneModel {
   lanes: Lane[];
   hiddenLaneCount: number;
-  /** [min first_seen, max last_seen] over all incidents, ms epoch */
+  /** [min received_at, max received_at] over all alerts (ms epoch) */
   domain: [number, number];
-  /** temporal edges whose both endpoints sit in a visible lane */
-  temporalEdges: TemporalEdge[];
-  /** incident id -> ids correlated via same_name edges */
-  sameNamePartners: Map<string, Set<string>>;
 }
 
 export interface SwimlaneOptions {
   maxVisibleLanes: number;
   expanded: boolean;
-  /** pills closer than this (ms) stack into separate rows so neither is
-   *  hidden once the renderer applies its minimum pixel width */
+  /** pills closer than this (ms) stack into separate rows */
   minSeparationMs?: number;
 }
 
 const SEVERITY_RANK: Record<string, number> = { critical: 3, warning: 2, info: 1 };
 
-function severityRank(node: GraphNode): number {
-  return SEVERITY_RANK[node.severity ?? ""] ?? 0;
+function severityRank(sev: string): number {
+  return SEVERITY_RANK[sev] ?? 0;
 }
 
-/** Greedy interval stacking: first row whose last pill ended early enough. */
-function stackRows(pills: LanePill[], minSeparationMs: number): number {
+/** Greedy stacking: first row whose last pill ended early enough. */
+function stackRows(pills: AlertPill[], minSeparationMs: number): number {
   const rowEnds: number[] = [];
   for (const pill of pills) {
-    let row = rowEnds.findIndex((end) => pill.startMs >= end + minSeparationMs);
+    let row = rowEnds.findIndex((end) => pill.atMs >= end + minSeparationMs);
     if (row === -1) {
       row = rowEnds.length;
-      rowEnds.push(0);
+      rowEnds.push(-Infinity);
     }
     pill.row = row;
-    rowEnds[row] = Math.max(rowEnds[row], pill.endMs);
+    rowEnds[row] = pill.atMs;
   }
   return Math.max(rowEnds.length, 1);
 }
@@ -74,30 +64,24 @@ export function buildSwimlanes(
   data: GraphData,
   { maxVisibleLanes, expanded, minSeparationMs = 0 }: SwimlaneOptions,
 ): SwimlaneModel {
-  const incidents = data.nodes.filter((n) => n.kind === "incident");
+  const incidents = data.incidents ?? [];
 
-  const byHost = new Map<string, LanePill[]>();
-  for (const node of incidents) {
-    const startMs = node.first_seen ? Date.parse(node.first_seen) : 0;
-    const endMs = node.last_seen ? Date.parse(node.last_seen) : startMs;
-    const host = node.group_key ?? "";
-    let pills = byHost.get(host);
-    if (!pills) byHost.set(host, (pills = []));
-    pills.push({ node, row: 0, startMs, endMs: Math.max(endMs, startMs) });
-  }
-
-  // noisiest lane first: incident count desc, then max severity desc, then name
-  const allLanes: Lane[] = [...byHost.entries()]
-    .map(([host, pills]) => {
-      pills.sort((a, b) => a.startMs - b.startMs);
-      return { host, pills, rowCount: stackRows(pills, minSeparationMs) };
+  const allLanes: Lane[] = incidents
+    .map((incident) => {
+      const pills: AlertPill[] = (incident.alerts ?? []).map((alert) => ({
+        alert,
+        row: 0,
+        atMs: Date.parse(alert.received_at),
+      }));
+      pills.sort((a, b) => a.atMs - b.atMs);
+      return { incident, pills, rowCount: stackRows(pills, minSeparationMs) };
     })
+    // noisiest first: alert count desc, then incident severity desc, then title
     .sort(
       (a, b) =>
-        b.pills.length - a.pills.length ||
-        Math.max(...b.pills.map((p) => severityRank(p.node))) -
-          Math.max(...a.pills.map((p) => severityRank(p.node))) ||
-        a.host.localeCompare(b.host),
+        b.incident.alert_count - a.incident.alert_count ||
+        severityRank(b.incident.severity) - severityRank(a.incident.severity) ||
+        a.incident.title.localeCompare(b.incident.title),
     );
 
   const lanes = expanded ? allLanes : allLanes.slice(0, maxVisibleLanes);
@@ -107,9 +91,16 @@ export function buildSwimlanes(
   let max = -Infinity;
   for (const lane of allLanes) {
     for (const pill of lane.pills) {
-      if (pill.startMs < min) min = pill.startMs;
-      if (pill.endMs > max) max = pill.endMs;
+      if (Number.isFinite(pill.atMs)) {
+        if (pill.atMs < min) min = pill.atMs;
+        if (pill.atMs > max) max = pill.atMs;
+      }
     }
+    // fall back to the incident's own span when it has no member alerts
+    const fs = Date.parse(lane.incident.first_seen);
+    const ls = Date.parse(lane.incident.last_seen);
+    if (Number.isFinite(fs)) min = Math.min(min, fs);
+    if (Number.isFinite(ls)) max = Math.max(max, ls);
   }
   if (!Number.isFinite(min)) {
     const now = Date.now();
@@ -118,29 +109,5 @@ export function buildSwimlanes(
   }
   if (min === max) max = min + 1;
 
-  const visibleIds = new Set(
-    lanes.flatMap((lane) => lane.pills.map((p) => p.node.id)),
-  );
-  const nodeById = new Map(incidents.map((n) => [n.id, n]));
-
-  const temporalEdges: TemporalEdge[] = [];
-  const sameNamePartners = new Map<string, Set<string>>();
-  for (const edge of data.edges) {
-    if (edge.kind === "temporal") {
-      const source = nodeById.get(edge.source);
-      const target = nodeById.get(edge.target);
-      if (source && target && visibleIds.has(source.id) && visibleIds.has(target.id)) {
-        temporalEdges.push({ source, target, weight: edge.weight });
-      }
-    } else if (edge.kind === "same_name") {
-      let a = sameNamePartners.get(edge.source);
-      if (!a) sameNamePartners.set(edge.source, (a = new Set()));
-      a.add(edge.target);
-      let b = sameNamePartners.get(edge.target);
-      if (!b) sameNamePartners.set(edge.target, (b = new Set()));
-      b.add(edge.source);
-    }
-  }
-
-  return { lanes, hiddenLaneCount, domain: [min, max], temporalEdges, sameNamePartners };
+  return { lanes, hiddenLaneCount, domain: [min, max] };
 }

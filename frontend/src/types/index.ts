@@ -33,15 +33,33 @@ export interface User {
 }
 
 // Read-only rule pulled from the Mimir Ruler (the alertname catalog source).
+// `expr` is DISPLAY-ONLY read-only text — never an input (no PromQL anywhere).
 export interface PulledRule {
   alertname: string;
   expr: string;
-  for: string;
+  for_seconds: number;
   severity: string;
   labels: Record<string, string>;
   annotations: Record<string, string>;
   namespace: string;
-  group: string;
+  group_name: string;
+  health: string;
+  state: string;
+  last_error: string | null;
+  last_evaluation: string | null;
+  value: number | null;
+  base_threshold: number | null;
+  comparator: string | null;
+  synced_at: string | null;
+}
+
+export interface ThresholdOverride {
+  id: string;
+  alertname: string;
+  target_cmdb_ci: string | null;
+  target_label_key: string | null;
+  target_label_value: string | null;
+  value: number;
 }
 
 export interface GroupMembership {
@@ -234,7 +252,7 @@ export interface TrendBucket {
 }
 
 export interface HostStat {
-  group_key: string;
+  host: string;
   open: number;
   total: number;
   alerts: number;
@@ -242,32 +260,31 @@ export interface HostStat {
   last_seen: string | null;
 }
 
-export interface GraphNode {
+// --- Incident-centric swimlane graph (node/edge model is GONE) ---
+export interface GraphAlert {
   id: string;
-  kind: "incident" | "host" | "alert";
-  label: string;
-  severity: string | null;
-  status: string | null;
-  alert_count?: number;
-  group_key?: string | null;
-  first_seen?: string;
-  last_seen?: string;
-  dominant_name?: string | null;
-  source?: string;
-  dedup_count?: number;
-  received_at?: string;
+  name: string;
+  severity: string;
+  status: string;
+  received_at: string;
+  cmdb_hostname: string | null;
+  dedup_count: number;
 }
 
-export interface GraphEdge {
-  source: string;
-  target: string;
-  kind: "host" | "temporal" | "same_name" | "member";
-  weight: number;
+export interface GraphIncident {
+  id: string;
+  title: string;
+  severity: string;
+  status: string;
+  first_seen: string;
+  last_seen: string;
+  alert_count: number;
+  cmdb_service_l2_code: string | null;
+  alerts: GraphAlert[];
 }
 
 export interface GraphData {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
+  incidents: GraphIncident[];
   meta: { truncated: boolean; total_incidents: number };
 }
 

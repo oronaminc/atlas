@@ -52,6 +52,28 @@ export function useInvalidate() {
 export const useRulesPulled = () =>
   useList<PulledRule>(["rules-pulled"], "/rules/pulled");
 
+// --- Threshold overrides (no PromQL: pick a pulled rule, edit a number) ---
+export const useThresholdOverrides = () =>
+  useQuery({
+    queryKey: ["threshold-overrides"],
+    queryFn: () => api.get<import("@/types").ThresholdOverride[]>("/threshold-overrides"),
+  });
+
+// --- Label autocomplete (whole-infra label names + values) ---
+export const useLabelNames = () =>
+  useQuery({
+    queryKey: ["labels"],
+    queryFn: () => api.get<string[]>("/labels"),
+    staleTime: 5 * 60_000,
+  });
+export const useLabelValues = (name: string | null) =>
+  useQuery({
+    queryKey: ["labels", name, "values"],
+    queryFn: () => api.get<string[]>(`/labels/${encodeURIComponent(name as string)}/values`),
+    enabled: !!name,
+    staleTime: 5 * 60_000,
+  });
+
 // --- Groups / Users ---
 export const useGroups = (params?: Params) => useList<Group>(["groups"], "/groups", params);
 export const useGroupMembers = (id: string) =>
@@ -151,10 +173,14 @@ export const useStatsTrend = (hours: number) =>
       }),
     refetchInterval: OPS_REFRESH_MS,
   });
-export const useStatsHosts = () =>
+export const useStatsHosts = (sinceHours?: number) =>
   useQuery({
-    queryKey: ["stats", "hosts"],
-    queryFn: () => api.get<HostStat[]>("/stats/hosts"),
+    queryKey: ["stats", "hosts", sinceHours],
+    queryFn: () =>
+      api.get<HostStat[]>(
+        "/stats/hosts",
+        sinceHours ? { since_hours: String(sinceHours) } : undefined,
+      ),
     refetchInterval: OPS_REFRESH_MS,
   });
 

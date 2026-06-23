@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   Network,
+  ScrollText,
   Settings,
   SlidersHorizontal,
   User as UserIcon,
@@ -60,10 +61,16 @@ const navSections: NavSection[] = [
     ],
   },
   {
+    labelKey: "nav.sectionAlertRules",
+    items: [
+      { to: "/alert-rules", labelKey: "nav.rulesViewer", icon: ScrollText },
+      { to: "/thresholds", labelKey: "nav.thresholds", icon: SlidersHorizontal },
+    ],
+  },
+  {
     labelKey: "nav.sectionConfigure",
     items: [
       { to: "/notifications", labelKey: "nav.notifications", icon: BellRing },
-      { to: "/thresholds", labelKey: "nav.thresholds", icon: SlidersHorizontal },
       { to: "/grouping-rules", labelKey: "nav.groupingRules", icon: Layers, adminOnly: true },
       {
         to: "/notification-defaults",
