@@ -22,7 +22,7 @@ from app.services.incident_service import (
     group_alert,
     promote_alert,
 )
-from app.services.threshold import ValueCache, should_suppress
+from app.services.threshold import should_suppress
 from app.workers.correlation_worker import claim_events
 
 NOW = utcnow()
@@ -49,15 +49,10 @@ def alert(sev="warning", l2=L2, fp=None, received=None, **labels):
     )
 
 
-async def _none_fetch(_tid, _q):
-    return None
-
-
 async def run_worker(db, now=NOW, dedup=None):
     """Replicates correlation_worker.correlate_pending on the test session."""
     dedup = dedup or InMemoryDedupStore()
     rule = await get_active_rule(db)
-    cache = ValueCache()
     for ev in await claim_events(db, worker_id="w", now=now):
         if ev.incident_id is not None:
             ev.correlated = True
@@ -71,7 +66,7 @@ async def run_worker(db, now=NOW, dedup=None):
                 prior.dedup_count += 1
                 await db.delete(ev)
                 continue
-        suppress, value = await should_suppress(db, ev, fetch_value=_none_fetch, cache=cache)
+        suppress, value = await should_suppress(db, ev)
         if value is not None:
             ev.value = value
         if suppress:
@@ -241,11 +236,16 @@ async def test_manual_attach_and_already_attached_409(db):
     assert raised
 
 
-async def test_detach_to_empty_resolves(db):
+async def test_detach_last_alert_forbidden(db):
+    # A4 (replaces decision D): detaching the only alert is forbidden — an
+    # incident can never have 0 alerts; dissolve it with delete_incident instead.
+    import pytest
+
+    from app.services.incident_service import LastAlertError
+
     a = alert(sev="critical", fp="solo")
     db.add(a)
     await run_worker(db)
     inc = (await _incidents(db))[0]
-    await detach_alert(db, inc, a, NOW)
-    assert a.incident_id is None and inc.alert_count == 0
-    assert inc.status == IncidentStatus.resolved  # decision D
+    with pytest.raises(LastAlertError):
+        await detach_alert(db, inc, a, NOW)

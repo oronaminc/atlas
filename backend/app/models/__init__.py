@@ -2,16 +2,17 @@ from app.models.alerting import AlertEvent, Incident, IncidentEvent
 from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.delivery import (
+    GroupChannel,
     Notification,
     NotificationDefault,
-    NotificationSettings,
 )
 from app.models.group import Group, GroupServiceCode, UserGroup
 from app.models.grouping import GroupingRule
 from app.models.llm import IncidentAnalysis, LLMConfig
 from app.models.maintenance import AlertStatsHourly, RetentionConfig
+from app.models.mimir import MimirRule, MimirSilence
 from app.models.notification import NotificationPolicy, Receiver, Silence
-from app.models.threshold import Comparator, RuleCatalog, ThresholdOverride
+from app.models.threshold import Comparator, ThresholdOverride
 from app.models.user import User
 
 __all__ = [
@@ -25,15 +26,16 @@ __all__ = [
     "Incident",
     "IncidentAnalysis",
     "LLMConfig",
+    "MimirRule",
+    "MimirSilence",
     "Notification",
     "NotificationDefault",
-    "NotificationSettings",
+    "GroupChannel",
     "IncidentEvent",
     "NotificationPolicy",
     "Receiver",
     "RetentionConfig",
     "Comparator",
-    "RuleCatalog",
     "Silence",
     "ThresholdOverride",
     "User",

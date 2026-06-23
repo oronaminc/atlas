@@ -7,6 +7,7 @@ resources:
   - correlation-worker.yaml
   - notification-worker.yaml
   - maintenance-worker.yaml
+  - mimir-sync-worker.yaml
   - llm-worker.yaml
   - frontend.yaml
   - ingress.yaml

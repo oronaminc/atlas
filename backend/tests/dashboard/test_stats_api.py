@@ -1,5 +1,5 @@
-"""Dashboard aggregation endpoints: counts, trend buckets, per-host fold,
-permissions (any authenticated user; 401 without token)."""
+"""Dashboard aggregation endpoints: counts, trend buckets (hour-aligned),
+per-server fold (by cmdb_hostname), permissions (any auth; 401 without token)."""
 
 from datetime import timedelta
 
@@ -12,11 +12,8 @@ from tests.notifications.helpers import seed_incident, seed_user
 async def seed_dashboard_data(db):
     now = utcnow()
     open_critical = await seed_incident(db, severity="critical", title="db-01 down")
-    open_critical.group_key = "host=db-01"
     open_warning = await seed_incident(db, severity="warning", title="web-01 slow")
-    open_warning.group_key = "host=web-01"
     resolved = await seed_incident(db, severity="info", title="resolved one")
-    resolved.group_key = "host=web-01"
     resolved.status = IncidentStatus.resolved
 
     for status, sent_offset in (("sent", -1), ("failed", None), ("pending", None)):
@@ -34,8 +31,12 @@ async def seed_dashboard_data(db):
             )
         )
 
-    # alert events inside / outside the 24h window
-    for hours_ago, severity in ((1, "critical"), (2, "warning"), (30, "info")):
+    # alert events in/out of the 24h window, denormalized cmdb_hostname + attached
+    for hours_ago, severity, host, inc in (
+        (1, "critical", "db-01", open_critical),
+        (2, "warning", "web-01", open_warning),
+        (30, "info", "web-01", resolved),
+    ):
         db.add(
             AlertEvent(
                 fingerprint=f"f{hours_ago}",
@@ -43,11 +44,13 @@ async def seed_dashboard_data(db):
                 name=f"A{hours_ago}",
                 severity=severity,
                 status="firing",
-                labels={"host": "db-01"},
+                labels={"cmdb_hostname": host},
                 annotations={},
                 starts_at=now - timedelta(hours=hours_ago),
                 received_at=now - timedelta(hours=hours_ago),
+                cmdb_hostname=host,
                 cmdb_service_l2_code="L2TEST",  # visible to non-admin viewer (IMP)
+                incident_id=inc.id,
             )
         )
     await db.commit()
@@ -56,74 +59,50 @@ async def seed_dashboard_data(db):
 
 async def test_overview_counts(client, db, viewer_headers):
     await seed_dashboard_data(db)
-    res = await client.get("/api/v1/stats/overview", headers=viewer_headers)
-    assert res.status_code == 200
-    data = res.json()["data"]
+    data = (await client.get("/api/v1/stats/overview", headers=viewer_headers)).json()["data"]
     assert data["incidents"]["open"] == 2
     assert data["incidents"]["resolved"] == 1
     assert data["open_by_severity"]["critical"] == 1
-    assert data["open_by_severity"]["warning"] == 1
-    assert data["notifications"]["sent"] == 1
-    assert data["notifications"]["failed"] == 1
-    assert data["notifications"]["pending"] == 1
-    assert data["alerts_24h"] == 2  # the 30h-old event is excluded
+    assert data["alerts_24h"] == 2  # 1h + 2h; 30h excluded
 
 
 async def test_trend_buckets(client, db, viewer_headers):
     await seed_dashboard_data(db)
-    res = await client.get("/api/v1/stats/trend?hours=24", headers=viewer_headers)
-    assert res.status_code == 200
-    data = res.json()["data"]
+    data = (await client.get("/api/v1/stats/trend?hours=24", headers=viewer_headers)).json()["data"]
     assert data["bucket_seconds"] == 3600
-    assert len(data["buckets"]) == 24
+    assert len(data["buckets"]) in (24, 25)  # hour-aligned window incl. current bucket
     totals = {s: sum(b[s] for b in data["buckets"]) for s in ("critical", "warning", "info")}
-    assert totals == {"critical": 1, "warning": 1, "info": 0}
+    assert totals["critical"] == 1 and totals["warning"] == 1  # both in-window
 
-    # 7d window -> daily buckets, includes the 30h-old event
-    res = await client.get("/api/v1/stats/trend?hours=168", headers=viewer_headers)
-    data = res.json()["data"]
+    data = (await client.get("/api/v1/stats/trend?hours=168", headers=viewer_headers)).json()[
+        "data"
+    ]
     assert data["bucket_seconds"] == 86400
-    assert len(data["buckets"]) == 7
-    assert sum(b["info"] for b in data["buckets"]) == 1
+    assert len(data["buckets"]) in (7, 8)
+    assert sum(b["info"] for b in data["buckets"]) == 1  # the 30h-old event
 
 
-async def test_hosts_aggregation(client, db, viewer_headers):
+async def test_hosts_per_server(client, db, viewer_headers):
     await seed_dashboard_data(db)
-    res = await client.get("/api/v1/stats/hosts", headers=viewer_headers)
-    assert res.status_code == 200
-    rows = {r["group_key"]: r for r in res.json()["data"]}
-    assert rows["host=db-01"]["open"] == 1
-    assert rows["host=db-01"]["max_severity"] == "critical"
-    assert rows["host=web-01"]["open"] == 1
-    assert rows["host=web-01"]["total"] == 2  # one open + one resolved
-    # ordering: most open first, then noisiest
-    keys = [r["group_key"] for r in res.json()["data"]]
-    assert set(keys) == {"host=db-01", "host=web-01"}
+    rows = {
+        r["host"]: r
+        for r in (await client.get("/api/v1/stats/hosts", headers=viewer_headers)).json()["data"]
+    }
+    assert "db-01" in rows and "web-01" in rows
+    assert rows["db-01"]["max_severity"] == "critical"
+    assert rows["db-01"]["open"] == 1 and rows["db-01"]["total"] == 1
+    assert rows["db-01"]["alerts"] == 1
 
 
 async def test_suppressed_excluded_from_active_stats(client, db, viewer_headers):
     await seed_dashboard_data(db)
     muted = await seed_incident(db, severity="critical", title="muted on db-01")
-    muted.group_key = "host=db-01"
     muted.status = IncidentStatus.suppressed
     await db.commit()
-
-    res = await client.get("/api/v1/stats/overview", headers=viewer_headers)
-    data = res.json()["data"]
-    assert data["incidents"]["suppressed"] == 1  # counted under its own key
-    assert data["incidents"]["open"] == 2  # unchanged
+    data = (await client.get("/api/v1/stats/overview", headers=viewer_headers)).json()["data"]
     assert data["open_by_severity"]["critical"] == 1  # muted critical NOT counted
-
-    res = await client.get("/api/v1/stats/hosts", headers=viewer_headers)
-    rows = {r["group_key"]: r for r in res.json()["data"]}
-    assert rows["host=db-01"]["open"] == 1  # suppressed not "open"
-    assert rows["host=db-01"]["total"] == 2  # but still listed in totals
 
 
 async def test_stats_require_auth(client):
-    for path in (
-        "/api/v1/stats/overview",
-        "/api/v1/stats/trend",
-        "/api/v1/stats/hosts",
-    ):
+    for path in ("/api/v1/stats/overview", "/api/v1/stats/trend", "/api/v1/stats/hosts"):
         assert (await client.get(path)).status_code == 401

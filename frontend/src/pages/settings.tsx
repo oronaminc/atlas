@@ -1,12 +1,10 @@
 import { useTranslation } from "react-i18next";
 
 import { PageHeader } from "@/components/layout/page-header";
-import {
-  NotificationSettingsCard,
-  RecipientsCard,
-} from "@/features/notifications/notification-admin";
 import { LLMConfigCard } from "@/features/llm/llm-config-card";
 import { RetentionCard } from "@/features/maintenance/retention-card";
+import { ChannelAssignmentCard } from "@/features/notifications/channel-assignment";
+import { RecipientsCard } from "@/features/notifications/notification-admin";
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -16,9 +14,9 @@ export function SettingsPage() {
       <PageHeader title={t("settings.title")} description={t("settings.description")} />
 
       <div className="space-y-6">
+        <ChannelAssignmentCard />
         <RetentionCard />
         <LLMConfigCard />
-        <NotificationSettingsCard />
         <RecipientsCard />
       </div>
     </div>

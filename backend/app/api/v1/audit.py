@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
 from app.core.envelope import envelope
-from app.core.pagination import decode_cursor, page_meta
+from app.core.pagination import decode_cursor, offset_page, page_meta
 from app.db import get_db
 from app.models import AuditLog, User
 from app.schemas.audit import AuditLogOut
@@ -18,6 +18,8 @@ router = APIRouter(prefix="/audit-logs", tags=["audit"])
 async def list_audit_logs(
     cursor: str | None = None,
     limit: int = Query(default=20, le=100),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     resource_type: str | None = None,
     resource_id: uuid.UUID | None = None,
     actor_id: uuid.UUID | None = None,
@@ -34,6 +36,11 @@ async def list_audit_logs(
         stmt = stmt.where(AuditLog.actor_id == actor_id)
     if emergency is not None:
         stmt = stmt.where(AuditLog.emergency == emergency)
+    if page is not None:  # numbered (1..N) pagination
+        items, meta = await offset_page(db, stmt, page=page, page_size=page_size)
+        return envelope(
+            [AuditLogOut.model_validate(a).model_dump(mode="json") for a in items], meta=meta
+        )
     if cursor:
         decoded = decode_cursor(cursor)
         if decoded:

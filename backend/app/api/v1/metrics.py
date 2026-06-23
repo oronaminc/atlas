@@ -22,7 +22,7 @@ from app.core.metrics import CONTENT_TYPE, REGISTRY
 from app.db import async_session_factory
 from app.models.alerting import AlertEvent
 from app.models.base import utcnow
-from app.models.delivery import Notification, NotificationSettings
+from app.models.delivery import Notification
 from app.services.maintenance import default_partition_count
 
 router = APIRouter(tags=["metrics"])
@@ -99,9 +99,7 @@ async def _refresh_softcap(db) -> None:
             .where(Notification.status.in_(("pending", "failed")))
         )
     ).scalar_one()
-    cap = (
-        await db.execute(select(NotificationSettings.pending_softcap).limit(1))
-    ).scalar_one_or_none() or settings.NOTIFY_PENDING_SOFTCAP
+    cap = settings.NOTIFY_PENDING_SOFTCAP
     m.tenant_pending_softcap_breached.clear()  # only re-emit current breach
     if pending > cap:
         m.tenant_pending_softcap_breached.set(1, service="global")

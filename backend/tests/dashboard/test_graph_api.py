@@ -1,5 +1,5 @@
-"""Graph endpoint: node/edge derivation, window+status filters, truncation,
-expansion, auth."""
+"""Incident swimlane graph: lane-per-incident with member alerts inline,
+window+status filter, truncation, expansion, auth."""
 
 from datetime import timedelta
 
@@ -11,26 +11,17 @@ from tests.notifications.helpers import seed_incident
 async def seed_graph(db):
     now = utcnow()
     a = await seed_incident(db, severity="critical", title="HighCPU on web-01")
-    a.group_key = "host=web-01"
     a.first_seen = now - timedelta(minutes=10)
     a.last_seen = now
     b = await seed_incident(db, severity="warning", title="DiskFull on web-01")
-    b.group_key = "host=web-01"
     b.first_seen = now - timedelta(minutes=5)
     b.last_seen = now
-    c = await seed_incident(db, severity="warning", title="HighCPU on db-01")
-    c.group_key = "host=db-01"
-    c.first_seen = now - timedelta(minutes=3)
-    c.last_seen = now
     old = await seed_incident(db, severity="info", title="old resolved")
-    old.group_key = "host=db-01"
     old.status = IncidentStatus.resolved
     old.first_seen = now - timedelta(hours=30)
     old.last_seen = now - timedelta(hours=30)
-
-    # dominant names: a and c share "HighCPU" (cross-host), b is "DiskFull"
-    for incident, name in ((a, "HighCPU"), (b, "DiskFull"), (c, "HighCPU")):
-        for j in range(2):
+    for incident, name, n in ((a, "HighCPU", 2), (b, "DiskFull", 1)):
+        for j in range(n):
             db.add(
                 AlertEvent(
                     fingerprint=f"g-{incident.id.hex[:6]}-{j}",
@@ -41,68 +32,50 @@ async def seed_graph(db):
                     labels={},
                     annotations={},
                     starts_at=incident.first_seen,
-                    received_at=incident.first_seen,
+                    received_at=incident.first_seen + timedelta(minutes=j),
                     incident_id=incident.id,
+                    cmdb_hostname="web-01",
                     cmdb_service_l2_code="L2TEST",
                 )
             )
     await db.commit()
-    return a, b, c, old
+    return a, b, old
 
 
-async def test_graph_nodes_and_edges(client, db, viewer_headers):
-    a, b, c, old = await seed_graph(db)
-    res = await client.get("/api/v1/graph", headers=viewer_headers)
-    assert res.status_code == 200
-    data = res.json()["data"]
-
-    by_kind = {}
-    for node in data["nodes"]:
-        by_kind.setdefault(node["kind"], []).append(node)
-    # default filter: open+acknowledged, 24h -> 'old' excluded
-    assert len(by_kind["incident"]) == 3
-    assert {h["id"] for h in by_kind["host"]} == {"host=web-01", "host=db-01"}
-    incident_node = next(n for n in by_kind["incident"] if n["id"] == str(a.id))
-    assert incident_node["severity"] == "critical"
-    assert incident_node["dominant_name"] == "HighCPU"
-
-    kinds = {}
-    for edge in data["edges"]:
-        kinds.setdefault(edge["kind"], []).append(edge)
-    assert len(kinds["host"]) == 3
-    # all three incidents are within the 900s window of each other -> 3 pairs
-    assert len(kinds["temporal"]) == 3
-    assert all(0 < e["weight"] <= 1 for e in kinds["temporal"])
-    # a and c share dominant name across different hosts
-    same_name_pairs = {frozenset((e["source"], e["target"])) for e in kinds["same_name"]}
-    assert frozenset((str(a.id), str(c.id))) in same_name_pairs
+async def test_graph_incident_lanes_with_alerts(client, db, viewer_headers):
+    a, b, old = await seed_graph(db)
+    data = (await client.get("/api/v1/graph", headers=viewer_headers)).json()["data"]
+    lanes = {lane["id"]: lane for lane in data["incidents"]}
+    # default open+acknowledged, 24h -> 'old' (resolved, 30h) excluded
+    assert set(lanes) == {str(a.id), str(b.id)}
+    assert lanes[str(a.id)]["title"] == "HighCPU on web-01"
+    assert len(lanes[str(a.id)]["alerts"]) == 2  # member alerts inline
+    assert lanes[str(a.id)]["alerts"][0]["name"] == "HighCPU"
     assert data["meta"]["truncated"] is False
 
 
-async def test_graph_status_and_window_filters(client, db, viewer_headers):
-    a, b, c, old = await seed_graph(db)
-    res = await client.get("/api/v1/graph?window_hours=72&status=resolved", headers=viewer_headers)
-    nodes = res.json()["data"]["nodes"]
-    incident_ids = [n["id"] for n in nodes if n["kind"] == "incident"]
-    assert incident_ids == [str(old.id)]
+async def test_graph_status_window_filter(client, db, viewer_headers):
+    _, _, old = await seed_graph(db)
+    data = (
+        await client.get("/api/v1/graph?window_hours=72&status=resolved", headers=viewer_headers)
+    ).json()["data"]
+    assert [lane["id"] for lane in data["incidents"]] == [str(old.id)]
 
 
-async def test_graph_truncation_meta(client, db, viewer_headers):
+async def test_graph_truncation(client, db, viewer_headers):
     await seed_graph(db)
-    res = await client.get("/api/v1/graph?max_nodes=2", headers=viewer_headers)
-    data = res.json()["data"]
+    data = (await client.get("/api/v1/graph?max_lanes=1", headers=viewer_headers)).json()["data"]
     assert data["meta"]["truncated"] is True
-    assert len([n for n in data["nodes"] if n["kind"] == "incident"]) == 2
+    assert len(data["incidents"]) == 1
 
 
 async def test_graph_incident_expansion(client, db, viewer_headers):
     a, *_ = await seed_graph(db)
-    res = await client.get(f"/api/v1/graph/incident/{a.id}", headers=viewer_headers)
-    assert res.status_code == 200
-    data = res.json()["data"]
-    assert len(data["nodes"]) == 2
-    assert all(n["kind"] == "alert" and n["label"] == "HighCPU" for n in data["nodes"])
-    assert all(e["kind"] == "member" and e["target"] == str(a.id) for e in data["edges"])
+    data = (await client.get(f"/api/v1/graph/incident/{a.id}", headers=viewer_headers)).json()[
+        "data"
+    ]
+    assert len(data["alerts"]) == 2
+    assert all(al["name"] == "HighCPU" for al in data["alerts"])
 
 
 async def test_graph_requires_auth(client):

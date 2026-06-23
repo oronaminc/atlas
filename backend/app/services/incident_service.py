@@ -13,11 +13,13 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alerting import AlertEvent, Incident, IncidentEvent, IncidentStatus
+from app.models.delivery import Notification
 from app.models.grouping import GroupingRule
+from app.services.correlation.fingerprint import compute_fingerprint
 from app.services.grouping_config import get_notification_defaults
 
 _SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2}
@@ -264,14 +266,121 @@ async def attach_to_incident(
     await attach_alert(db, inc, alert, now, manual=True)
 
 
+class LastAlertError(Exception):
+    """Detach of an incident's last alert (A4): an incident can never have 0
+    alerts — dissolve it with DELETE /incidents/{id} instead."""
+
+    def __init__(self, incident_id: uuid.UUID):
+        self.incident_id = incident_id
+        super().__init__(f"incident {incident_id} would be emptied; delete it to dissolve")
+
+
+async def resolve_if_all_resolved(db: AsyncSession, inc: Incident, now: datetime) -> bool:
+    """If every member alert is resolved, move the incident to resolved (system
+    actor) — the universal terminal regardless of prior state (open/ack/suppressed).
+    Idempotent; no-op on an already-resolved incident."""
+    if inc.status == IncidentStatus.resolved:
+        return False
+    await db.flush()  # ensure just-set alert statuses are visible to the counts
+    total = (
+        await db.execute(
+            select(func.count()).select_from(AlertEvent).where(AlertEvent.incident_id == inc.id)
+        )
+    ).scalar_one()
+    if total == 0:
+        return False
+    unresolved = (
+        await db.execute(
+            select(func.count())
+            .select_from(AlertEvent)
+            .where(AlertEvent.incident_id == inc.id, AlertEvent.status != "resolved")
+        )
+    ).scalar_one()
+    if unresolved == 0:
+        inc.status = IncidentStatus.resolved
+        await _timeline(
+            db,
+            inc,
+            "status_changed",
+            {"to": "resolved", "reason": "all alerts resolved", "actor": "system"},
+        )
+        return True
+    return False
+
+
 async def detach_alert(db: AsyncSession, inc: Incident, alert: AlertEvent, now: datetime) -> None:
-    """Manual detach. Decision D: an incident emptied by detach auto-resolves.
-    A detached alert stays FREE (correlated=True) and is NOT auto-re-grouped."""
+    """Manual detach (A4). Blocks emptying the incident (1->0 forbidden) — a
+    detached alert stays FREE (incident_id NULL, correlated=True), browsable and
+    manually re-attachable, never auto-re-grouped. After detach, if the remaining
+    alerts are all resolved the incident auto-resolves."""
     if alert.incident_id != inc.id:
         return
+    if inc.alert_count <= 1:
+        raise LastAlertError(inc.id)
     alert.incident_id = None
-    inc.alert_count = max(0, inc.alert_count - 1)
+    inc.alert_count -= 1
     await _timeline(db, inc, "alert_detached", {"alert_event_id": str(alert.id)})
-    if inc.alert_count == 0:
-        inc.status = IncidentStatus.resolved
-        await _timeline(db, inc, "status_changed", {"to": "resolved", "reason": "emptied"})
+    await resolve_if_all_resolved(db, inc, now)
+
+
+async def delete_incident(db: AsyncSession, inc: Incident) -> int:
+    """Dissolve an incident (A4): free ALL its alerts (incident_id NULL, keep
+    correlated so they don't auto-regroup), drop its timeline + its pending/failed
+    notifications, then delete the incident. Already-sent/dead notifications are
+    kept as the delivery record (FK SET NULL orphans them). Returns freed count."""
+    await db.execute(
+        delete(Notification).where(
+            Notification.incident_id == inc.id,
+            Notification.status.in_(("pending", "failed")),
+        )
+    )
+    # keep sent/dead as the delivery record — orphan them explicitly (don't rely
+    # on FK SET NULL: SQLite doesn't enforce FK actions by default).
+    await db.execute(
+        update(Notification)
+        .where(Notification.incident_id == inc.id)
+        .values(incident_id=None)
+        .execution_options(synchronize_session=False)
+    )
+    freed = (
+        await db.execute(
+            update(AlertEvent)
+            .where(AlertEvent.incident_id == inc.id)
+            .values(incident_id=None)
+            .execution_options(synchronize_session=False)
+        )
+    ).rowcount
+    await db.delete(inc)  # cascade-deletes the timeline (ORM relationship cascade)
+    return freed
+
+
+async def resolve_incoming(
+    db: AsyncSession, source: str, name: str, labels: dict, now: datetime
+) -> bool:
+    """An Alertmanager 'resolved' element (incl. per-element in a batched webhook):
+    match the stored alert by fingerprint (= ingest dedup identity), flip it to
+    resolved by the SYSTEM, and auto-resolve its incident if all alerts are now
+    resolved. No matching stored alert -> no-op."""
+    fp = compute_fingerprint(source, name, labels)
+    alert = (
+        await db.execute(
+            select(AlertEvent)
+            .where(AlertEvent.fingerprint == fp, AlertEvent.status != "resolved")
+            .order_by(AlertEvent.received_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if alert is None:
+        return False
+    alert.status = "resolved"
+    if alert.incident_id is not None:
+        inc = await db.get(Incident, alert.incident_id)
+        if inc is not None:
+            await _timeline(
+                db,
+                inc,
+                "alert_resolved",
+                {"alert_event_id": str(alert.id), "source": "alertmanager", "actor": "system"},
+            )
+            await resolve_if_all_resolved(db, inc, now)
+    return True

@@ -19,6 +19,21 @@ def decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID] | None:
         return None
 
 
+async def offset_page(db, stmt, *, page: int, page_size: int) -> tuple[list[Any], dict[str, Any]]:
+    """Numbered pagination (1-based). Returns (items, meta{total,page,pages,page_size}).
+    `stmt` is an ORM select already ordered; total is counted from its WHERE."""
+    from sqlalchemy import func, select
+
+    page = max(1, page)
+    page_size = max(1, min(page_size, 200))
+    total = (
+        await db.execute(select(func.count()).select_from(stmt.order_by(None).subquery()))
+    ).scalar_one()
+    rows = list((await db.execute(stmt.limit(page_size).offset((page - 1) * page_size))).scalars())
+    pages = max(1, (total + page_size - 1) // page_size)
+    return rows, {"total": total, "page": page, "pages": pages, "page_size": page_size}
+
+
 def page_meta(items: list[Any], limit: int) -> tuple[list[Any], dict[str, Any]]:
     """Items must be fetched with limit+1; trims the sentinel row and builds meta.
 

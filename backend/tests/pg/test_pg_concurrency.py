@@ -36,9 +36,9 @@ from app.notifications.fanout import fan_out_pending
 from tests.notifications.helpers import (
     NOW,
     seed_group,
+    seed_group_channel,
     seed_incident,
     seed_route,
-    seed_user,
 )
 
 PG_URL = os.environ.get("ATLAS_PG_TEST_URL")
@@ -73,26 +73,20 @@ async def pg_factory():
     await engine.dispose()
 
 
-async def test_pg_concurrent_workers_send_exactly_once(pg_factory):
+async def test_pg_concurrent_workers_send_exactly_once(pg_factory, monkeypatch):
+    # Quota out of scope (exactly-once-under-concurrency, not the cap): lift the
+    # env group/day quotas so all 40 send.
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "NOTIFY_QUOTA_GROUP_PER_HOUR", 10_000)
+    monkeypatch.setattr(settings, "NOTIFY_QUOTA_GLOBAL_PER_DAY", 10_000)
     n_targets = 40
     async with pg_factory() as db:
-        # Quota out of scope: this test proves exactly-once-under-concurrency,
-        # not the 30/group/h cap. Without a settings row, get_notification_settings
-        # falls back to the 30/group/h default and (correctly) defers 10 of 40.
-        from app.models.delivery import NotificationSettings
-
-        db.add(
-            NotificationSettings(
-                telegram_bot_token=None,
-                telegram_rate_per_second=25,
-                quota_group_per_hour=10_000,
-                quota_global_per_day=10_000,
-            )
-        )
-        users = [await seed_user(db, f"u{i}@example.com", chat_id=f"{i}") for i in range(n_targets)]
-        group = await seed_group(db, "oncall", users)
+        group = await seed_group(db, "oncall", [])
         await seed_route(db, group)
-        await seed_incident(db)
+        for i in range(n_targets):  # the group's own 40 telegram chats
+            await seed_group_channel(db, group, "telegram", bot_token="b", chat_id=f"{i}")
+        await seed_incident(db, channels=["telegram"])
         await fan_out_pending(db, now=NOW)
         await db.commit()
 

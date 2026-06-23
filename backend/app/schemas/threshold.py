@@ -1,21 +1,6 @@
 import uuid
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
-
-
-class RuleCatalogOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    alertname: str
-    comparator: str | None
-    unit: str | None
-    value_query: str | None
-
-
-class RuleCatalogUpdate(BaseModel):
-    comparator: Literal[">", "<"] | None = None
-    unit: str | None = None
-    value_query: str | None = None
 
 
 class ThresholdOverrideCreate(BaseModel):

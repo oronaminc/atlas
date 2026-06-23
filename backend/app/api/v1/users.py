@@ -7,11 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.auth import user_to_out
 from app.core.deps import client_ip, get_current_user, require_admin
 from app.core.envelope import envelope
-from app.core.pagination import decode_cursor, page_meta
+from app.core.pagination import decode_cursor, offset_page, page_meta
 from app.core.security import hash_password
 from app.db import get_db
 from app.models import User
-from app.schemas.user import MeUpdate, UserCreate, UserUpdate
+from app.schemas.user import MeUpdate, PasswordReset, UserCreate, UserUpdate
 from app.services.audit import record_audit, snapshot
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -23,6 +23,8 @@ USER_AUDIT_FIELDS = ["email", "username", "role", "is_active"]
 async def list_users(
     cursor: str | None = None,
     limit: int = Query(default=20, le=100),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     q: str | None = None,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
@@ -31,6 +33,9 @@ async def list_users(
     if q:
         pattern = f"%{q}%"
         stmt = stmt.where(or_(User.email.ilike(pattern), User.username.ilike(pattern)))
+    if page is not None:  # numbered (1..N) pagination
+        items, meta = await offset_page(db, stmt, page=page, page_size=page_size)
+        return envelope([user_to_out(u).model_dump(mode="json") for u in items], meta=meta)
     if cursor:
         decoded = decode_cursor(cursor)
         if decoded:
@@ -39,6 +44,32 @@ async def list_users(
     res = await db.execute(stmt.limit(limit + 1))
     items, meta = page_meta(list(res.scalars().unique()), limit)
     return envelope([user_to_out(u).model_dump(mode="json") for u in items], meta=meta)
+
+
+@router.post("/{user_id}/reset-password")
+async def reset_password(
+    user_id: uuid.UUID,
+    body: PasswordReset,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Admin-direct password reset: set a new password immediately (NO email)."""
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.hashed_password = hash_password(body.new_password)
+    user.updated_by = admin.id
+    await record_audit(
+        db,
+        actor_id=admin.id,
+        action="reset_password",
+        resource_type="user",
+        resource_id=user.id,
+        ip=client_ip(request),
+    )
+    await db.commit()
+    return envelope({"ok": True})
 
 
 @router.post("", status_code=201)

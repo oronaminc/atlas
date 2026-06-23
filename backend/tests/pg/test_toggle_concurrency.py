@@ -25,9 +25,9 @@ from app.notifications.fanout import fan_out_pending
 from tests.notifications.helpers import (
     NOW,
     seed_group,
+    seed_group_channel,
     seed_incident,
     seed_route,
-    seed_user,
 )
 
 PG_URL = os.environ.get("ATLAS_PG_TEST_URL")
@@ -57,9 +57,10 @@ async def pg_factory():
 
 async def test_concurrent_fanout_respects_toggles(pg_factory):
     async with pg_factory() as db:
-        users = [await seed_user(db, f"u{i}@x.com", chat_id=str(i)) for i in range(3)]
-        group = await seed_group(db, "oncall", users)
+        group = await seed_group(db, "oncall", [])
         await seed_route(db, group)  # maps the group to the test l2
+        for i in range(3):  # group's own 3 telegram chats
+            await seed_group_channel(db, group, "telegram", bot_token="b", chat_id=str(i))
         # 5 telegram-only incidents -> 3 telegram rows each = 15
         for _ in range(5):
             await seed_incident(db, channels=["telegram"], title="LIVE")
@@ -86,5 +87,5 @@ async def test_concurrent_fanout_respects_toggles(pg_factory):
         # 5 telegram-on incidents x 3 members = 15; toggled-off incidents = 0
         assert len(rows) == 15, len(rows)
         assert all(r.channel == "telegram" for r in rows), {r.channel for r in rows}
-        # exactly-once under the race: unique (incident, recipient)
-        assert len({(r.incident_id, r.recipient_user_id) for r in rows}) == 15
+        # exactly-once under the race: unique (incident, recipient_address)
+        assert len({(r.incident_id, r.recipient_address) for r in rows}) == 15

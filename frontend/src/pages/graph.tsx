@@ -1,6 +1,5 @@
-/** 2D incident swimlane view (lazy route /graph).
- *  X = time, one lane per host, noisiest lane on top. Arcs = temporal
- *  proximity (undirected — "fired together", not causality).
+/** Incident swimlane view (lazy route /graph).
+ *  X = time, ONE LANE PER INCIDENT (title), member alerts as pills inside.
  *  Manual refresh by design — to enable polling, see
  *  src/features/graph/config.ts (GRAPH_REFRESH_INTERVAL_MS). */
 
@@ -16,26 +15,30 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { GRAPH_DEFAULT_WINDOW_HOURS } from "@/features/graph/config";
 import { SwimlaneChart } from "@/features/graph/swimlane-chart";
-import { useExpandIncident, useGraphData } from "@/features/graph/use-graph-data";
+import { useGraphData } from "@/features/graph/use-graph-data";
 import { formatDate } from "@/lib/utils";
-import type { GraphNode } from "@/types";
+import type { GraphIncident } from "@/types";
+
+const EMPTY: GraphIncident[] = [];
 
 export default function GraphPage() {
   const { t } = useTranslation();
   const [windowHours, setWindowHours] = useState(GRAPH_DEFAULT_WINDOW_HOURS);
-  const [selected, setSelected] = useState<GraphNode | null>(null);
+  const [selected, setSelected] = useState<GraphIncident | null>(null);
 
   const graph = useGraphData(windowHours);
-  const expansion = useExpandIncident(
-    selected?.kind === "incident" ? selected.id : null,
-  );
+  const data = graph.data?.data ?? { incidents: EMPTY, meta: { truncated: false, total_incidents: 0 } };
+
+  // keep the selected incident's data fresh across refetches
+  const selectedLive =
+    selected && data.incidents.find((i) => i.id === selected.id)
+      ? data.incidents.find((i) => i.id === selected.id)!
+      : selected;
 
   return (
     <div className="flex h-full flex-col" data-testid="graph-page">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-2xl font-semibold tracking-tight">
-          {t("graph.title")}
-        </h1>
+        <h1 className="mr-auto text-2xl font-semibold tracking-tight">{t("graph.title")}</h1>
         <SegmentedToggle
           size="sm"
           aria-label={t("graph.title")}
@@ -47,7 +50,6 @@ export default function GraphPage() {
             { value: "168", label: "7d" },
           ]}
         />
-        {/* Manual refresh (no auto-poll): switch via config.ts if needed */}
         <Button
           size="sm"
           variant="outline"
@@ -60,7 +62,7 @@ export default function GraphPage() {
         </Button>
       </div>
 
-      {graph.data?.data.meta.truncated && (
+      {data.meta.truncated && (
         <p className="mb-2 text-sm text-severity-warning">{t("graph.truncated")}</p>
       )}
 
@@ -68,98 +70,73 @@ export default function GraphPage() {
         {graph.isLoading ? (
           <LoadingSpinner />
         ) : (
-          <SwimlaneChart
-            data={graph.data?.data ?? { nodes: [], edges: [], meta: { truncated: false, total_incidents: 0 } }}
-            selectedId={selected?.id ?? null}
-            onSelect={setSelected}
-          />
+          <SwimlaneChart data={data} selectedId={selected?.id ?? null} onSelect={setSelected} />
         )}
 
-        {/* legend — wording is deliberate: proximity/correlation, not cause.
-            pointer-events-none: must never swallow clicks on pills/expander below */}
+        {/* legend — severity only (no edges in the incident-centric model) */}
         <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-background/80 p-2 text-xs backdrop-blur">
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ background: "hsl(var(--sev-critical))" }}
-              />{" "}
-              critical
-            </span>
-            <span className="flex items-center gap-1">
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ background: "hsl(var(--sev-warning))" }}
-              />{" "}
-              warning
-            </span>
-            <span className="flex items-center gap-1">
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ background: "hsl(var(--sev-info))" }}
-              />{" "}
-              info
-            </span>
+            {(["critical", "warning", "info"] as const).map((sev) => (
+              <span key={sev} className="flex items-center gap-1">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: `hsl(var(--sev-${sev}))` }}
+                />{" "}
+                {sev}
+              </span>
+            ))}
           </div>
-          <div className="mt-1 flex items-center gap-3 text-muted-foreground">
-            <span style={{ color: "hsl(var(--sev-info))" }}>
-              ⌒ {t("graph.legendTemporal")}
-            </span>
-            <span style={{ color: "hsl(var(--primary))" }}>
-              ┄ {t("graph.legendSameName")}
-            </span>
-          </div>
+          <div className="mt-1 text-muted-foreground">{t("graph.legendLane")}</div>
         </div>
 
         {/* selection panel */}
-        {selected && (
+        {selectedLive && (
           <Card
             className="absolute right-3 top-3 w-80 bg-background/95 backdrop-blur"
             data-testid="graph-detail"
           >
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">{selected.label}</CardTitle>
+              <CardTitle className="text-sm">{selectedLive.title}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-xs">
               <div className="flex flex-wrap gap-1">
-                {selected.severity && <SeverityBadge severity={selected.severity} />}
-                {selected.status && <Badge variant="outline">{selected.status}</Badge>}
-                {selected.group_key && (
-                  <Badge variant="secondary">{selected.group_key}</Badge>
+                <SeverityBadge severity={selectedLive.severity} />
+                <Badge variant="outline">{selectedLive.status}</Badge>
+                {selectedLive.cmdb_service_l2_code && (
+                  <Badge variant="secondary">{selectedLive.cmdb_service_l2_code}</Badge>
                 )}
               </div>
-              {selected.kind === "incident" && (
-                <>
-                  <p className="text-muted-foreground">
-                    {t("ops.alerts")}: {selected.alert_count} ·{" "}
-                    {formatDate(selected.first_seen ?? null)} →{" "}
-                    {formatDate(selected.last_seen ?? null)}
-                  </p>
-                  <div>
-                    <p className="mb-1 font-semibold">{t("graph.memberAlerts")}</p>
-                    {expansion.isLoading ? (
-                      <LoadingSpinner className="h-4 w-4" />
-                    ) : (
-                      <div className="max-h-44 space-y-1 overflow-y-auto">
-                        {(expansion.data?.data.nodes ?? []).map((alert) => (
-                          <div
-                            key={alert.id}
-                            className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1"
-                          >
-                            <span>
-                              {alert.label}
-                              <span className="ml-1 text-muted-foreground">
-                                {alert.source} ×{alert.dedup_count}
-                              </span>
-                            </span>
-                            <SeverityBadge severity={alert.severity ?? "info"} />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
+              <p className="text-muted-foreground">
+                {t("ops.alerts")}: {selectedLive.alert_count} ·{" "}
+                {formatDate(selectedLive.first_seen)} → {formatDate(selectedLive.last_seen)}
+              </p>
+              <div>
+                <p className="mb-1 font-semibold">{t("graph.memberAlerts")}</p>
+                <div className="max-h-52 space-y-1 overflow-y-auto">
+                  {selectedLive.alerts.map((alert) => (
+                    <div
+                      key={alert.id}
+                      className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2 py-1"
+                    >
+                      <span className="min-w-0 truncate">
+                        <span className="font-medium">{alert.name}</span>
+                        {alert.cmdb_hostname && (
+                          <span className="ml-1 font-mono text-muted-foreground">
+                            {alert.cmdb_hostname}
+                          </span>
+                        )}
+                        {alert.dedup_count > 1 && (
+                          <span className="ml-1 text-muted-foreground">×{alert.dedup_count}</span>
+                        )}
+                      </span>
+                      <SeverityBadge severity={alert.severity} />
+                    </div>
+                  ))}
+                  {selectedLive.alerts.length === 0 && (
+                    <p className="text-muted-foreground">{t("graph.noAlerts")}</p>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

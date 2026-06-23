@@ -108,6 +108,7 @@ export function OpsPage() {
   const { hasRole } = useAuth();
   const canEdit = hasRole("admin", "editor");
   const [statusFilter, setStatusFilter] = useState(ACTIVE);
+  const [channelFilter, setChannelFilter] = useState(ALL);
   const [trendHours, setTrendHours] = useState(24);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
@@ -127,6 +128,9 @@ export function OpsPage() {
   });
   const incidentsHasMore = incidents.data?.meta?.has_more ?? false;
   const notifications = useNotificationRows({ limit: "20" });
+  const notificationRows = (notifications.data?.data ?? []).filter(
+    (n) => channelFilter === ALL || n.channel === channelFilter,
+  );
   const trend = useStatsTrend(trendHours);
   const hostStats = useStatsHosts();
   const detail = useIncident(detailId);
@@ -273,8 +277,19 @@ export function OpsPage() {
 
         {/* Panel 2: notification delivery */}
         <Card data-testid="panel-notifications">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">{t("ops.deliveryStatus")}</CardTitle>
+            <Select value={channelFilter} onValueChange={setChannelFilter}>
+              <SelectTrigger className="h-8 w-36" data-testid="channel-filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t("ops.channelAll")}</SelectItem>
+                <SelectItem value="telegram">{t("ops.channelTelegram")}</SelectItem>
+                <SelectItem value="email">{t("ops.channelEmail")}</SelectItem>
+                <SelectItem value="oncall">{t("ops.channelOncall")}</SelectItem>
+              </SelectContent>
+            </Select>
           </CardHeader>
           <CardContent>
             {notifications.isLoading ? (
@@ -291,7 +306,7 @@ export function OpsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(notifications.data?.data ?? []).map((n) => (
+                  {notificationRows.map((n) => (
                     <TableRow key={n.id}>
                       <TableCell>
                         <Badge variant="outline">{n.channel}</Badge>
@@ -310,6 +325,13 @@ export function OpsPage() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {notificationRows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                        {t("ops.noDeliveries")}
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             )}
@@ -371,8 +393,8 @@ export function OpsPage() {
                 </TableHeader>
                 <TableBody>
                   {(hostStats.data?.data ?? []).map((h) => (
-                    <TableRow key={h.group_key}>
-                      <TableCell className="font-mono text-sm">{h.group_key}</TableCell>
+                    <TableRow key={h.host}>
+                      <TableCell className="font-mono text-sm">{h.host}</TableCell>
                       <TableCell className="text-right font-semibold">{h.open}</TableCell>
                       <TableCell className="text-right">{h.total}</TableCell>
                       <TableCell className="text-right">{h.alerts}</TableCell>
@@ -384,6 +406,13 @@ export function OpsPage() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {(hostStats.data?.data ?? []).length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                        {t("ops.noHosts")}
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             )}

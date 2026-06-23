@@ -6,7 +6,7 @@ import {
   GRAPH_MAX_NODES,
   GRAPH_REFRESH_INTERVAL_MS,
 } from "@/features/graph/config";
-import type { GraphData } from "@/types";
+import type { GraphAlert, GraphData } from "@/types";
 
 export function useGraphData(windowHours: number, status: string = GRAPH_DEFAULT_STATUS) {
   return useQuery({
@@ -23,11 +23,12 @@ export function useGraphData(windowHours: number, status: string = GRAPH_DEFAULT
   });
 }
 
+/** Member alerts for one incident (lazy detail). The list payload already
+ *  carries `alerts` inline, so this is only needed if a fuller list is wanted. */
 export function useExpandIncident(incidentId: string | null) {
   return useQuery({
     queryKey: ["graph", "incident", incidentId],
-    queryFn: () =>
-      api.get<Pick<GraphData, "nodes" | "edges">>(`/graph/incident/${incidentId}`),
+    queryFn: () => api.get<{ alerts: GraphAlert[] }>(`/graph/incident/${incidentId}`),
     enabled: !!incidentId,
   });
 }

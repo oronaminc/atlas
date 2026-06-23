@@ -13,6 +13,11 @@ export interface ApiError {
 export interface Meta {
   next_cursor: string | null;
   has_more?: boolean;
+  // numbered pagination (audit-logs, users with ?page=)
+  total?: number;
+  page?: number;
+  pages?: number;
+  page_size?: number;
 }
 
 export type GlobalRole = "admin" | "editor" | "viewer";
@@ -33,15 +38,33 @@ export interface User {
 }
 
 // Read-only rule pulled from the Mimir Ruler (the alertname catalog source).
+// `expr` is DISPLAY-ONLY read-only text — never an input (no PromQL anywhere).
 export interface PulledRule {
   alertname: string;
   expr: string;
-  for: string;
-  severity: string;
+  for_seconds: number | null;
+  severity: string | null;
   labels: Record<string, string>;
   annotations: Record<string, string>;
   namespace: string;
-  group: string;
+  group_name: string;
+  health: string | null;
+  state: string | null;
+  last_error: string | null;
+  last_evaluation: string | null;
+  value: number | null;
+  base_threshold: number | null;
+  comparator: string | null;
+  synced_at: string | null;
+}
+
+export interface ThresholdOverride {
+  id: string;
+  alertname: string;
+  target_cmdb_ci: string | null;
+  target_label_key: string | null;
+  target_label_value: string | null;
+  value: number;
 }
 
 export interface GroupMembership {
@@ -54,6 +77,7 @@ export interface Group {
   id: string;
   name: string;
   description: string | null;
+  labels?: string[];
   member_count?: number;
   created_at: string;
 }
@@ -82,14 +106,21 @@ export interface NotificationPolicy {
   created_at: string;
 }
 
+export interface SilenceMatcher {
+  name: string;
+  value: string;
+  isRegex?: boolean;
+  isEqual?: boolean;
+}
+
 export interface Silence {
-  id: string;
-  matchers: Record<string, string>;
-  starts_at: string;
-  ends_at: string;
-  comment: string;
-  created_by: string | null;
-  created_at: string;
+  silence_id: string;
+  matchers: SilenceMatcher[];
+  starts_at: string | null;
+  ends_at: string | null;
+  comment: string | null;
+  created_by_label: string | null;
+  state: string | null;
 }
 
 export interface AuditLog {
@@ -115,12 +146,15 @@ export interface ActiveAlert {
   endsAt: string;
 }
 
-export interface NotificationSettings {
-  telegram_bot_token: string | null;
-  telegram_rate_per_second: number;
-  quota_group_per_hour: number;
-  quota_global_per_day: number;
-  pending_softcap: number;
+export interface GroupChannel {
+  id: string;
+  channel: "telegram" | "email" | "oncall";
+  enabled: boolean;
+  chat_id: string | null;
+  email: string | null;
+  bot_token: string | null; // MASKED when set
+  webhook_url: string | null; // MASKED when set
+  oncall_token: string | null; // MASKED when set
 }
 
 export interface Recipient {
@@ -234,7 +268,7 @@ export interface TrendBucket {
 }
 
 export interface HostStat {
-  group_key: string;
+  host: string;
   open: number;
   total: number;
   alerts: number;
@@ -242,32 +276,31 @@ export interface HostStat {
   last_seen: string | null;
 }
 
-export interface GraphNode {
+// --- Incident-centric swimlane graph (node/edge model is GONE) ---
+export interface GraphAlert {
   id: string;
-  kind: "incident" | "host" | "alert";
-  label: string;
-  severity: string | null;
-  status: string | null;
-  alert_count?: number;
-  group_key?: string | null;
-  first_seen?: string;
-  last_seen?: string;
-  dominant_name?: string | null;
-  source?: string;
-  dedup_count?: number;
-  received_at?: string;
+  name: string;
+  severity: string;
+  status: string;
+  received_at: string;
+  cmdb_hostname: string | null;
+  dedup_count: number;
 }
 
-export interface GraphEdge {
-  source: string;
-  target: string;
-  kind: "host" | "temporal" | "same_name" | "member";
-  weight: number;
+export interface GraphIncident {
+  id: string;
+  title: string;
+  severity: string;
+  status: string;
+  first_seen: string;
+  last_seen: string;
+  alert_count: number;
+  cmdb_service_l2_code: string | null;
+  alerts: GraphAlert[];
 }
 
 export interface GraphData {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
+  incidents: GraphIncident[];
   meta: { truncated: boolean; total_incidents: number };
 }
 

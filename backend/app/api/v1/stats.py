@@ -124,10 +124,18 @@ async def trend(
     of the un-rolled-up tail only (Phase 3: was a full 24h alert_events
     fetch — 810ms p50 @ 357k rows in Phase 1)."""
     now = utcnow()
-    since = now - timedelta(hours=hours)
     bucket_seconds = 3600 if hours <= 48 else 86400
+    # Align the window start to the bucket boundary (hour or UTC-day) so display
+    # buckets line up exactly with the hour-floored data buckets — otherwise an
+    # unaligned `since` shifts every count into the wrong bucket and drops the
+    # leading partial one (the "values wrong" bug).
+    raw_since = now - timedelta(hours=hours)
+    if bucket_seconds == 3600:
+        since = raw_since.replace(minute=0, second=0, microsecond=0)
+    else:
+        since = raw_since.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    n_buckets = max((hours * 3600) // bucket_seconds, 1)
+    n_buckets = int((now - since).total_seconds() // bucket_seconds) + 1
     buckets: list[dict] = [
         {
             "bucket": (since + timedelta(seconds=i * bucket_seconds)).isoformat(),
@@ -147,29 +155,37 @@ async def trend(
 @router.get("/hosts")
 async def hosts(
     limit: int = Query(default=50, le=200),
+    since_hours: int = Query(default=168, ge=1, le=24 * 30),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Incidents grouped by group_key (host=...) — which servers are noisy.
-    Folded in Python for SQLite/PG portability."""
-    incidents = (
+    """Per-server status, keyed by the alert's cmdb_hostname (IMP: incident
+    group_key is now the l2 service code, so the old host parse was empty).
+    For each server: alert count, distinct open/total incidents, worst
+    severity, last seen. Folded in Python for SQLite/PG portability."""
+    since = utcnow() - timedelta(hours=since_hours)
+    rows = (
         await db.execute(
             select(
-                Incident.group_key,
+                AlertEvent.cmdb_hostname,
+                AlertEvent.severity,
+                AlertEvent.received_at,
+                AlertEvent.incident_id,
                 Incident.status,
-                Incident.severity,
-                Incident.last_seen,
-                Incident.alert_count,
-            ).where(Incident.group_key.is_not(None))
+            )
+            .join(Incident, Incident.id == AlertEvent.incident_id, isouter=True)
+            .where(AlertEvent.cmdb_hostname.isnot(None), AlertEvent.received_at >= since)
         )
     ).all()
 
-    by_key: dict[str, dict] = {}
-    for group_key, status, severity, last_seen, alert_count in incidents:
-        entry = by_key.setdefault(
-            group_key,
+    by_host: dict[str, dict] = {}
+    inc_seen: dict[str, set] = {}
+    open_seen: dict[str, set] = {}
+    for host, severity, received_at, incident_id, status in rows:
+        entry = by_host.setdefault(
+            host,
             {
-                "group_key": group_key,
+                "host": host,
                 "open": 0,
                 "total": 0,
                 "alerts": 0,
@@ -177,16 +193,21 @@ async def hosts(
                 "last_seen": None,
             },
         )
-        entry["total"] += 1
-        entry["alerts"] += alert_count
-        if status not in (IncidentStatus.resolved, IncidentStatus.suppressed):
-            entry["open"] += 1
-            if SEVERITY_RANK.get(severity, 0) >= SEVERITY_RANK[entry["max_severity"]]:
-                entry["max_severity"] = severity
-        if entry["last_seen"] is None or (last_seen and last_seen > entry["last_seen"]):
-            entry["last_seen"] = last_seen
+        entry["alerts"] += 1
+        if SEVERITY_RANK.get(severity, 0) >= SEVERITY_RANK[entry["max_severity"]]:
+            entry["max_severity"] = severity
+        if entry["last_seen"] is None or (received_at and received_at > entry["last_seen"]):
+            entry["last_seen"] = received_at
+        if incident_id is not None:
+            inc_seen.setdefault(host, set()).add(incident_id)
+            if status not in (IncidentStatus.resolved, IncidentStatus.suppressed):
+                open_seen.setdefault(host, set()).add(incident_id)
 
-    result = sorted(by_key.values(), key=lambda e: (-e["open"], -e["alerts"]))[:limit]
+    for host, entry in by_host.items():
+        entry["total"] = len(inc_seen.get(host, set()))
+        entry["open"] = len(open_seen.get(host, set()))
+
+    result = sorted(by_host.values(), key=lambda e: (-e["open"], -e["alerts"]))[:limit]
     for entry in result:
         if isinstance(entry["last_seen"], datetime):
             entry["last_seen"] = entry["last_seen"].isoformat()

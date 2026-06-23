@@ -1,7 +1,7 @@
-"""Real-PG: threshold filter under concurrent correlation workers. Below-
-threshold events are suppressed exactly once (terminal, no re-claim, no
-incident); above-threshold create incidents. Mock Mimir (fail-open path is
-unit-tested separately)."""
+"""Real-PG: no-PromQL threshold filter under concurrent correlation workers.
+Below-threshold events are suppressed exactly once (terminal, no re-claim, no
+incident); above-threshold create incidents. The alert carries its own value;
+comparator from its annotations; override sets the number."""
 
 import asyncio
 import os
@@ -14,11 +14,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.models import Base
 from app.models.alerting import AlertEvent
-from app.models.threshold import RuleCatalog, ThresholdOverride
-from app.services.correlation.dedup import InMemoryDedupStore
+from app.models.threshold import ThresholdOverride
 from app.services.grouping_config import get_active_rule
 from app.services.incident_service import group_alert
-from app.services.threshold import ValueCache, should_suppress
+from app.services.threshold import should_suppress
 from app.workers.correlation_worker import claim_events
 from tests.notifications.helpers import NOW
 
@@ -44,13 +43,8 @@ async def pg_factory():
     await engine.dispose()
 
 
-async def _fetch(promql):  # LOW -> 92 (suppress), HIGH -> 97 (pass)
-    return 92.0 if '"LOW"' in promql else 97.0
-
-
 async def test_concurrent_threshold_filter(pg_factory):
     async with pg_factory() as db:
-        db.add(RuleCatalog(alertname="A", comparator=">", value_query='m{cmdb_ci="{{cmdb_ci}}"}'))
         db.add(ThresholdOverride(alertname="A", target_cmdb_ci="LOW", value=95))
         db.add(ThresholdOverride(alertname="A", target_cmdb_ci="HIGH", value=95))
         for i in range(6):
@@ -62,9 +56,10 @@ async def test_concurrent_threshold_filter(pg_factory):
                     severity="critical",
                     status="firing",
                     labels={"cmdb_ci": "LOW", "host": f"l{i}"},
-                    annotations={},
+                    annotations={"atlas_compare": ">"},
                     starts_at=NOW,
                     received_at=NOW,
+                    value=92.0,  # < 95 -> suppress
                 )
             )
         for i in range(6):
@@ -76,9 +71,10 @@ async def test_concurrent_threshold_filter(pg_factory):
                     severity="critical",
                     status="firing",
                     labels={"cmdb_ci": "HIGH", "host": f"h{i}"},
-                    annotations={},
+                    annotations={"atlas_compare": ">"},
                     starts_at=NOW,
                     received_at=NOW,
+                    value=97.0,  # >= 95 -> pass
                     cmdb_service_l2_code=f"HIGH-{i}",
                 )
             )
@@ -86,8 +82,6 @@ async def test_concurrent_threshold_filter(pg_factory):
 
     async def worker():
         async with pg_factory() as db:
-            InMemoryDedupStore()  # dedup not exercised (distinct fingerprints)
-            cache = ValueCache()
             rule = await get_active_rule(db)
             while True:
                 events = await claim_events(
@@ -96,9 +90,7 @@ async def test_concurrent_threshold_filter(pg_factory):
                 if not events:
                     break
                 for event in events:
-                    suppress, value = await should_suppress(
-                        db, event, fetch_value=_fetch, cache=cache
-                    )
+                    suppress, value = await should_suppress(db, event)
                     if value is not None:
                         event.value = value
                     if suppress:

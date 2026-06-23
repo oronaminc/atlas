@@ -51,6 +51,11 @@ class AlertmanagerClient(BaseIntegrationClient):
 
     # --- silences ---
 
+    async def get_silences(self) -> list[dict[str, Any]]:
+        response = await self.request("GET", "/alertmanager/api/v2/silences")
+        response.raise_for_status()
+        return response.json()
+
     async def create_silence(self, silence: dict[str, Any]) -> str:
         response = await self.request("POST", "/alertmanager/api/v2/silences", json=silence)
         response.raise_for_status()

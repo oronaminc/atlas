@@ -1,9 +1,9 @@
-/** 2D swimlane renderer: plain React → SVG, system fonts only (air-gap safe).
+/** Incident swimlane renderer: plain React → SVG, system fonts only (air-gap).
  *
- *  X = time, one lane per host. Temporal edges are UNDIRECTED arcs — the
- *  data is proximity ("fired together"), not causality, so no arrowheads.
- *  same_name correlation stays hidden until a pill is hovered/selected to
- *  avoid re-cluttering during alert storms.
+ *  X = time. One lane per INCIDENT (label = incident title). Inside each lane,
+ *  the incident's member alerts render as time-positioned pills colored by
+ *  severity. Selecting a pill or the lane label bubbles the incident up to the
+ *  page for the detail panel. No edges/arcs — the model is incident-centric.
  */
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -13,32 +13,27 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { GRAPH_MAX_VISIBLE_LANES } from "@/features/graph/config";
 import { buildSwimlanes } from "@/features/graph/swimlanes";
-import { stripGroupKey } from "@/lib/server-identity";
-import type { GraphData, GraphNode } from "@/types";
+import type { GraphData, GraphIncident } from "@/types";
 
-const GUTTER_W = 260; // host label column (FQDNs need the room)
+const GUTTER_W = 260; // incident-title column
 const AXIS_H = 28;
-const ROW_H = 26;
+const ROW_H = 24;
 const LANE_VPAD = 7;
-const PILL_H = 16;
-const PILL_MIN_W = 8;
+const PILL_H = 14;
+const PILL_MIN_W = 9;
 
-// Theme-aware: severity tokens resolve per light/dark via CSS vars, so the
-// swimlane reads correctly in both. Neutral fallback for unknown severities.
 const SEVERITY_FILL: Record<string, string> = {
   critical: "hsl(var(--sev-critical))",
   warning: "hsl(var(--sev-warning))",
   info: "hsl(var(--sev-info))",
 };
 const SEVERITY_FALLBACK = "hsl(var(--sev-neutral))";
-const TEMPORAL_STROKE = "hsl(var(--sev-info))"; // proximity arcs
-const SAMENAME_STROKE = "hsl(var(--primary))"; // same_name arcs (accent)
-const SELECTED_STROKE = "hsl(var(--foreground))"; // high-contrast ring
+const SELECTED_STROKE = "hsl(var(--foreground))";
 
 interface SwimlaneChartProps {
   data: GraphData;
   selectedId: string | null;
-  onSelect: (node: GraphNode | null) => void;
+  onSelect: (incident: GraphIncident | null) => void;
 }
 
 export function SwimlaneChart({ data, selectedId, onSelect }: SwimlaneChartProps) {
@@ -46,7 +41,6 @@ export function SwimlaneChart({ data, selectedId, onSelect }: SwimlaneChartProps
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [expanded, setExpanded] = useState(false);
-  const [hoverId, setHoverId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -60,7 +54,6 @@ export function SwimlaneChart({ data, selectedId, onSelect }: SwimlaneChartProps
   const innerW = Math.max(width - GUTTER_W - 16, 100);
 
   const model = useMemo(() => {
-    // stack pills that would collide at the current pixel density
     const probe = buildSwimlanes(data, {
       maxVisibleLanes: GRAPH_MAX_VISIBLE_LANES,
       expanded,
@@ -69,7 +62,7 @@ export function SwimlaneChart({ data, selectedId, onSelect }: SwimlaneChartProps
     return buildSwimlanes(data, {
       maxVisibleLanes: GRAPH_MAX_VISIBLE_LANES,
       expanded,
-      minSeparationMs: msPerPx * (PILL_MIN_W + 4),
+      minSeparationMs: msPerPx * (PILL_MIN_W + 3),
     });
   }, [data, expanded, innerW]);
 
@@ -79,7 +72,6 @@ export function SwimlaneChart({ data, selectedId, onSelect }: SwimlaneChartProps
     .domain([new Date(minMs - pad), new Date(maxMs + pad)])
     .range([GUTTER_W, GUTTER_W + innerW]);
 
-  // lane offsets + pill anchor positions (for edge arcs)
   const laneTops: number[] = [];
   let cursor = AXIS_H;
   for (const lane of model.lanes) {
@@ -87,28 +79,6 @@ export function SwimlaneChart({ data, selectedId, onSelect }: SwimlaneChartProps
     cursor += lane.rowCount * ROW_H + LANE_VPAD * 2;
   }
   const chartH = cursor;
-
-  const anchor = new Map<string, { x: number; y: number }>();
-  model.lanes.forEach((lane, i) => {
-    for (const pill of lane.pills) {
-      anchor.set(pill.node.id, {
-        x: x(pill.startMs) + PILL_MIN_W / 2,
-        y: laneTops[i] + LANE_VPAD + pill.row * ROW_H + ROW_H / 2,
-      });
-    }
-  });
-
-  const activeId = hoverId ?? selectedId;
-  const partners = activeId ? model.sameNamePartners.get(activeId) : undefined;
-  const related = activeId
-    ? new Set([activeId, ...(partners ?? [])])
-    : null;
-
-  const arc = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-    const bend = a.y === b.y ? -Math.min(24, 10 + Math.abs(b.x - a.x) / 8) : 0;
-    const my = (a.y + b.y) / 2 + bend;
-    return `M ${a.x} ${a.y} C ${a.x} ${my}, ${b.x} ${my}, ${b.x} ${b.y}`;
-  };
 
   if (model.lanes.length === 0) {
     return (
@@ -151,122 +121,76 @@ export function SwimlaneChart({ data, selectedId, onSelect }: SwimlaneChartProps
           </g>
         ))}
 
-        {/* lanes */}
+        {/* lanes (one per incident) */}
         {model.lanes.map((lane, i) => {
           const top = laneTops[i];
           const h = lane.rowCount * ROW_H + LANE_VPAD * 2;
+          const isSelected = lane.incident.id === selectedId;
           return (
-            <g key={lane.host || "(none)"} data-testid={`lane-${lane.host}`}>
-              {i % 2 === 1 && (
-                <rect x={0} y={top} width="100%" height={h} className="fill-muted/40" />
+            <g key={lane.incident.id} data-testid={`lane-${lane.incident.id}`}>
+              {(i % 2 === 1 || isSelected) && (
+                <rect
+                  x={0}
+                  y={top}
+                  width="100%"
+                  height={h}
+                  className={isSelected ? "fill-accent/40" : "fill-muted/40"}
+                />
               )}
               <line x1={0} x2="100%" y1={top + h} y2={top + h} className="stroke-border" />
               <text
                 x={10}
                 y={top + h / 2 + 4}
-                className="fill-foreground text-xs font-medium"
+                className="cursor-pointer fill-foreground text-xs font-medium"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(lane.incident);
+                }}
               >
-                <title>{stripGroupKey(lane.host) || t("graph.noHost")}</title>
-                {(stripGroupKey(lane.host) || t("graph.noHost")).slice(0, 36)}
+                <title>{lane.incident.title}</title>
+                {lane.incident.title.slice(0, 34)}
                 <tspan className="fill-muted-foreground font-normal">
-                  {" "}({lane.pills.length})
+                  {" "}({lane.incident.alert_count})
                 </tspan>
               </text>
             </g>
           );
         })}
 
-        {/* temporal arcs — undirected: proximity, not causality */}
-        {model.temporalEdges.map((edge, i) => {
-          const a = anchor.get(edge.source.id);
-          const b = anchor.get(edge.target.id);
-          if (!a || !b) return null;
-          const touched =
-            !related || related.has(edge.source.id) || related.has(edge.target.id);
-          return (
-            <path
-              key={`t${i}`}
-              d={arc(a, b)}
-              fill="none"
-              stroke={TEMPORAL_STROKE}
-              strokeWidth={1.2}
-              opacity={(0.35 + edge.weight * 0.45) * (touched ? 1 : 0.15)}
-            />
-          );
-        })}
-
-        {/* same_name arcs — only while hovering/selected */}
-        {activeId &&
-          [...(partners ?? [])].map((partnerId) => {
-            const a = anchor.get(activeId);
-            const b = anchor.get(partnerId);
-            if (!a || !b) return null;
-            return (
-              <path
-                key={`s${partnerId}`}
-                d={arc(a, b)}
-                fill="none"
-                stroke={SAMENAME_STROKE}
-                strokeWidth={1.6}
-                strokeDasharray="5 3"
-                data-testid="same-name-arc"
-              />
-            );
-          })}
-
-        {/* incident pills */}
+        {/* alert pills inside each incident lane */}
         {model.lanes.map((lane, i) =>
           lane.pills.map((pill) => {
-            const px = x(pill.startMs);
-            const pw = Math.max(x(pill.endMs) - px, PILL_MIN_W);
+            const px = x(pill.atMs);
             const py =
               laneTops[i] + LANE_VPAD + pill.row * ROW_H + (ROW_H - PILL_H) / 2;
-            const dimmed = related !== null && !related.has(pill.node.id);
-            const highlighted = related !== null && related.has(pill.node.id);
+            const pw = PILL_MIN_W;
             return (
               <g
-                key={pill.node.id}
-                data-testid="incident-pill"
-                data-incident-id={pill.node.id}
+                key={pill.alert.id}
+                data-testid="alert-pill"
+                data-incident-id={lane.incident.id}
                 className="cursor-pointer"
-                opacity={dimmed ? 0.25 : 1}
-                onMouseEnter={() => setHoverId(pill.node.id)}
-                onMouseLeave={() => setHoverId(null)}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSelect(pill.node);
+                  onSelect(lane.incident);
                 }}
               >
                 <title>
-                  {`${pill.node.label}\n${pill.node.severity ?? ""} · ×${pill.node.alert_count ?? 0}`}
+                  {`${pill.alert.name}\n${pill.alert.severity} · ${
+                    pill.alert.cmdb_hostname ?? ""
+                  } · ×${pill.alert.dedup_count}`}
                 </title>
                 <rect
                   x={px}
                   y={py}
                   width={pw}
                   height={PILL_H}
-                  rx={4}
-                  fill={SEVERITY_FILL[pill.node.severity ?? ""] ?? SEVERITY_FALLBACK}
-                  fillOpacity={pill.node.status === "resolved" ? 0.4 : 0.9}
-                  stroke={
-                    pill.node.id === selectedId
-                      ? SELECTED_STROKE
-                      : highlighted
-                        ? SAMENAME_STROKE
-                        : "none"
-                  }
-                  strokeWidth={pill.node.id === selectedId ? 2 : 1.5}
+                  rx={3}
+                  fill={SEVERITY_FILL[pill.alert.severity] ?? SEVERITY_FALLBACK}
+                  fillOpacity={pill.alert.status === "resolved" ? 0.4 : 0.95}
+                  stroke={lane.incident.id === selectedId ? SELECTED_STROKE : "none"}
+                  strokeWidth={1.5}
                 />
-                {pw > 40 && (
-                  <text
-                    x={px + 5}
-                    y={py + PILL_H - 4}
-                    className="pointer-events-none fill-white text-[10px]"
-                  >
-                    {pill.node.label.slice(0, Math.floor(pw / 7))}
-                    {(pill.node.alert_count ?? 0) > 1 ? ` ×${pill.node.alert_count}` : ""}
-                  </text>
-                )}
               </g>
             );
           }),

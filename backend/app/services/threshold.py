@@ -1,70 +1,61 @@
-"""Ingest-time threshold filter (PR #2, Model 2).
+"""Ingest-time threshold filter (no PromQL anywhere).
 
-Precedence (IMP, label-based — no server table): per-server cmdb_ci override >
-label-scoped override (target_label_key matches one of the alert's labels, e.g.
-cmdb_service_l2_code) > none = never suppress. For an overridden target we fetch
-the CURRENT metric value from Mimir (catalog.value_query with the cmdb_ci
-substituted) and suppress the alert iff it's *less severe* than the override.
+The incident filter decides whether a firing alert is incident-worthy. It NEVER
+queries Mimir and never parses PromQL. Inputs are all label/annotation/cache:
 
-FAIL-OPEN is absolute: missing cmdb_ci / no override / no catalog value_query /
-query error / timeout / empty / non-numeric -> PASS (never suppress). A real
-alert must never be dropped because of a lookup hiccup.
+- current value  = the alert's carried value (AlertEvent.value, parsed at ingest
+  from its annotations).
+- effective threshold = per-server (cmdb_ci) override > per-service
+  (cmdb_service_l2_code) override > the rule's BASE threshold.
+- base threshold + comparator (decision A1) = the alert's OWN annotations
+  (atlas_threshold / atlas_compare) preferred, else the cached Mimir rule's
+  base (read from the rule's labels/annotations by the sync worker).
+
+FAIL-OPEN is absolute: no value / no comparator / no effective threshold -> PASS
+(never suppress). Suppressed alerts are still stored, just not escalated.
 """
 
-import time
-from collections.abc import Awaitable, Callable
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alerting import AlertEvent
-from app.models.threshold import Comparator, RuleCatalog, ThresholdOverride
+from app.models.mimir import MimirRule
+from app.models.threshold import Comparator, ThresholdOverride
 
-# fetch_value(filled_promql) -> current value, or None on any failure
-FetchValue = Callable[[str], Awaitable[float | None]]
-
-
-class ValueCache:
-    """Tiny per-(cmdb_ci, alertname) TTL cache so AM resends/dedup don't
-    re-hammer Mimir. Caches misses too (None) — still fail-open."""
-
-    def __init__(self, ttl_seconds: float = 10.0) -> None:
-        self._ttl = ttl_seconds
-        self._d: dict[tuple, tuple[float | None, float]] = {}
-
-    async def get(self, key: tuple, loader: Callable[[], Awaitable[float | None]], now: float):
-        hit = self._d.get(key)
-        if hit is not None and hit[1] > now:
-            return hit[0]
-        val = await loader()
-        self._d[key] = (val, now + self._ttl)
-        return val
+THRESHOLD_KEYS = ("atlas_threshold", "threshold")
+COMPARE_KEYS = ("atlas_compare", "atlas_comparator", "compare")
+VALUE_KEYS = ("value", "atlas_value")
 
 
-def parse_instant_value(resp: dict[str, Any]) -> float | None:
-    """Prometheus instant-query JSON -> the first sample's value, or None."""
+def to_float(v: Any) -> float | None:
     try:
-        result = resp["data"]["result"]
-        if not result:
-            return None
-        return float(result[0]["value"][1])
-    except (KeyError, IndexError, TypeError, ValueError):
+        return float(v)
+    except (TypeError, ValueError):
         return None
 
 
-async def resolve_threshold(
-    db: AsyncSession,
-    labels: dict[str, str],
-    alertname: str,
-) -> tuple[str, float] | None:
-    """Label-based precedence (IMP): per-server cmdb_ci override > label-scoped
-    override (target_label_key matches a label value, e.g. cmdb_service_l2_code)
-    > None (default = never suppress). No server table — everything is matched
-    against the alert's own labels."""
+def _first(d: dict[str, Any], keys) -> Any:
+    for k in keys:
+        if (d or {}).get(k) not in (None, ""):
+            return d[k]
+    return None
+
+
+def value_from_annotations(annotations: dict[str, Any]) -> float | None:
+    """The metric value the alert carries (set onto AlertEvent.value at ingest)."""
+    return to_float(_first(annotations, VALUE_KEYS))
+
+
+async def resolve_override(
+    db: AsyncSession, labels: dict[str, str], alertname: str
+) -> float | None:
+    """Override number, precedence per-server cmdb_ci > per-service label
+    (e.g. cmdb_service_l2_code) > None. Matched against the alert's own labels."""
     cmdb_ci = labels.get("cmdb_ci")
     if cmdb_ci:
-        server_ovr = (
+        v = (
             await db.execute(
                 select(ThresholdOverride.value).where(
                     ThresholdOverride.alertname == alertname,
@@ -72,10 +63,8 @@ async def resolve_threshold(
                 )
             )
         ).scalar_one_or_none()
-        if server_ovr is not None:
-            return ("cmdb_ci", server_ovr)
-
-    # label-scoped overrides: first whose (key, value) the alert's labels satisfy
+        if v is not None:
+            return v
     rows = (
         await db.execute(
             select(
@@ -88,10 +77,31 @@ async def resolve_threshold(
             )
         )
     ).all()
-    for key, value, threshold in rows:
-        if key and labels.get(key) == value:
-            return ("label", threshold)
+    for key, val, threshold in rows:
+        if key and labels.get(key) == val:
+            return threshold
     return None
+
+
+async def _base_threshold(
+    db: AsyncSession, annotations: dict[str, Any], alertname: str
+) -> tuple[float | None, str | None]:
+    """Rule base + comparator: the alert's own annotations win; else the cached
+    Mimir rule's base (read-only from the rule's labels/annotations)."""
+    base = to_float(_first(annotations, THRESHOLD_KEYS))
+    cmp_raw = _first(annotations, COMPARE_KEYS)
+    comparator = cmp_raw if cmp_raw in (">", "<") else None
+    if base is not None and comparator is not None:
+        return base, comparator
+    rule = (
+        await db.execute(select(MimirRule).where(MimirRule.alertname == alertname).limit(1))
+    ).scalar_one_or_none()
+    if rule is not None:
+        if base is None:
+            base = rule.base_threshold
+        if comparator is None:
+            comparator = rule.comparator
+    return base, comparator
 
 
 def _is_below_severity(value: float, threshold: float, comparator: str) -> bool:
@@ -102,46 +112,22 @@ def _is_below_severity(value: float, threshold: float, comparator: str) -> bool:
         return value < threshold
     if comparator == Comparator.lt.value:
         return value > threshold
-    return False  # unknown comparator -> fail-open
+    return False
 
 
-async def should_suppress(
-    db: AsyncSession,
-    event: AlertEvent,
-    *,
-    fetch_value: FetchValue,
-    cache: ValueCache,
-    now: float | None = None,
-) -> tuple[bool, float | None]:
-    """Returns (suppress, fetched_value). Fail-open everywhere."""
-    now = now if now is not None else time.monotonic()
+async def should_suppress(db: AsyncSession, event: AlertEvent) -> tuple[bool, float | None]:
+    """Returns (suppress, value). Fail-open everywhere. No Mimir query, no PromQL."""
     labels = event.labels or {}
-    cmdb_ci = labels.get("cmdb_ci")
-    if not cmdb_ci:
+    annotations = event.annotations or {}
+    value = event.value if event.value is not None else value_from_annotations(annotations)
+    if value is None:
         return (False, None)
 
-    resolved = await resolve_threshold(db, labels, event.name)
-    if resolved is None:
-        return (False, None)  # no override -> never suppress
-    _tier, threshold = resolved
-
-    catalog = (
-        await db.execute(select(RuleCatalog).where(RuleCatalog.alertname == event.name))
-    ).scalar_one_or_none()
-    if catalog is None or not catalog.value_query or not catalog.comparator:
-        return (False, None)  # not configured -> pass-through
-
-    promql = catalog.value_query.replace("{{cmdb_ci}}", cmdb_ci)
-    key = (cmdb_ci, event.name)
-
-    async def _load() -> float | None:
-        try:
-            return await fetch_value(promql)
-        except Exception:
-            return None  # query error/timeout -> fail-open
-
-    value = await cache.get(key, _load, now)
-    if value is None:
-        return (False, None)  # empty/non-numeric/error -> fail-open
-
-    return (_is_below_severity(value, threshold, catalog.comparator), value)
+    base, comparator = await _base_threshold(db, annotations, event.name)
+    if comparator is None:
+        return (False, value)
+    override = await resolve_override(db, labels, event.name)
+    effective = override if override is not None else base
+    if effective is None:
+        return (False, value)
+    return (_is_below_severity(value, effective, comparator), value)

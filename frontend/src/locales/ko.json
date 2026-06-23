@@ -20,7 +20,8 @@
     "test": "테스트",
     "validate": "검증",
     "success": "성공",
-    "failed": "실패"
+    "failed": "실패",
+    "totalCount": "총 {{count}}건"
   },
   "theme": {
     "toggle": "테마 변경",
@@ -36,7 +37,7 @@
     "alerts": "알림",
     "incidents": "인시던트",
     "notifications": "알림 설정",
-    "groups": "그룹 관리",
+    "groups": "사용자 그룹 관리",
     "users": "사용자 관리",
     "audit": "감사 로그",
     "profile": "프로필",
@@ -45,16 +46,51 @@
     "ops": "운영 대시보드",
     "graph": "인시던트 그래프",
     "thresholds": "임계값",
-    "groupingRules": "그룹핑 룰",
+    "groupingRules": "인시던트 형성 룰",
     "notificationDefaults": "알림 기본값",
+    "rulesViewer": "룰 뷰어",
     "sectionMonitor": "모니터링",
     "sectionConfigure": "설정",
-    "sectionAdmin": "관리"
+    "sectionAlertRules": "알림 룰",
+    "sectionManage": "관리",
+    "sectionSilence": "사일런스",
+    "silence": "사일런스"
+  },
+  "dateRange": {
+    "preset_1h": "최근 1시간",
+    "preset_6h": "최근 6시간",
+    "preset_24h": "최근 24시간",
+    "preset_7d": "최근 7일",
+    "preset_30d": "최근 30일",
+    "custom": "사용자 지정",
+    "start": "시작",
+    "end": "종료",
+    "apply": "적용"
+  },
+  "rulesViewer": {
+    "title": "알림 룰",
+    "description": "Mimir Ruler에서 가져온 읽기 전용 룰 — 각 룰의 정의, 수집 방식, 현재 값, 평가 오류를 확인합니다.",
+    "search": "alertname 검색...",
+    "alertname": "알림명",
+    "severity": "심각도",
+    "state": "상태",
+    "health": "헬스",
+    "value": "값",
+    "baseThreshold": "기본 임계값",
+    "for": "지속",
+    "lastEval": "마지막 평가",
+    "lastError": "마지막 오류",
+    "expr": "표현식 (읽기 전용)",
+    "namespace": "네임스페이스",
+    "group": "그룹",
+    "synced": "동기화",
+    "none": "룰 없음"
   },
   "alerts": {
     "description": "수집된 모든 알림 (인시던트 포함 여부 무관), 라벨 기반",
     "hostname": "호스트명...",
     "zone": "존...",
+    "cmdbCi": "cmdb_ci...",
     "allSeverities": "모든 심각도",
     "anyIncident": "전체",
     "inIncident": "인시던트 포함",
@@ -64,7 +100,16 @@
     "none": "알림 없음",
     "promote": "승격",
     "promoted": "인시던트로 승격됨",
-    "suppressed": "억제됨"
+    "suppressed": "억제됨",
+    "colSeverity": "심각도",
+    "colName": "이름",
+    "colHostname": "호스트명",
+    "colZone": "존",
+    "colService": "서비스 (l2)",
+    "colStatus": "상태",
+    "colIncident": "인시던트",
+    "colReceived": "수신 시각",
+    "page": "{{n}} 페이지"
   },
   "incidents": {
     "description": "인시던트 컨테이너 — 내부에 묶인 알림들",
@@ -73,13 +118,16 @@
     "detach": "분리",
     "notify_email": "이메일",
     "notify_telegram": "텔레그램",
-    "notify_oncall": "OnCall"
+    "notify_oncall": "OnCall",
+    "delete": "인시던트 삭제",
+    "deleteConfirm": "이 인시던트를 삭제할까요? 알림은 해제되며 삭제되지 않습니다."
   },
   "groupingRules": {
-    "description": "토폴로지 그룹핑 기준 (관리자)",
-    "labelKeys": "라벨 키",
-    "window": "윈도우 (초)",
+    "description": "수집된 알림을 인시던트로 묶는 기준 (관리자)",
+    "labelKeys": "라벨 키 (읽기 전용)",
+    "window": "형성 윈도우 (초)",
     "minGroupSize": "최소 그룹 크기",
+    "dedupWindow": "중복 제거 윈도우 (초)",
     "criticalImmediate": "Critical 즉시 생성"
   },
   "notificationDefaults": {
@@ -91,7 +139,17 @@
   },
   "groups": {
     "serviceCodes": "서비스 코드 (l2)",
-    "serviceCodesHelp": "이 그룹이 보고/알림받는 cmdb_service_l2_code 값 (한 줄에 하나)"
+    "serviceCodesHelp": "이 그룹이 보고/알림받는 cmdb_service_l2_code 값 (한 줄에 하나)",
+    "members": "멤버",
+    "roleInGroup": "그룹 내 역할",
+    "labels": "라벨",
+    "labelsHelp": "설명용 메타데이터입니다 — Mimir의 라벨 이름. 이 그룹에 해당하는 라벨을 선택하세요."
+  },
+  "users": {
+    "resetPassword": "비밀번호 재설정",
+    "resetPasswordHelp": "새 비밀번호를 직접 설정합니다 (최소 8자). 이메일은 발송되지 않습니다.",
+    "resetPasswordDone": "비밀번호가 재설정되었습니다",
+    "history": "활동 이력"
   },
   "mutes": {
     "title": "알림 차단 / 대상 그룹",
@@ -121,30 +179,27 @@
   },
   "thresholds": {
     "title": "임계값 재정의",
-    "description": "서버(cmdb_ci) 또는 라벨별 알림 임계값. 임계값 미만 알림은 수집 시점에 억제되며, 쿼리 실패 시 통과(fail-open)합니다.",
-    "catalog": "룰 카탈로그",
+    "description": "가져온 룰을 선택한 뒤 서비스별 또는 서버별 임계값을 설정합니다. 임계값 미만 알림은 수집 시점에 억제되며, 쿼리 실패 시 통과(fail-open)합니다.",
+    "editor": "새 재정의",
+    "ruleSelect": "Mimir Ruler에서 가져온 알림명(alertname)을 선택하세요",
     "searchRules": "룰 검색...",
     "noRules": "일치하는 룰 없음",
     "selectRule": "룰을 선택하세요",
-    "passthrough": "통과",
-    "comparator": "비교 연산자",
-    "cmpGt": "> (초과 시 알림)",
-    "cmpLt": "< (미만 시 알림)",
-    "unit": "단위",
-    "valueQuery": "값 쿼리 (PromQL)",
-    "valueQueryHint": "서버 위치에 {{cmdb_ci}}를 사용하세요. 비워두면 통과(억제 안 함)합니다.",
     "overrides": "재정의 목록",
-    "pulledHelp": "Mimir Ruler에서 가져온 알림명(alertname)을 선택하세요",
     "rule": "룰",
     "target": "대상",
-    "targetCmdb": "서버 (cmdb_ci)",
-    "targetLabel": "라벨",
-    "labelKey": "라벨 키",
-    "labelValue": "라벨 값",
+    "perService": "서비스별",
+    "perServer": "서버별",
+    "serviceCode": "서비스 (cmdb_service_l2_code)",
+    "selectService": "서비스 선택",
+    "base": "기본 임계값",
     "value": "임계값",
+    "defaultValue": "기본값",
+    "customValue": "사용자 지정",
     "addOverride": "재정의 추가",
     "added": "재정의가 추가되었습니다",
-    "noOverrides": "재정의가 없습니다"
+    "noOverrides": "재정의가 없습니다",
+    "readOnly": "읽기 전용 (편집자 권한 필요)"
   },
   "auth": {
     "login": "로그인",
@@ -179,8 +234,11 @@
     "lastSynced": "마지막 동기화"
   },
   "dashboard": {
+    "description": "관리자 개요 — 활성 알림 및 최근 활동",
     "activeAlerts": "활성 알림",
+    "criticalAlerts": "Critical",
     "recentAudit": "최근 감사 로그",
+    "alertmanagerUnavailable": "Alertmanager에 연결할 수 없습니다 — 알림 요약을 표시할 수 없습니다.",
     "syncState": "동기화 상태"
   },
   "settings": {
@@ -215,6 +273,12 @@
     "lastSeen": "마지막 발생",
     "deliveryStatus": "알림 발송 현황",
     "channel": "채널",
+    "channelAll": "모든 채널",
+    "channelTelegram": "텔레그램",
+    "channelEmail": "이메일",
+    "channelOncall": "OnCall",
+    "noDeliveries": "발송 내역 없음",
+    "noHosts": "호스트 데이터 없음",
     "recipient": "수신자",
     "attempts": "시도",
     "detailCol": "상세",
@@ -253,13 +317,12 @@
   "graph": {
     "title": "인시던트 스윔레인",
     "refresh": "새로고침",
-    "truncated": "노드 수 제한으로 일부만 표시 중 (최근 항목 우선)",
+    "truncated": "표시 한도 도달로 일부만 표시 중 (최근 항목 우선)",
     "memberAlerts": "구성 알림",
-    "legendTemporal": "동시 발생 (시간 근접)",
-    "legendSameName": "동일 알림 이름",
-    "laneMore": "호스트 {{count}}개 더 보기",
-    "showLess": "호스트 접기",
-    "noHost": "(호스트 없음)",
+    "legendLane": "각 레인은 하나의 인시던트이며, 알약은 구성 알림입니다.",
+    "laneMore": "인시던트 {{count}}개 더 보기",
+    "showLess": "인시던트 접기",
+    "noAlerts": "구성 알림 없음",
     "noData": "이 기간에 인시던트가 없습니다"
   },
   "retention": {
@@ -298,5 +361,32 @@
     "label": "라벨",
     "text": "텍스트",
     "noResults": "결과 없음"
+  },
+  "silence": {
+    "description": "Mimir Alertmanager 사일런스 (조회는 전체; 생성/만료는 편집자 이상). 서비스 또는 서버 + 기간을 선택하면 매처가 자동 생성됩니다.",
+    "target": "대상",
+    "state": "상태",
+    "starts": "시작",
+    "ends": "종료",
+    "comment": "설명",
+    "createdBy": "생성자",
+    "expire": "만료",
+    "none": "사일런스 없음",
+    "kind": "사일런스",
+    "service": "서비스 (l2)",
+    "server": "서버 (cmdb_ci)",
+    "create": "사일런스 생성"
+  },
+  "channels": {
+    "title": "채널 지정",
+    "help": "각 사용자 그룹은 자체 알림 채널(전용 Telegram 봇+챗, 이메일, OnCall 웹훅)을 가집니다. 인시던트는 서비스(l2)에 매핑된 그룹으로, 그다음 이 채널들로 전달됩니다.",
+    "selectGroup": "그룹 선택",
+    "none": "이 그룹에 채널이 없습니다",
+    "channel": "채널",
+    "botToken": "봇 토큰",
+    "chatId": "챗 ID",
+    "email": "이메일",
+    "webhookUrl": "웹훅 URL",
+    "add": "채널 추가"
   }
 }

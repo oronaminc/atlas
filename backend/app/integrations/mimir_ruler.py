@@ -67,3 +67,62 @@ class MimirQueryClient(BaseIntegrationClient):
         response = await self.request("GET", "/api/v1/query", params={"query": expr})
         response.raise_for_status()
         return response.json()
+
+    # --- label discovery (autocomplete / filter choices; whole-infra) ---
+
+    async def label_names(
+        self, *, start: str | None = None, end: str | None = None, match: list[str] | None = None
+    ) -> list[str]:
+        params: dict[str, Any] = {}
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if match:
+            params["match[]"] = match
+        response = await self.request("GET", "/api/v1/labels", params=params)
+        response.raise_for_status()
+        return response.json().get("data", []) or []
+
+    async def label_values(
+        self,
+        name: str,
+        *,
+        start: str | None = None,
+        end: str | None = None,
+        match: list[str] | None = None,
+    ) -> list[str]:
+        params: dict[str, Any] = {}
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if match:
+            params["match[]"] = match
+        response = await self.request("GET", f"/api/v1/label/{name}/values", params=params)
+        response.raise_for_status()
+        return response.json().get("data", []) or []
+
+    # --- rule eval state (how a rule is collected + its read value + errors) ---
+
+    async def alerting_rules(self) -> list[dict[str, Any]]:
+        """Prometheus rules API → flat list of alerting rules with eval state.
+        Each: name, query, duration, labels, annotations, health, state,
+        lastError, lastEvaluation, alerts[] (active instances w/ value)."""
+        response = await self.request("GET", "/api/v1/rules", params={"type": "alert"})
+        response.raise_for_status()
+        groups = response.json().get("data", {}).get("groups", []) or []
+        out: list[dict[str, Any]] = []
+        for group in groups:
+            for rule in group.get("rules", []) or []:
+                if rule.get("type") and rule.get("type") != "alerting":
+                    continue
+                if "name" not in rule:
+                    continue
+                rule = {
+                    **rule,
+                    "_group": group.get("name", ""),
+                    "_namespace": group.get("file", ""),
+                }
+                out.append(rule)
+        return out

@@ -108,6 +108,8 @@ async def update_group(
         group.name = body.name
     if body.description is not None:
         group.description = body.description
+    if body.labels is not None:
+        group.labels = body.labels
     group.updated_by = user.id
     await record_audit(
         db,

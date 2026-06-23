@@ -12,17 +12,18 @@ from app.notifications.outbox import (
 from tests.notifications.helpers import (
     NOW,
     seed_group,
+    seed_group_channel,
     seed_incident,
     seed_route,
-    seed_user,
 )
 
 
 async def seed_notifications(db, n: int = 3) -> list[Notification]:
-    users = [await seed_user(db, f"u{i}@example.com", chat_id=str(i)) for i in range(n)]
-    group = await seed_group(db, "oncall", users)
+    group = await seed_group(db, "oncall", [])
     await seed_route(db, group)
-    await seed_incident(db)
+    for i in range(n):
+        await seed_group_channel(db, group, "telegram", bot_token="b", chat_id=str(i))
+    await seed_incident(db, channels=["telegram"])
     from app.notifications.fanout import fan_out_pending
 
     await fan_out_pending(db, now=NOW)

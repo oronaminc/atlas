@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { useAuditLogs } from "@/api/queries";
 import { DataTable, type Column } from "@/components/common/data-table";
+import { Pager } from "@/components/common/pager";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -25,17 +26,19 @@ const ALL = "__all__";
 
 export function AuditPage() {
   const { t } = useTranslation();
-  const [cursor, setCursor] = useState<string | undefined>();
+  const [page, setPage] = useState(1);
   const [resourceFilter, setResourceFilter] = useState(ALL);
   const [emergencyOnly, setEmergencyOnly] = useState(ALL);
   const [detail, setDetail] = useState<AuditLog | null>(null);
 
   const logs = useAuditLogs({
-    cursor,
-    limit: "25",
+    page: String(page),
+    page_size: "25",
     resource_type: resourceFilter === ALL ? undefined : resourceFilter,
     emergency: emergencyOnly === ALL ? undefined : emergencyOnly,
   });
+
+  const meta = logs.data?.meta;
 
   const columns: Column<AuditLog>[] = [
     {
@@ -87,7 +90,7 @@ export function AuditPage() {
               value={resourceFilter}
               onValueChange={(v) => {
                 setResourceFilter(v);
-                setCursor(undefined);
+                setPage(1);
               }}
             >
               <SelectTrigger className="w-44">
@@ -108,7 +111,7 @@ export function AuditPage() {
               value={emergencyOnly}
               onValueChange={(v) => {
                 setEmergencyOnly(v);
-                setCursor(undefined);
+                setPage(1);
               }}
             >
               <SelectTrigger className="w-40">
@@ -121,12 +124,17 @@ export function AuditPage() {
             </Select>
           </div>
         }
-        pagination={{
-          hasMore: logs.data?.meta?.has_more ?? false,
-          onNext: () => setCursor(logs.data?.meta?.next_cursor ?? undefined),
-        }}
         onRowClick={(l) => setDetail(l)}
       />
+
+      <div className="mt-4">
+        <Pager
+          page={meta?.page ?? page}
+          pages={meta?.pages ?? 1}
+          total={meta?.total}
+          onPage={setPage}
+        />
+      </div>
 
       <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
         <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">

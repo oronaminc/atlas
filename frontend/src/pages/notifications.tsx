@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BellOff, Plus, Send, Trash2 } from "lucide-react";
+import { Plus, Send, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
@@ -7,7 +7,6 @@ import {
   useApiMutation,
   usePolicies,
   useReceivers,
-  useSilences,
 } from "@/api/queries";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { DataTable, type Column } from "@/components/common/data-table";
@@ -34,8 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { formatDate } from "@/lib/utils";
-import type { NotificationPolicy, Receiver, Silence } from "@/types";
+import type { NotificationPolicy, Receiver } from "@/types";
 
 export function NotificationsPage() {
   const { t } = useTranslation();
@@ -46,16 +44,12 @@ export function NotificationsPage() {
         <TabsList>
           <TabsTrigger value="receivers">Receivers</TabsTrigger>
           <TabsTrigger value="policies">Policies</TabsTrigger>
-          <TabsTrigger value="silences">Silences</TabsTrigger>
-        </TabsList>
+          </TabsList>
         <TabsContent value="receivers">
           <ReceiversTab />
         </TabsContent>
         <TabsContent value="policies">
           <PoliciesTab />
-        </TabsContent>
-        <TabsContent value="silences">
-          <SilencesTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -330,132 +324,3 @@ function PoliciesTab() {
   );
 }
 
-function SilencesTab() {
-  const { t } = useTranslation();
-  const { hasRole } = useAuth();
-  const canEdit = hasRole("admin", "editor");
-  const silences = useSilences();
-
-  const [createOpen, setCreateOpen] = useState(false);
-  const [matchersJson, setMatchersJson] = useState('{"alertname": ""}');
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
-  const [comment, setComment] = useState("");
-
-  const create = useApiMutation(
-    () =>
-      api.post("/silences", {
-        matchers: JSON.parse(matchersJson || "{}"),
-        starts_at: new Date(startsAt).toISOString(),
-        ends_at: new Date(endsAt).toISOString(),
-        comment,
-      }),
-    ["silences"],
-    () => setCreateOpen(false),
-  );
-
-  const remove = useApiMutation(
-    (s: Silence) => api.delete(`/silences/${s.id}`),
-    ["silences"],
-  );
-
-  const columns: Column<Silence>[] = [
-    {
-      key: "matchers",
-      header: "Matchers",
-      render: (s) => <code className="text-xs">{JSON.stringify(s.matchers)}</code>,
-    },
-    { key: "starts", header: "Starts", render: (s) => formatDate(s.starts_at) },
-    { key: "ends", header: "Ends", render: (s) => formatDate(s.ends_at) },
-    {
-      key: "comment",
-      header: "Comment",
-      render: (s) => <span className="text-muted-foreground">{s.comment}</span>,
-    },
-    {
-      key: "actions",
-      header: "",
-      render: (s) =>
-        canEdit ? (
-          <Button variant="ghost" size="icon" onClick={() => remove.mutate(s)}>
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
-        ) : null,
-    },
-  ];
-
-  return (
-    <div className="space-y-4">
-      {canEdit && (
-        <div className="flex justify-end">
-          <Button onClick={() => setCreateOpen(true)}>
-            <BellOff className="h-4 w-4" />
-            Silence {t("common.create")}
-          </Button>
-        </div>
-      )}
-      <DataTable
-        columns={columns}
-        rows={silences.data?.data ?? []}
-        rowKey={(s) => s.id}
-        loading={silences.isLoading}
-      />
-
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Silence {t("common.create")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <FormField label="Matchers (JSON)" htmlFor="sl-matchers">
-              <Textarea
-                id="sl-matchers"
-                rows={3}
-                value={matchersJson}
-                onChange={(e) => setMatchersJson(e.target.value)}
-              />
-            </FormField>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField label="Starts at" htmlFor="sl-start" required>
-                <Input
-                  id="sl-start"
-                  type="datetime-local"
-                  value={startsAt}
-                  onChange={(e) => setStartsAt(e.target.value)}
-                />
-              </FormField>
-              <FormField label="Ends at" htmlFor="sl-end" required>
-                <Input
-                  id="sl-end"
-                  type="datetime-local"
-                  value={endsAt}
-                  onChange={(e) => setEndsAt(e.target.value)}
-                />
-              </FormField>
-            </div>
-            <FormField label="Comment" htmlFor="sl-comment">
-              <Input
-                id="sl-comment"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-              />
-            </FormField>
-          </div>
-          <DialogFooter>
-            <Button
-              onClick={() => create.mutate(undefined)}
-              disabled={!startsAt || !endsAt || create.isPending}
-            >
-              {t("common.save")}
-            </Button>
-          </DialogFooter>
-          {create.isError && (
-            <p className="text-sm text-destructive">
-              {create.error instanceof Error ? create.error.message : t("common.error")}
-            </p>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}

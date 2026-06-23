@@ -170,10 +170,17 @@ async def detach_alert(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_editor),
 ):
-    """Manual detach. Emptying the incident auto-resolves it (decision D)."""
+    """Manual detach (A4). Removing the LAST alert is forbidden (409) — delete
+    the incident to dissolve it. Auto-resolves if the rest are all resolved."""
     incident = await load_incident(db, incident_id)
     alert = await _get_alert(db, alert_id)
-    await incident_service.detach_alert(db, incident, alert, utcnow())
+    try:
+        await incident_service.detach_alert(db, incident, alert, utcnow())
+    except incident_service.LastAlertError as e:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot remove the incident's last alert; delete the incident to dissolve it.",
+        ) from e
     await record_audit(
         db,
         actor_id=user.id,
@@ -185,6 +192,31 @@ async def detach_alert(
     )
     await db.commit()
     return envelope({"ok": True})
+
+
+@router.delete("/{incident_id}")
+async def delete_incident(
+    incident_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_editor),
+):
+    """Dissolve an incident (A4): delete only the incident; its alerts are freed
+    (incident_id NULL, still browsable + manually re-attachable). Drops the
+    timeline + pending/failed notifications; keeps sent/dead as the record."""
+    incident = await load_incident(db, incident_id)
+    freed = await incident_service.delete_incident(db, incident)
+    await record_audit(
+        db,
+        actor_id=user.id,
+        action="delete_incident",
+        resource_type="incident",
+        resource_id=incident_id,
+        before={"title": incident.title, "freed_alerts": freed},
+        ip=client_ip(request),
+    )
+    await db.commit()
+    return envelope({"ok": True, "freed_alerts": freed})
 
 
 @router.patch("/{incident_id}")

@@ -20,7 +20,8 @@
     "test": "Test",
     "validate": "Validate",
     "success": "Success",
-    "failed": "Failed"
+    "failed": "Failed",
+    "totalCount": "{{count}} total"
   },
   "theme": {
     "toggle": "Toggle theme",
@@ -36,8 +37,8 @@
     "alerts": "Alerts",
     "incidents": "Incidents",
     "notifications": "Notifications",
-    "groups": "Groups",
-    "users": "Users",
+    "groups": "User Group Management",
+    "users": "User Management",
     "audit": "Audit Log",
     "profile": "Profile",
     "logout": "Log out",
@@ -45,16 +46,51 @@
     "ops": "Ops Dashboard",
     "graph": "Incident Graph",
     "thresholds": "Thresholds",
-    "groupingRules": "Grouping Rules",
+    "groupingRules": "Incident Formation Rules",
     "notificationDefaults": "Notification Defaults",
+    "rulesViewer": "Rules Viewer",
     "sectionMonitor": "Monitor",
     "sectionConfigure": "Configure",
-    "sectionAdmin": "Admin"
+    "sectionAlertRules": "Alert Rules",
+    "sectionManage": "Manage",
+    "sectionSilence": "Silence",
+    "silence": "Silences"
+  },
+  "dateRange": {
+    "preset_1h": "Last 1 hour",
+    "preset_6h": "Last 6 hours",
+    "preset_24h": "Last 24 hours",
+    "preset_7d": "Last 7 days",
+    "preset_30d": "Last 30 days",
+    "custom": "Custom",
+    "start": "Start",
+    "end": "End",
+    "apply": "Apply"
+  },
+  "rulesViewer": {
+    "title": "Alert Rules",
+    "description": "Read-only rules pulled from the Mimir Ruler — what each is, how it's collected, its value, and any evaluation error.",
+    "search": "Search alertname...",
+    "alertname": "Alertname",
+    "severity": "Severity",
+    "state": "State",
+    "health": "Health",
+    "value": "Value",
+    "baseThreshold": "Base threshold",
+    "for": "For",
+    "lastEval": "Last eval",
+    "lastError": "Last error",
+    "expr": "Expression (read-only)",
+    "namespace": "Namespace",
+    "group": "Group",
+    "synced": "Synced",
+    "none": "No rules"
   },
   "alerts": {
     "description": "Every inbound alert (in an incident or not), label-based",
     "hostname": "Hostname...",
     "zone": "Zone...",
+    "cmdbCi": "cmdb_ci...",
     "allSeverities": "All severities",
     "anyIncident": "Any",
     "inIncident": "In incident",
@@ -64,7 +100,16 @@
     "none": "No alerts",
     "promote": "Promote",
     "promoted": "Promoted to incident",
-    "suppressed": "Suppressed"
+    "suppressed": "Suppressed",
+    "colSeverity": "Severity",
+    "colName": "Name",
+    "colHostname": "Hostname",
+    "colZone": "Zone",
+    "colService": "Service (l2)",
+    "colStatus": "Status",
+    "colIncident": "In-incident",
+    "colReceived": "Received",
+    "page": "Page {{n}}"
   },
   "incidents": {
     "description": "Incident containers — the alerts grouped inside each",
@@ -73,13 +118,16 @@
     "detach": "Detach",
     "notify_email": "Email",
     "notify_telegram": "Telegram",
-    "notify_oncall": "OnCall"
+    "notify_oncall": "OnCall",
+    "delete": "Delete incident",
+    "deleteConfirm": "Delete this incident? Its alerts are freed (not deleted)."
   },
   "groupingRules": {
-    "description": "Topology grouping criteria (admin)",
-    "labelKeys": "Label keys",
-    "window": "Window (seconds)",
+    "description": "Criteria that group inbound alerts into incidents (admin)",
+    "labelKeys": "Label keys (read-only)",
+    "window": "Formation window (seconds)",
     "minGroupSize": "Min group size",
+    "dedupWindow": "Dedup window (seconds)",
     "criticalImmediate": "Critical forms immediately"
   },
   "notificationDefaults": {
@@ -91,7 +139,17 @@
   },
   "groups": {
     "serviceCodes": "Service codes (l2)",
-    "serviceCodesHelp": "cmdb_service_l2_code values this group sees / is notified for (one per line)"
+    "serviceCodesHelp": "cmdb_service_l2_code values this group sees / is notified for (one per line)",
+    "members": "Members",
+    "roleInGroup": "Role in group",
+    "labels": "Labels",
+    "labelsHelp": "Descriptive metadata only — label names from Mimir. Select any that apply to this group."
+  },
+  "users": {
+    "resetPassword": "Reset password",
+    "resetPasswordHelp": "Set a new password directly (min 8 characters). No email is sent.",
+    "resetPasswordDone": "Password reset",
+    "history": "Activity history"
   },
   "mutes": {
     "title": "Mutes / Target Groups",
@@ -121,30 +179,27 @@
   },
   "thresholds": {
     "title": "Threshold Overrides",
-    "description": "Per-server (cmdb_ci) or per-label alert thresholds. Below-threshold alerts are suppressed at ingest; query failures fail open.",
-    "catalog": "Rule catalog",
+    "description": "Pick a pulled rule, then set a per-service or per-server threshold. Below-threshold alerts are suppressed at ingest; query failures fail open.",
+    "editor": "New override",
+    "ruleSelect": "Pick an alertname pulled from the Mimir Ruler",
     "searchRules": "Search rules...",
     "noRules": "No matching rules",
     "selectRule": "Select a rule",
-    "passthrough": "Pass-through",
-    "comparator": "Comparator",
-    "cmpGt": "> (alert when above)",
-    "cmpLt": "< (alert when below)",
-    "unit": "Unit",
-    "valueQuery": "Value query (PromQL)",
-    "valueQueryHint": "Use {{cmdb_ci}} as the server placeholder. Empty = pass-through (never suppress).",
     "overrides": "Overrides",
-    "pulledHelp": "Pick an alertname pulled from the Mimir Ruler",
     "rule": "Rule",
     "target": "Target",
-    "targetCmdb": "Server (cmdb_ci)",
-    "targetLabel": "Label",
-    "labelKey": "Label key",
-    "labelValue": "Label value",
+    "perService": "Per-service",
+    "perServer": "Per-server",
+    "serviceCode": "Service (cmdb_service_l2_code)",
+    "selectService": "Select a service",
+    "base": "Base threshold",
     "value": "Threshold",
+    "defaultValue": "Default",
+    "customValue": "Custom",
     "addOverride": "Add override",
     "added": "Override added",
-    "noOverrides": "No overrides"
+    "noOverrides": "No overrides",
+    "readOnly": "Read-only (editor role required)"
   },
   "auth": {
     "login": "Log in",
@@ -179,8 +234,11 @@
     "lastSynced": "Last synced"
   },
   "dashboard": {
+    "description": "Admin overview — active alerts and recent activity",
     "activeAlerts": "Active alerts",
+    "criticalAlerts": "Critical",
     "recentAudit": "Recent audit log",
+    "alertmanagerUnavailable": "Cannot reach Alertmanager — alert summary unavailable.",
     "syncState": "Sync state"
   },
   "settings": {
@@ -215,6 +273,12 @@
     "lastSeen": "Last seen",
     "deliveryStatus": "Notification delivery",
     "channel": "Channel",
+    "channelAll": "All channels",
+    "channelTelegram": "Telegram",
+    "channelEmail": "Email",
+    "channelOncall": "OnCall",
+    "noDeliveries": "No deliveries",
+    "noHosts": "No host data",
     "recipient": "Recipient",
     "attempts": "Attempts",
     "detailCol": "Detail",
@@ -253,13 +317,12 @@
   "graph": {
     "title": "Incident Swimlanes",
     "refresh": "Refresh",
-    "truncated": "Showing a subset (node cap, most recent first)",
+    "truncated": "Showing a subset (cap reached, most recent first)",
     "memberAlerts": "Member alerts",
-    "legendTemporal": "fired together (proximity)",
-    "legendSameName": "same alert name",
-    "laneMore": "+{{count}} more hosts",
-    "showLess": "Show fewer hosts",
-    "noHost": "(no host)",
+    "legendLane": "Each lane is one incident; pills are its member alerts.",
+    "laneMore": "+{{count}} more incidents",
+    "showLess": "Show fewer incidents",
+    "noAlerts": "No member alerts",
     "noData": "No incidents in this window"
   },
   "retention": {
@@ -298,5 +361,32 @@
     "label": "Label",
     "text": "Text",
     "noResults": "No results"
+  },
+  "silence": {
+    "description": "Mimir Alertmanager silences (view all; create/expire = editor+). Pick a service or server + window — the matcher is built for you.",
+    "target": "Target",
+    "state": "State",
+    "starts": "Starts",
+    "ends": "Ends",
+    "comment": "Description",
+    "createdBy": "Created by",
+    "expire": "Expire",
+    "none": "No silences",
+    "kind": "Silence",
+    "service": "Service (l2)",
+    "server": "Server (cmdb_ci)",
+    "create": "Create silence"
+  },
+  "channels": {
+    "title": "Channel assignment",
+    "help": "Each user group has its own notification channels (its own Telegram bot+chats, emails, OnCall webhook). Incidents route to the groups mapped to their service (l2), then to these channels.",
+    "selectGroup": "Select a group",
+    "none": "No channels for this group",
+    "channel": "Channel",
+    "botToken": "Bot token",
+    "chatId": "Chat ID",
+    "email": "Email",
+    "webhookUrl": "Webhook URL",
+    "add": "Add channel"
   }
 }
