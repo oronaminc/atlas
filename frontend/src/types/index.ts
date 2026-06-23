@@ -42,14 +42,14 @@ export interface User {
 export interface PulledRule {
   alertname: string;
   expr: string;
-  for_seconds: number;
-  severity: string;
+  for_seconds: number | null;
+  severity: string | null;
   labels: Record<string, string>;
   annotations: Record<string, string>;
   namespace: string;
   group_name: string;
-  health: string;
-  state: string;
+  health: string | null;
+  state: string | null;
   last_error: string | null;
   last_evaluation: string | null;
   value: number | null;
