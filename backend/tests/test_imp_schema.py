@@ -8,7 +8,7 @@ from app.models import GroupingRule, GroupServiceCode, NotificationDefault
 from app.models.alerting import AlertEvent, Incident, IncidentStatus
 from app.models.base import utcnow
 from app.models.group import Group
-from app.models.threshold import RuleCatalog, ThresholdOverride
+from app.models.threshold import ThresholdOverride
 
 NOW = utcnow()
 
@@ -109,7 +109,6 @@ async def test_notification_default_row(db):
 
 
 async def test_threshold_override_label_target(db):
-    db.add(RuleCatalog(alertname="HostHighCpuLoad", comparator=">", value_query="q"))
     o = ThresholdOverride(
         alertname="HostHighCpuLoad",
         target_label_key="cmdb_service_l2_code",

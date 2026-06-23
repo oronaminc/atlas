@@ -37,6 +37,8 @@ _DENORM_KEYS = (
 
 
 def build_event(alert: NormalizedAlert, received_at: datetime) -> AlertEvent:
+    from app.services.threshold import value_from_annotations
+
     labels = alert.labels or {}
     return AlertEvent(
         fingerprint=compute_fingerprint(alert.source, alert.name, alert.labels),
@@ -48,6 +50,8 @@ def build_event(alert: NormalizedAlert, received_at: datetime) -> AlertEvent:
         annotations=alert.annotations,
         starts_at=alert.starts_at,
         received_at=received_at,
+        # the alert's carried metric value (threshold filter compares this; no query)
+        value=value_from_annotations(alert.annotations),
         **{key: labels.get(key) for key in _DENORM_KEYS},
     )
 

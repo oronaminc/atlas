@@ -1,17 +1,12 @@
-"""Threshold-override model (PR #2). Ingest-time per-server / per-group
-threshold overrides with precedence server > its-group > default. Compiled
-against the live metric VALUE fetched from Mimir at filter time (Model 2);
-atlas never modifies Ruler rules.
-
-RuleCatalog carries the per-alertname metadata: which way the comparison runs
-(comparator), the unit (display), and the `value_query` (PromQL with a
-{{cmdb_ci}} slot) atlas runs to read the current value. value_query NULL =>
-not configured => pass-through (the filter can't evaluate, so it never
-suppresses)."""
+"""Threshold-override model. Per-server (cmdb_ci) / per-service (label) overrides
+of an alert rule's threshold, applied by the ingest filter to decide whether a
+firing alert is incident-worthy. No PromQL: the comparison uses the alert's own
+carried value vs the effective threshold (override > rule base). Precedence:
+target_cmdb_ci > (target_label_key, target_label_value) > the rule base."""
 
 import enum
 
-from sqlalchemy import Float, String, Text, UniqueConstraint
+from sqlalchemy import Float, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import TimestampedBase
@@ -20,19 +15,6 @@ from app.models.base import TimestampedBase
 class Comparator(enum.StrEnum):
     gt = ">"  # fires when value is HIGH (e.g. mem used %) -> suppress if value < threshold
     lt = "<"  # fires when value is LOW (e.g. mem available %) -> suppress if value > threshold
-
-
-class RuleCatalog(TimestampedBase):
-    __tablename__ = "rule_catalog"
-    __table_args__ = (UniqueConstraint("alertname", name="uq_rule_catalog_alertname"),)
-
-    alertname: Mapped[str] = mapped_column(String(255), index=True)
-    # stored as the StrEnum value (">"/"<"); plain VARCHAR for dialect simplicity
-    comparator: Mapped[str | None] = mapped_column(String(2), nullable=True)
-    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    # PromQL whose result is the current value; {{cmdb_ci}} is substituted at
-    # filter time. NULL => threshold filter is a no-op for this alertname.
-    value_query: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ThresholdOverride(TimestampedBase):

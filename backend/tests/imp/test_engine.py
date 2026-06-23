@@ -22,7 +22,7 @@ from app.services.incident_service import (
     group_alert,
     promote_alert,
 )
-from app.services.threshold import ValueCache, should_suppress
+from app.services.threshold import should_suppress
 from app.workers.correlation_worker import claim_events
 
 NOW = utcnow()
@@ -49,15 +49,10 @@ def alert(sev="warning", l2=L2, fp=None, received=None, **labels):
     )
 
 
-async def _none_fetch(_tid, _q):
-    return None
-
-
 async def run_worker(db, now=NOW, dedup=None):
     """Replicates correlation_worker.correlate_pending on the test session."""
     dedup = dedup or InMemoryDedupStore()
     rule = await get_active_rule(db)
-    cache = ValueCache()
     for ev in await claim_events(db, worker_id="w", now=now):
         if ev.incident_id is not None:
             ev.correlated = True
@@ -71,7 +66,7 @@ async def run_worker(db, now=NOW, dedup=None):
                 prior.dedup_count += 1
                 await db.delete(ev)
                 continue
-        suppress, value = await should_suppress(db, ev, fetch_value=_none_fetch, cache=cache)
+        suppress, value = await should_suppress(db, ev)
         if value is not None:
             ev.value = value
         if suppress:

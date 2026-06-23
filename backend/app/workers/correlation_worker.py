@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import instruments
 from app.core.config import settings
 from app.db import async_session_factory
-from app.integrations.mimir_ruler import MimirQueryClient
 from app.models.alerting import AlertEvent
 from app.models.base import utcnow
 from app.schemas.alerting import NormalizedAlert
@@ -32,7 +31,7 @@ from app.services.correlation.dedup import InMemoryDedupStore, RedisDedupStore
 from app.services.correlation.engine import latest_other_event
 from app.services.grouping_config import get_active_rule
 from app.services.incident_service import group_alert
-from app.services.threshold import ValueCache, parse_instant_value, should_suppress
+from app.services.threshold import should_suppress
 from app.workers.metrics_server import heartbeat, start_metrics_server
 
 logger = logging.getLogger(__name__)
@@ -109,20 +108,7 @@ async def claim_events(
     return list(res.scalars())
 
 
-def _make_fetch_value(db: AsyncSession):
-    """Mimir value fetch for the threshold filter (single default org). Runs an
-    instant query; the caller (should_suppress) treats exceptions/None as
-    fail-open."""
-
-    async def fetch_value(promql: str) -> float | None:
-        client = MimirQueryClient()
-        resp = await client.instant_query(promql)
-        return parse_instant_value(resp)
-
-    return fetch_value
-
-
-async def correlate_pending(dedup_store, cache: ValueCache) -> int:
+async def correlate_pending(dedup_store) -> int:
     """Claim a batch and run dedup -> threshold -> topology grouping. Every
     outcome marks the alert terminal-for-claiming (deleted | suppressed |
     correlated), so a processed-but-FREE alert is never re-claimed yet stays
@@ -131,7 +117,6 @@ async def correlate_pending(dedup_store, cache: ValueCache) -> int:
     t0 = time.perf_counter()
     async with async_session_factory() as db:
         rule = await get_active_rule(db)
-        fetch_value = _make_fetch_value(db)
         now = utcnow()
         for event in await claim_events(db, worker_id=WORKER_ID, now=now):
             # 0. already attached (retro-attached by an earlier sibling this batch)
@@ -151,7 +136,7 @@ async def correlate_pending(dedup_store, cache: ValueCache) -> int:
                     processed += 1
                     continue
             # 2. threshold (fail-open): suppressed alerts are stored, not grouped
-            suppress, value = await should_suppress(db, event, fetch_value=fetch_value, cache=cache)
+            suppress, value = await should_suppress(db, event)
             if value is not None:
                 event.value = value
             if suppress:
@@ -188,12 +173,11 @@ async def main() -> None:
     instruments.redis_up.set(1 if redis is not None else 0)
 
     dedup = RedisDedupStore(redis) if redis is not None else InMemoryDedupStore()
-    value_cache = ValueCache()  # short-TTL cache for threshold-filter Mimir reads
 
     logger.info("correlation worker %s started", WORKER_ID)
     while True:
         try:
-            n = await correlate_pending(dedup, value_cache)
+            n = await correlate_pending(dedup)
             if n:
                 logger.info("correlated %d alert events", n)
         except Exception:

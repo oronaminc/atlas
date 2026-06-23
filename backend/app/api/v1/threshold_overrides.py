@@ -8,11 +8,8 @@ from app.core.deps import client_ip, get_current_user, require_editor
 from app.core.envelope import envelope
 from app.db import get_db
 from app.models import User
-from app.models.alerting import AlertEvent
-from app.models.threshold import RuleCatalog, ThresholdOverride
+from app.models.threshold import ThresholdOverride
 from app.schemas.threshold import (
-    RuleCatalogOut,
-    RuleCatalogUpdate,
     ThresholdOverrideCreate,
     ThresholdOverrideOut,
     ThresholdOverrideUpdate,
@@ -22,57 +19,7 @@ from app.services.audit import record_audit
 router = APIRouter(tags=["thresholds"])
 
 
-# ---- rule catalog (per-alertname threshold metadata) ----
-
-
-@router.get("/rule-catalog")
-async def list_catalog(db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
-    """Union of cataloged rows (with metadata) and alertnames merely seen in
-    events (metadata NULL until configured). Feeds the threshold + mute UIs."""
-    rows = {
-        r.alertname: RuleCatalogOut.model_validate(r).model_dump()
-        for r in (await db.execute(select(RuleCatalog))).scalars()
-    }
-    seen = (await db.execute(select(AlertEvent.name).distinct())).scalars()
-    for name in seen:
-        rows.setdefault(
-            name, {"alertname": name, "comparator": None, "unit": None, "value_query": None}
-        )
-    return envelope(sorted(rows.values(), key=lambda r: r["alertname"]))
-
-
-@router.patch("/rule-catalog/{alertname}")
-async def upsert_catalog(
-    alertname: str,
-    body: RuleCatalogUpdate,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_editor),
-):
-    row = (
-        await db.execute(select(RuleCatalog).where(RuleCatalog.alertname == alertname))
-    ).scalar_one_or_none()
-    if row is None:
-        row = RuleCatalog(alertname=alertname)
-        db.add(row)
-    data = body.model_dump(exclude_unset=True)
-    for k, v in data.items():
-        setattr(row, k, v)
-    await db.flush()
-    await record_audit(
-        db,
-        actor_id=user.id,
-        action="upsert",
-        resource_type="rule_catalog",
-        resource_id=row.id,
-        after=data,
-        ip=client_ip(request),
-    )
-    await db.commit()
-    return envelope(RuleCatalogOut.model_validate(row).model_dump())
-
-
-# ---- threshold overrides (server > group > default) ----
+# ---- threshold overrides (per-server cmdb_ci > per-service label > rule base) ----
 
 
 @router.get("/threshold-overrides")

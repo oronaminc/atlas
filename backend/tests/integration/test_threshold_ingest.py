@@ -1,19 +1,20 @@
-"""Integration: the correlation loop with the threshold filter (mock Mimir).
+"""Integration: the correlation loop with the no-PromQL threshold filter.
 A below-threshold event is stored + suppressed (no incident, terminal);
-an above-threshold event is escalated to an incident."""
+an above-threshold event is escalated to an incident. The alert carries its own
+value; the comparator comes from its annotations; the override sets the number."""
 
 from sqlalchemy import select
 
 from app.models.alerting import AlertEvent, Incident
-from app.models.threshold import RuleCatalog, ThresholdOverride
+from app.models.threshold import ThresholdOverride
 from app.services.grouping_config import get_active_rule
 from app.services.incident_service import group_alert
-from app.services.threshold import ValueCache, should_suppress
+from app.services.threshold import should_suppress
 from app.workers.correlation_worker import claim_events
 from tests.notifications.helpers import NOW
 
 
-def _event(db, cmdb, name="HostOutOfMemory"):
+def _event(db, cmdb, value, name="HostOutOfMemory"):
     e = AlertEvent(
         fingerprint=f"fp-{cmdb}",
         source="am",
@@ -21,9 +22,10 @@ def _event(db, cmdb, name="HostOutOfMemory"):
         severity="critical",
         status="firing",
         labels={"cmdb_ci": cmdb, "cmdb_service_l2_code": f"L2-{cmdb}"},
-        annotations={},
+        annotations={"atlas_compare": ">"},  # comparator only; number = the override
         starts_at=NOW,
         received_at=NOW,
+        value=value,
         cmdb_service_l2_code=f"L2-{cmdb}",
     )
     db.add(e)
@@ -31,24 +33,15 @@ def _event(db, cmdb, name="HostOutOfMemory"):
 
 
 async def test_threshold_filter_in_correlation_loop(db):
-    db.add(
-        RuleCatalog(
-            alertname="HostOutOfMemory", comparator=">", value_query='m{cmdb_ci="{{cmdb_ci}}"}'
-        )
-    )
     db.add(ThresholdOverride(alertname="HostOutOfMemory", target_cmdb_ci="LOW", value=95))
     db.add(ThresholdOverride(alertname="HostOutOfMemory", target_cmdb_ci="HIGH", value=95))
-    _event(db, "LOW")  # value 92 < 95 -> suppress
-    _event(db, "HIGH")  # value 97 >= 95 -> pass -> incident
+    _event(db, "LOW", 92.0)  # 92 < 95 -> suppress
+    _event(db, "HIGH", 97.0)  # 97 >= 95 -> pass -> incident
     await db.commit()
 
-    async def fetch_value(promql):
-        return 92.0 if '"LOW"' in promql else 97.0
-
-    cache = ValueCache()
     rule = await get_active_rule(db)
     for event in await claim_events(db, worker_id="w", now=NOW):
-        suppress, value = await should_suppress(db, event, fetch_value=fetch_value, cache=cache)
+        suppress, value = await should_suppress(db, event)
         if value is not None:
             event.value = value
         if suppress:
