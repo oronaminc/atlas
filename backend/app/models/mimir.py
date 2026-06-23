@@ -59,3 +59,14 @@ class MimirSilence(TimestampedBase):
     created_by_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     state: Mapped[str | None] = mapped_column(String(20), nullable=True)  # active|pending|expired
     synced_at: Mapped[datetime] = mapped_column(AwareDateTime())
+
+
+class MimirQueryConfig(TimestampedBase):
+    """Single row, admin-managed. Bounds the Mimir label-discovery proxy: when a
+    label query omits start/end, atlas defaults to [now - lookback, now] so a
+    stale bucket-index / full-retention window can't 422 the whole query.
+    DB value is authoritative; 1h is the seeded/fallback default."""
+
+    __tablename__ = "mimir_query_config"
+
+    label_query_lookback_hours: Mapped[int] = mapped_column(Integer, default=1)

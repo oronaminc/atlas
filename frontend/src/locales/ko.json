@@ -334,6 +334,11 @@
     "audit": "감사 로그 (일)",
     "archive": "삭제 전 CSV로 아카이브"
   },
+  "mimirQuery": {
+    "title": "Mimir 레이블 쿼리 범위",
+    "help": "범위를 지정하지 않은 레이블 자동완성의 조회 기간. 짧은 범위는 전체 보존 기간에 걸친 오래된 버킷 인덱스로 인한 Mimir 422 오류를 방지합니다.",
+    "lookbackHours": "조회 기간 (시간)"
+  },
   "llm": {
     "title": "LLM 분석",
     "help": "인시던트 근본원인 분석용 OpenAI 호환 엔드포인트. 자체 호스팅(vLLM/Ollama/게이트웨이)이 기본; 외부 OpenAI는 외부 송신 허용 시에만.",

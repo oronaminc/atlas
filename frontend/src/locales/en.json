@@ -334,6 +334,11 @@
     "audit": "Audit log (days)",
     "archive": "Archive partitions to CSV before dropping"
   },
+  "mimirQuery": {
+    "title": "Mimir label query window",
+    "help": "Lookback for label autocomplete when no range is given. A short window avoids Mimir 422s from a stale bucket index over the full retention period.",
+    "lookbackHours": "Lookback (hours)"
+  },
   "llm": {
     "title": "LLM analysis",
     "help": "OpenAI-compatible endpoint for incident root-cause analysis. Self-hosted (vLLM/Ollama/gateway) is the primary path; external OpenAI only if egress is allowed.",
