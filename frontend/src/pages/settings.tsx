@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { LLMConfigCard } from "@/features/llm/llm-config-card";
+import { MimirQueryCard } from "@/features/maintenance/mimir-query-card";
 import { RetentionCard } from "@/features/maintenance/retention-card";
 import { ChannelAssignmentCard } from "@/features/notifications/channel-assignment";
 import { RecipientsCard } from "@/features/notifications/notification-admin";
@@ -16,6 +17,7 @@ export function SettingsPage() {
       <div className="space-y-6">
         <ChannelAssignmentCard />
         <RetentionCard />
+        <MimirQueryCard />
         <LLMConfigCard />
         <RecipientsCard />
       </div>

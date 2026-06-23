@@ -13,6 +13,7 @@ from app.api.v1 import (
     ingest,
     labels,
     llm_config,
+    mimir_query_config,
     notification_admin,
     notification_defaults,
     notifications,
@@ -43,6 +44,7 @@ api_router.include_router(stats.router)
 api_router.include_router(graph.router)
 api_router.include_router(audit.router)
 api_router.include_router(llm_config.router)
+api_router.include_router(mimir_query_config.router)
 api_router.include_router(search.router)
 api_router.include_router(threshold_overrides.router)
 api_router.include_router(grouping_rules.router)

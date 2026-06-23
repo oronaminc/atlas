@@ -11,11 +11,11 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.base import utcnow
-from app.models.mimir import MimirRule, MimirSilence
+from app.models.mimir import MimirQueryConfig, MimirRule, MimirSilence
 
 logger = logging.getLogger(__name__)
 
@@ -139,3 +139,14 @@ async def sync_silences(db: AsyncSession, am_client) -> int:
         n += 1
     await db.flush()
     return n
+
+
+async def get_mimir_query_config(db: AsyncSession) -> MimirQueryConfig:
+    """Single-row admin config for the label-discovery proxy; seeds the default
+    (label_query_lookback_hours=1) on first access. DB value is authoritative."""
+    row = (await db.execute(select(MimirQueryConfig).limit(1))).scalar_one_or_none()
+    if row is None:
+        row = MimirQueryConfig()  # label_query_lookback_hours defaults to 1
+        db.add(row)
+        await db.flush()
+    return row

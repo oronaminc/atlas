@@ -10,7 +10,7 @@ from app.models.group import Group, GroupServiceCode, UserGroup
 from app.models.grouping import GroupingRule
 from app.models.llm import IncidentAnalysis, LLMConfig
 from app.models.maintenance import AlertStatsHourly, RetentionConfig
-from app.models.mimir import MimirRule, MimirSilence
+from app.models.mimir import MimirQueryConfig, MimirRule, MimirSilence
 from app.models.notification import NotificationPolicy, Receiver, Silence
 from app.models.threshold import Comparator, ThresholdOverride
 from app.models.user import User
@@ -26,6 +26,7 @@ __all__ = [
     "Incident",
     "IncidentAnalysis",
     "LLMConfig",
+    "MimirQueryConfig",
     "MimirRule",
     "MimirSilence",
     "Notification",
