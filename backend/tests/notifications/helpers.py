@@ -2,9 +2,10 @@
 
 from datetime import UTC, datetime
 
-from app.core.security import hash_password
+from app.core.security import encrypt_secret, hash_password
 from app.models import Group, User, UserGroup
 from app.models.alerting import Incident, IncidentStatus
+from app.models.delivery import GroupChannel
 from app.models.group import GroupServiceCode
 from app.models.user import GlobalRole
 
@@ -50,6 +51,33 @@ async def seed_route(
     db.add(mapping)
     await db.flush()
     return mapping
+
+
+async def seed_group_channel(
+    db,
+    group,
+    channel: str,
+    *,
+    chat_id: str | None = None,
+    bot_token: str | None = None,
+    email: str | None = None,
+    webhook_url: str | None = None,
+    enabled: bool = True,
+) -> GroupChannel:
+    """A per-group channel destination. Secrets stored Fernet-encrypted like the
+    real API, so the non-overridden channel_for path works too."""
+    gc = GroupChannel(
+        group_id=group.id,
+        channel=channel,
+        enabled=enabled,
+        chat_id=chat_id,
+        email=email,
+        bot_token=encrypt_secret(bot_token) if bot_token else None,
+        webhook_url=encrypt_secret(webhook_url) if webhook_url else None,
+    )
+    db.add(gc)
+    await db.flush()
+    return gc
 
 
 def _toggles(channels):

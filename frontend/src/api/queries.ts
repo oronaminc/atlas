@@ -15,7 +15,7 @@ import type {
   NotificationRow,
   StatsOverview,
   TrendBucket,
-  NotificationSettings,
+  GroupChannel,
   Recipient,
   AuditLog,
   Envelope,
@@ -90,10 +90,11 @@ export const usePolicies = () =>
   useList<NotificationPolicy>(["notification-policies"], "/notification-policies");
 export const useSilences = () => useList<Silence>(["silences"], "/silences");
 
-export const useNotificationSettings = () =>
+export const useGroupChannels = (groupId: string | null) =>
   useQuery({
-    queryKey: ["notification-settings"],
-    queryFn: () => api.get<NotificationSettings>("/notification-settings"),
+    queryKey: ["group-channels", groupId],
+    enabled: !!groupId,
+    queryFn: () => api.get<GroupChannel[]>(`/groups/${groupId}/channels`),
   });
 export const useRecipients = () =>
   useList<Recipient>(["notification-recipients"], "/notification-recipients");

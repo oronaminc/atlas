@@ -76,7 +76,7 @@ async def test_claim_uses_partial_index_no_seqscan_no_sort(pg):
             text(
                 "INSERT INTO notifications (id,incident_id,channel,recipient_user_id,"
                 "recipient_address,status,attempts,priority,created_at,updated_at) "
-                "SELECT gen_random_uuid(), :inc, 'telegram', u.id, 'c','pending',0,1,"
+                "SELECT gen_random_uuid(), :inc, 'telegram', u.id, u.id::text,'pending',0,1,"
                 "now(),now() FROM users u WHERE u.username LIKE 'bulk%'"
             ),
             {"inc": inc},
@@ -121,7 +121,7 @@ async def test_claim_batch_index_backed_at_scale(pg):
             text(
                 "INSERT INTO notifications (id,incident_id,channel,recipient_user_id,"
                 "recipient_address,status,attempts,priority,created_at,updated_at) "
-                "SELECT gen_random_uuid(), :inc,'telegram',u.id,'c','pending',0,1,"
+                "SELECT gen_random_uuid(), :inc,'telegram',u.id,u.id::text,'pending',0,1,"
                 "now() - interval '1 hour', now() FROM users u WHERE u.username LIKE 'z%'"
             ),
             {"inc": inc},

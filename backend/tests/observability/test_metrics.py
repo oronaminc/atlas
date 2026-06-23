@@ -6,9 +6,10 @@ from datetime import UTC, datetime
 
 import app.core.instruments as m
 from app.api.v1.metrics import collect_db_gauges
+from app.core.config import settings
 from app.core.metrics import Counter, Gauge, Registry
 from app.models.alerting import AlertEvent, Incident, IncidentStatus
-from app.models.delivery import Notification, NotificationSettings
+from app.models.delivery import Notification
 from app.models.user import GlobalRole
 from tests.conftest import make_user
 
@@ -123,18 +124,9 @@ async def test_queue_depth_gauge_rises_with_backlog(db):
     assert _gauge_val(m.notifications_oldest_pending_seconds) >= 0
 
 
-async def test_softcap_breach_is_breach_only_global(db):
-    # global pending exceeds the single settings cap -> exactly one series,
-    # keyed service="global". No per-service cardinality (multi-tenancy gone).
-    db.add(
-        NotificationSettings(
-            telegram_bot_token=None,
-            telegram_rate_per_second=25,
-            quota_group_per_hour=30,
-            quota_global_per_day=500,
-            pending_softcap=3,
-        )
-    )
+async def test_softcap_breach_is_breach_only_global(db, monkeypatch):
+    # global pending exceeds the (env) cap -> exactly one series, service="global".
+    monkeypatch.setattr(settings, "NOTIFY_PENDING_SOFTCAP", 3)
     inc = Incident(
         title="a",
         status=IncidentStatus.open,
@@ -164,17 +156,8 @@ async def test_softcap_breach_is_breach_only_global(db):
     assert series == {("global",): 1}  # single global breach series
 
 
-async def test_softcap_clears_when_resolved(db):
-    db.add(
-        NotificationSettings(
-            telegram_bot_token=None,
-            telegram_rate_per_second=25,
-            quota_group_per_hour=30,
-            quota_global_per_day=500,
-            pending_softcap=100000,
-        )
-    )
-    await db.commit()
+async def test_softcap_clears_when_resolved(db, monkeypatch):
+    monkeypatch.setattr(settings, "NOTIFY_PENDING_SOFTCAP", 100000)
     await collect_db_gauges(db)
     # no breach -> zero series (cardinality bound in steady state)
     assert list(_gauge_series(m.tenant_pending_softcap_breached)) == []

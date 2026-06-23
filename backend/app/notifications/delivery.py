@@ -1,9 +1,12 @@
 """Delivery pass: claim → quota → throttle → channel.send → mark.
-Quota counting uses sent rows in PG (exact, shared across pods).
 
-Settings (bot token / rate / quotas), channels and the token bucket are the
-single global config. Tests and callers may pass explicit `channels=`/
-`throttle=` overrides, which apply to every row in the pass."""
+Each notification is sent through ITS group's channel (group_channels: the
+group's own telegram bot / email / oncall webhook), resolved from
+group_channel_id at send time. Rate/quota/soft-cap are global infra guards from
+env (per-group business config is the channel set, not the limits). The
+TokenBucket is keyed per group-channel so each group's bot has its own rate
+budget. Tests/callers may pass `channels=`/`throttle=` overrides.
+"""
 
 import asyncio
 import logging
@@ -18,11 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import instruments
 from app.core.config import settings as app_settings
 from app.models.alerting import Incident
-from app.models.delivery import Notification
+from app.models.delivery import GroupChannel, Notification
 from app.notifications.channels.base import NotificationChannel
-from app.notifications.channels.registry import build_channels
+from app.notifications.channels.registry import channel_for
 from app.notifications.outbox import claim_batch, defer, mark_failed, mark_sent
-from app.notifications.settings import get_notification_settings
 from app.notifications.throttle import TokenBucket
 
 logger = logging.getLogger(__name__)
@@ -45,8 +47,6 @@ class DeliveryResult(int):
 
 
 def _send_concurrency(rate_per_second: float) -> int:
-    """Fill the RTT pipe: ceil(rate*RTT)+4, capped. The TokenBucket still
-    enforces the sustained rate; this just removes the serial bottleneck."""
     rtt = app_settings.SEND_RTT_ESTIMATE_SECONDS
     return max(1, min(app_settings.SEND_CONCURRENCY_CAP, math.ceil(rate_per_second * rtt) + 4))
 
@@ -62,9 +62,7 @@ def render_message(incident: Incident) -> str:
 
 
 async def _sent_count_since(
-    db: AsyncSession,
-    since: datetime,
-    group_id: uuid.UUID | None = None,
+    db: AsyncSession, since: datetime, group_id: uuid.UUID | None = None
 ) -> int:
     stmt = (
         select(func.count())
@@ -74,6 +72,29 @@ async def _sent_count_since(
     if group_id is not None:
         stmt = stmt.where(Notification.group_id == group_id)
     return (await db.execute(stmt)).scalar_one()
+
+
+async def _resolve_channels(
+    db: AsyncSession, batch: list[Notification], override: dict[str, NotificationChannel] | None
+) -> dict[uuid.UUID, NotificationChannel | None]:
+    """Per-notification channel instance. Override (tests) wins; otherwise build
+    each from its group_channel's own secrets."""
+    out: dict[uuid.UUID, NotificationChannel | None] = {}
+    if override is not None:
+        return {n.id: override.get(n.channel) for n in batch}
+    gc_ids = {n.group_channel_id for n in batch if n.group_channel_id}
+    gcs = {}
+    if gc_ids:
+        gcs = {
+            gc.id: gc
+            for gc in (
+                await db.execute(select(GroupChannel).where(GroupChannel.id.in_(gc_ids)))
+            ).scalars()
+        }
+    for n in batch:
+        gc = gcs.get(n.group_channel_id)
+        out[n.id] = channel_for(gc) if gc is not None else None
+    return out
 
 
 async def deliver_once(
@@ -87,47 +108,45 @@ async def deliver_once(
     lease_seconds: int = 60,
     limit: int = 50,
 ) -> DeliveryResult:
-    """One delivery pass. Quota-gate + reserve SYNCHRONOUSLY (so concurrent
-    sends can't slip past the same quota), then pipeline the actual channel.send
-    calls with a bounded gather to saturate the rate budget, then apply DB
-    writes serially (one AsyncSession is not concurrency-safe).
-
-    Returns DeliveryResult (==sent count) with claimed/deferred/was_full."""
+    """One delivery pass. Quota-gate + reserve synchronously, pipeline the sends
+    (bounded gather), then apply DB writes serially. Returns DeliveryResult."""
     batch = await claim_batch(
         db, worker_id=worker_id, now=now, lease_seconds=lease_seconds, limit=limit
     )
     if not batch:
         return DeliveryResult(0, claimed=0, deferred=0, was_full=False)
 
-    settings_row = await get_notification_settings(db)
-    active_channels = channels if channels is not None else build_channels(settings_row)
-    if throttle is not None:
-        bucket = throttle
-    elif throttles is not None:
-        bucket = throttles.get("_global")
-        if bucket is None or getattr(bucket, "_rate", None) != float(
-            max(settings_row.telegram_rate_per_second, 0.001)
-        ):
-            bucket = TokenBucket(rate_per_second=settings_row.telegram_rate_per_second)
-            throttles["_global"] = bucket
-    else:
-        bucket = None
+    rate = app_settings.NOTIFY_RATE_PER_SECOND
+    quota_day = app_settings.NOTIFY_QUOTA_GLOBAL_PER_DAY
+    quota_hour = app_settings.NOTIFY_QUOTA_GROUP_PER_HOUR
+    chan_for_id = await _resolve_channels(db, batch, channels)
+
+    def bucket_for(n: Notification):
+        if throttle is not None:
+            return throttle
+        if throttles is None:
+            return None
+        key = str(n.group_channel_id or "_global")
+        b = throttles.get(key)
+        if b is None:
+            b = TokenBucket(rate_per_second=rate)
+            throttles[key] = b
+        return b
 
     sent = 0
     deferred = 0
     global_sent = await _sent_count_since(db, now - timedelta(days=1))
     group_sent: dict[uuid.UUID, int] = {}
 
-    # --- phase 1: quota gate + RESERVE synchronously (no await between check
-    # and reserve, so concurrent dispatch can't double-spend quota)
+    # --- phase 1: quota gate + RESERVE synchronously
     to_send: list[tuple[Notification, NotificationChannel]] = []
     for n in batch:
-        if global_sent >= settings_row.quota_global_per_day:
+        if global_sent >= quota_day:
             await defer(
                 db,
                 n,
                 retry_at=now + timedelta(days=1),
-                reason=f"quota: global {settings_row.quota_global_per_day}/day reached",
+                reason=f"quota: global {quota_day}/day reached",
             )
             instruments.notifications_deferred.inc(reason="quota_global")
             deferred += 1
@@ -137,19 +156,19 @@ async def deliver_once(
                 group_sent[n.group_id] = await _sent_count_since(
                     db, now - timedelta(hours=1), group_id=n.group_id
                 )
-            if group_sent[n.group_id] >= settings_row.quota_group_per_hour:
+            if group_sent[n.group_id] >= quota_hour:
                 await defer(
                     db,
                     n,
                     retry_at=now + timedelta(hours=1),
-                    reason=f"quota: group {settings_row.quota_group_per_hour}/h reached",
+                    reason=f"quota: group {quota_hour}/h reached",
                 )
                 instruments.notifications_deferred.inc(reason="quota_group")
                 deferred += 1
                 continue
-        channel = active_channels.get(n.channel)
+        channel = chan_for_id.get(n.id)
         if channel is None:
-            await mark_failed(db, n, f"channel not configured: {n.channel}", now=now)
+            await mark_failed(db, n, f"no channel configured for {n.channel}", now=now)
             continue
         global_sent += 1
         if n.group_id is not None:
@@ -162,10 +181,11 @@ async def deliver_once(
         )
 
     # --- phase 2: pipeline the network sends (bounded), DB-free
-    sem = asyncio.Semaphore(_send_concurrency(settings_row.telegram_rate_per_second))
+    sem = asyncio.Semaphore(_send_concurrency(rate))
 
-    async def _do_send(n, channel, b=bucket, sem=sem):
+    async def _do_send(n, channel, sem=sem):
         async with sem:
+            b = bucket_for(n)
             if b is not None:
                 await b.acquire(n.recipient_address)
             t0 = time.perf_counter()
@@ -180,8 +200,7 @@ async def deliver_once(
 
     results = await asyncio.gather(*(_do_send(n, ch) for n, ch in to_send))
 
-    # --- phase 3: apply outcomes serially (single session); release the quota
-    # reservation for any send that failed
+    # --- phase 3: apply outcomes serially; release the quota reservation on fail
     for n, err in results:
         if err is None:
             await mark_sent(db, n, now=now)

@@ -361,5 +361,17 @@
     "service": "서비스 (l2)",
     "server": "서버 (cmdb_ci)",
     "create": "사일런스 생성"
+  },
+  "channels": {
+    "title": "채널 지정",
+    "help": "각 사용자 그룹은 자체 알림 채널(전용 Telegram 봇+챗, 이메일, OnCall 웹훅)을 가집니다. 인시던트는 서비스(l2)에 매핑된 그룹으로, 그다음 이 채널들로 전달됩니다.",
+    "selectGroup": "그룹 선택",
+    "none": "이 그룹에 채널이 없습니다",
+    "channel": "채널",
+    "botToken": "봇 토큰",
+    "chatId": "챗 ID",
+    "email": "이메일",
+    "webhookUrl": "웹훅 URL",
+    "add": "채널 추가"
   }
 }

@@ -21,9 +21,9 @@ from tests.notifications.helpers import (
     NOW,
     FakeChannel,
     seed_group,
+    seed_group_channel,
     seed_incident,
     seed_route,
-    seed_user,
 )
 
 
@@ -39,10 +39,11 @@ async def file_db(tmp_path):
 
 async def seed_outbox(factory, n_users: int) -> None:
     async with factory() as db:
-        users = [await seed_user(db, f"u{i}@example.com", chat_id=f"{i}00") for i in range(n_users)]
-        group = await seed_group(db, "oncall", users)
+        group = await seed_group(db, "oncall", [])
         await seed_route(db, group)
-        await seed_incident(db)
+        for i in range(n_users):
+            await seed_group_channel(db, group, "telegram", bot_token="b", chat_id=f"{i}00")
+        await seed_incident(db, channels=["telegram"])
         await fan_out_pending(db, now=NOW)
         await db.commit()
 

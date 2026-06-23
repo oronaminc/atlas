@@ -361,5 +361,17 @@
     "service": "Service (l2)",
     "server": "Server (cmdb_ci)",
     "create": "Create silence"
+  },
+  "channels": {
+    "title": "Channel assignment",
+    "help": "Each user group has its own notification channels (its own Telegram bot+chats, emails, OnCall webhook). Incidents route to the groups mapped to their service (l2), then to these channels.",
+    "selectGroup": "Select a group",
+    "none": "No channels for this group",
+    "channel": "Channel",
+    "botToken": "Bot token",
+    "chatId": "Chat ID",
+    "email": "Email",
+    "webhookUrl": "Webhook URL",
+    "add": "Add channel"
   }
 }

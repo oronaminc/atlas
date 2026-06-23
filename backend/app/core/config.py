@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # alarm threshold (admin-adjustable via notify_config; alert, never shed).
     METRICS_PORT: int = 9100
     NOTIFY_PENDING_SOFTCAP: int = 50000
+    # Send-pipeline guards (per-group channels are config; these are global infra
+    # safety). Rate is per group-channel bot bucket; quotas/soft-cap are global.
+    NOTIFY_RATE_PER_SECOND: int = 25
+    NOTIFY_QUOTA_GROUP_PER_HOUR: int = 30
+    NOTIFY_QUOTA_GLOBAL_PER_DAY: int = 500
     LLM_REQUEST_TIMEOUT_SECONDS: float = 60.0
     METRICS_DB_CACHE_SECONDS: float = 15.0
     MIMIR_RULER_URL: str = "http://mimir:8080/prometheus/config/v1/rules"

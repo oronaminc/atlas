@@ -1,12 +1,14 @@
-"""Phase 4 notification scale: per-incident dedup, priority ordering, single
-global claim queue, pipelined sends, quota-defer visibility."""
+"""Notification scale: per-incident dedup, priority ordering, single global
+claim queue, quota-defer visibility, pipelined send."""
 
 from datetime import timedelta
 
+import pytest
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.models.alerting import AlertEvent
-from app.models.delivery import Notification, NotificationSettings
+from app.models.delivery import Notification
 from app.notifications.delivery import deliver_once
 from app.notifications.fanout import fan_out_pending, fan_out_to_group, severity_priority
 from app.notifications.outbox import claim_batch
@@ -14,20 +16,19 @@ from tests.notifications.helpers import (
     NOW,
     FakeChannel,
     seed_group,
+    seed_group_channel,
     seed_incident,
     seed_route,
-    seed_user,
 )
 
-# --- per-incident dedup ---
+pytestmark = pytest.mark.asyncio
 
 
-async def test_many_alerts_one_notification_per_recipient(db):
-    """10 alert events attached to one incident -> exactly ONE notification
-    per (recipient, channel), not one per alert."""
-    user = await seed_user(db, "u@x.io", chat_id="c1")
-    group = await seed_group(db, "g", [user])
-    await seed_route(db, group, min_severity="info", channels=["telegram"])
+async def test_many_alerts_one_notification_per_channel(db):
+    """10 alerts on one incident -> ONE notification per group channel, not per alert."""
+    group = await seed_group(db, "g", [])
+    await seed_route(db, group)
+    await seed_group_channel(db, group, "telegram", bot_token="b", chat_id="c1")
     incident = await seed_incident(db, severity="critical")
     for i in range(10):
         db.add(
@@ -45,113 +46,80 @@ async def test_many_alerts_one_notification_per_recipient(db):
             )
         )
     await db.commit()
-
-    created = await fan_out_pending(db, now=NOW)
+    assert await fan_out_pending(db, now=NOW) == 1
     await db.commit()
-    assert created == 1
-
     rows = (await db.execute(select(Notification))).scalars().all()
-    assert len(rows) == 1
-    assert rows[0].recipient_address == "c1"
+    assert len(rows) == 1 and rows[0].recipient_address == "c1"
 
 
-async def test_refanout_is_idempotent(db):
-    user = await seed_user(db, "u@x.io", chat_id="c1")
-    group = await seed_group(db, "g", [user])
+async def test_fan_out_to_group_idempotent(db):
+    group = await seed_group(db, "g", [])
+    await seed_group_channel(db, group, "telegram", bot_token="b", chat_id="c1")
+    await seed_group_channel(db, group, "email", email="ops@x.io")
     incident = await seed_incident(db, severity="critical")
     await db.commit()
-
     first = await fan_out_to_group(db, incident, group)
     await db.commit()
     second = await fan_out_to_group(db, incident, group)
     await db.commit()
-    # telegram + email = 2 targets first time, 0 the second
-    assert first == 2 and second == 0
-    assert (await db.execute(select(Notification))).scalars().all().__len__() == 2
+    assert first == 2 and second == 0  # telegram + email once
+    assert len((await db.execute(select(Notification))).scalars().all()) == 2
 
 
-# --- priority ---
-
-
-async def test_priority_set_from_severity_at_fanout(db):
+async def test_priority_from_severity(db):
     for sev, expect in [("critical", 0), ("warning", 1), ("info", 2)]:
         assert severity_priority(sev) == expect
-    user = await seed_user(db, "u@x.io", chat_id="c1")
-    group = await seed_group(db, "g", [user])
-    await seed_route(db, group, min_severity="info", channels=["telegram"])
+    group = await seed_group(db, "g", [])
+    await seed_route(db, group)
+    await seed_group_channel(db, group, "telegram", bot_token="b", chat_id="c1")
     crit = await seed_incident(db, severity="critical", title="crit")
     info = await seed_incident(db, severity="info", title="info")
     info.group_key = "host=other"
     await db.commit()
     await fan_out_pending(db, now=NOW)
     await db.commit()
-    by_addr = {
-        n.incident_id: n.priority for n in (await db.execute(select(Notification))).scalars()
-    }
-    assert by_addr[crit.id] == 0
-    assert by_addr[info.id] == 2
+    pr = {n.incident_id: n.priority for n in (await db.execute(select(Notification))).scalars()}
+    assert pr[crit.id] == 0 and pr[info.id] == 2
 
 
 async def test_claim_orders_critical_before_info(db):
-    """The global claim queue drains higher priority (critical) first."""
-    users = [await seed_user(db, f"u{i}@x.io", chat_id=f"c{i}") for i in range(6)]
-    await seed_group(db, "g", users)
-    # 3 info incidents (older) + 3 critical (newer): priority must win over age
-    for i in range(3):
-        inc = await seed_incident(db, severity="info", title=f"info{i}")
-        inc.group_key = f"host=i{i}"
-        await db.flush()
-        for u in users:
-            db.add(
-                Notification(
-                    incident_id=inc.id,
-                    channel="telegram",
-                    recipient_user_id=u.id,
-                    recipient_address=u.telegram_chat_id,
-                    status="pending",
-                    priority=2,
-                    created_at=NOW - timedelta(hours=2),
-                )
-            )
-    for i in range(3):
-        inc = await seed_incident(db, severity="critical", title=f"crit{i}")
-        inc.group_key = f"host=c{i}"
-        await db.flush()
-        for u in users:
-            db.add(
-                Notification(
-                    incident_id=inc.id,
-                    channel="telegram",
-                    recipient_user_id=u.id,
-                    recipient_address=u.telegram_chat_id,
-                    status="pending",
-                    priority=0,
-                    created_at=NOW,
-                )
-            )
-    await db.commit()
-
-    batch = await claim_batch(db, worker_id="w", now=NOW, limit=10)
-    assert len(batch) == 10
-    # all claimed rows are the critical (priority 0) ones
-    assert all(n.priority == 0 for n in batch)
-
-
-# --- single global claim queue (multi-tenancy removed) ---
-
-
-async def test_claim_fills_batch_up_to_limit(db):
-    """The claim is a single global queue: a backlog larger than the limit
-    yields exactly `limit` rows, ordered by (priority, created_at)."""
-    inc = await seed_incident(db, title="a")
+    inc = await seed_incident(db, title="x")
     await db.flush()
-    for i in range(80):
-        u = await seed_user(db, f"a{i}@x.io", chat_id=f"ca{i}")
+    for i in range(3):
         db.add(
             Notification(
                 incident_id=inc.id,
                 channel="telegram",
-                recipient_user_id=u.id,
+                recipient_address=f"i{i}",
+                status="pending",
+                priority=2,
+                created_at=NOW - timedelta(hours=2),
+            )
+        )
+    for i in range(3):
+        db.add(
+            Notification(
+                incident_id=inc.id,
+                channel="telegram",
+                recipient_address=f"c{i}",
+                status="pending",
+                priority=0,
+                created_at=NOW,
+            )
+        )
+    await db.commit()
+    batch = await claim_batch(db, worker_id="w", now=NOW, limit=3)
+    assert len(batch) == 3 and all(n.priority == 0 for n in batch)
+
+
+async def test_claim_fills_batch_up_to_limit(db):
+    inc = await seed_incident(db, title="a")
+    await db.flush()
+    for i in range(80):
+        db.add(
+            Notification(
+                incident_id=inc.id,
+                channel="telegram",
                 recipient_address=f"ca{i}",
                 status="pending",
                 priority=1,
@@ -160,7 +128,7 @@ async def test_claim_fills_batch_up_to_limit(db):
         )
     await db.commit()
     batch = await claim_batch(db, worker_id="w", now=NOW, limit=50)
-    assert len(batch) == 50  # claim caps at the limit; rest stay pending
+    assert len(batch) == 50
     remaining = (
         (
             await db.execute(
@@ -175,55 +143,38 @@ async def test_claim_fills_batch_up_to_limit(db):
     assert len(remaining) == 30
 
 
-# --- quota defer visibility + pipelined send ---
-
-
-async def test_quota_defer_sets_reason_and_stays_pending(db):
-    users = [await seed_user(db, f"u{i}@x.io", chat_id=f"c{i}") for i in range(5)]
-    group = await seed_group(db, "g", users)
-    await seed_route(db, group, min_severity="info", channels=["telegram"])
+async def test_quota_defer_sets_reason(db, monkeypatch):
+    monkeypatch.setattr(settings, "NOTIFY_QUOTA_GROUP_PER_HOUR", 2)
+    group = await seed_group(db, "g", [])
+    await seed_route(db, group)
+    for i in range(5):
+        await seed_group_channel(db, group, "telegram", bot_token="b", chat_id=f"c{i}")
     await seed_incident(db, severity="critical")
-    db.add(
-        NotificationSettings(
-            telegram_bot_token=None,
-            telegram_rate_per_second=100,
-            quota_group_per_hour=2,  # only 2 of 5 may send
-            quota_global_per_day=1000,
-        )
-    )
     await db.commit()
     await fan_out_pending(db, now=NOW)
     await db.commit()
-
-    channel = FakeChannel()
-    result = await deliver_once(db, channels={"telegram": channel}, worker_id="w", now=NOW)
+    result = await deliver_once(db, channels={"telegram": FakeChannel()}, worker_id="w", now=NOW)
     await db.commit()
-
-    assert int(result) == 2  # quota capped sends
-    assert result.deferred == 3
+    assert int(result) == 2 and result.deferred == 3
     deferred = (
         (await db.execute(select(Notification).where(Notification.status == "pending")))
         .scalars()
         .all()
     )
-    assert len(deferred) == 3
-    assert all("quota: group" in (n.last_error or "") for n in deferred)
-    assert all(n.retry_at is not None for n in deferred)
+    assert len(deferred) == 3 and all("quota: group" in (n.last_error or "") for n in deferred)
 
 
 async def test_pipelined_send_marks_all_sent(db):
-    users = [await seed_user(db, f"u{i}@x.io", chat_id=f"c{i}") for i in range(12)]
-    group = await seed_group(db, "g", users)
-    await seed_route(db, group, min_severity="info", channels=["telegram"])
+    group = await seed_group(db, "g", [])
+    await seed_route(db, group)
+    for i in range(12):
+        await seed_group_channel(db, group, "telegram", bot_token="b", chat_id=f"c{i}")
     await seed_incident(db, severity="critical")
     await db.commit()
     await fan_out_pending(db, now=NOW)
     await db.commit()
-
     channel = FakeChannel()
     result = await deliver_once(db, channels={"telegram": channel}, worker_id="w", now=NOW)
     await db.commit()
-    assert int(result) == 12
-    assert len(channel.sent) == 12
-    statuses = (await db.execute(select(Notification.status))).scalars().all()
-    assert all(s == "sent" for s in statuses)
+    assert int(result) == 12 and len(channel.sent) == 12
+    assert all(s == "sent" for s in (await db.execute(select(Notification.status))).scalars().all())

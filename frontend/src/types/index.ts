@@ -140,12 +140,15 @@ export interface ActiveAlert {
   endsAt: string;
 }
 
-export interface NotificationSettings {
-  telegram_bot_token: string | null;
-  telegram_rate_per_second: number;
-  quota_group_per_hour: number;
-  quota_global_per_day: number;
-  pending_softcap: number;
+export interface GroupChannel {
+  id: string;
+  channel: "telegram" | "email" | "oncall";
+  enabled: boolean;
+  chat_id: string | null;
+  email: string | null;
+  bot_token: string | null; // MASKED when set
+  webhook_url: string | null; // MASKED when set
+  oncall_token: string | null; // MASKED when set
 }
 
 export interface Recipient {

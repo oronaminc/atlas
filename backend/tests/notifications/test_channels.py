@@ -60,16 +60,20 @@ async def test_email_smtp_failure_raises_channel_error(monkeypatch):
         await EmailChannel().send("ops@example.com", "x")
 
 
-async def test_registry_builds_channels_from_settings(db):
+def test_registry_channel_for_per_group():
     from app.core.security import encrypt_secret
-    from app.notifications.channels.registry import build_channels
-    from app.notifications.settings import get_notification_settings
+    from app.models.delivery import GroupChannel
+    from app.notifications.channels.registry import channel_for
 
-    settings_row = await get_notification_settings(db)
-    # no token -> email only
-    channels = build_channels(settings_row)
-    assert "email" in channels and "telegram" not in channels
+    email = channel_for(GroupChannel(channel="email", email="a@x.io"))
+    assert email is not None and email.name == "email"
 
-    settings_row.telegram_bot_token = encrypt_secret("REAL-TOKEN")
-    channels = build_channels(settings_row)
-    assert set(channels) == {"telegram", "email"}
+    tg = channel_for(
+        GroupChannel(channel="telegram", bot_token=encrypt_secret("REAL"), chat_id="c1")
+    )
+    assert tg is not None and tg.name == "telegram"
+    # incomplete telegram (no token) -> None (skipped, no recipients)
+    assert channel_for(GroupChannel(channel="telegram", chat_id="c1")) is None
+
+    oncall = channel_for(GroupChannel(channel="oncall", webhook_url=encrypt_secret("https://h")))
+    assert oncall is not None and oncall.name == "oncall"

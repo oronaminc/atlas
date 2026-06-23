@@ -2,9 +2,9 @@ from app.models.alerting import AlertEvent, Incident, IncidentEvent
 from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.delivery import (
+    GroupChannel,
     Notification,
     NotificationDefault,
-    NotificationSettings,
 )
 from app.models.group import Group, GroupServiceCode, UserGroup
 from app.models.grouping import GroupingRule
@@ -30,7 +30,7 @@ __all__ = [
     "MimirSilence",
     "Notification",
     "NotificationDefault",
-    "NotificationSettings",
+    "GroupChannel",
     "IncidentEvent",
     "NotificationPolicy",
     "Receiver",
