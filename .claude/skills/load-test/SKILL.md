@@ -37,37 +37,39 @@ uv run python -m loadtest.query_bench                                          #
 uv run python -m loadtest.fanout_storm --recipients 300 --incidents 10        # outbox depth + send rate
 ```
 
-Baseline numbers (2026-06-12, 4 vCPU / 16GB container): see CLAUDE.md
-"Load-test findings". Re-run after perf changes and diff against those.
+Baselines are container-relative (4 vCPU / 16GB reference) — re-measure after
+perf changes and compare trends/ratios, not absolutes.
 
-## Partition-migration proof (Phase 3 procedure)
+## Partitioning (baked into the baseline)
 
-To re-verify migration 0006 on a populated table: reset PG to revision 0005
-(`uv run alembic downgrade`/fresh schema + `upgrade 0005`), seed
-(`uv run python -m loadtest.seed_events --rows 10000000` — stamps two
-synthetic tenant ids), snapshot `count(*)` + per-tenant counts, then time
-`uv run alembic upgrade head` (prints `0006: conversion lock window = Ns`)
-and re-compare counts. 2026-06-13 result @10M: 9.6s lock window, zero loss.
-After conversion, `query_bench` still works against the partitioned parent;
-run a maintenance pass + `app.api.v1.stats._alert_counts` timing for the
-trend before/after (909ms -> 2.3ms p50 @10M).
+`alert_events` is RANGE-partitioned by `received_at` from the **0001 baseline**
+(daily partitions created at runtime by `maintenance_worker`); there is no
+longer a separate conversion migration to re-verify. To load-test it: seed via
+COPY (`seed_events --rows 10000000`), run a maintenance pass, then `query_bench`
++ time `app.api.v1.stats._alert_counts` for the trend — assert partition pruning
+(EXPLAIN: only recent partitions scanned, no full seq scan). SQLite (unit tests)
+stays a plain table; partition ops are PG-only.
 
-## Notification scale (Phase 4)
+## Notification scale
 
-`fanout_storm` drives the real pipelined deliver_once. Before/after this phase:
-send rate 10.9/s -> 21.3/s at the 25/s bucket. claim @1.3M pending: seed via SQL
-(one notification per distinct user, UNIQUE(incident,channel,user)), then EXPLAIN
-the per-tenant claim — must be Index Scan using ix_notifications_claim, no Seq
-Scan, no Sort (861ms -> 0.49ms). TRUNCATE notifications + DELETE notification_routes
-between fanout_storm runs.
+`fanout_storm` drives the real pipelined `deliver_once` over **per-group
+channels** (no global routes): it seeds one group mapped to an l2 + N telegram
+`GroupChannel`s, and incidents carrying that l2. Dedup is
+`UNIQUE(incident_id, channel, recipient_address)`. claim @high pending: EXPLAIN
+the claim — must be Index Scan using **`ix_notifications_claim` `(priority,
+created_at)`** (partial `WHERE status IN ('pending','failed')` on PG), no Seq
+Scan, no Sort. `TRUNCATE notifications, group_channels, group_service_codes`
+between runs.
 
 ## Pitfalls (hit while building this)
 
-- `fanout_storm` reruns accumulate groups+routes: **routes are global**, every
-  enabled route matches every un-notified incident → reruns multiply targets.
-  `TRUNCATE notifications; DELETE FROM notification_routes;` between runs.
-- `notification_settings` row doesn't exist until first read — UPDATEing
-  quotas on a fresh DB no-ops and the default 30/group/h freezes sends at 30.
+- `fanout_storm` reruns accumulate groups + group_channels → reruns multiply
+  targets. `TRUNCATE notifications, group_channels, group_service_codes;` between
+  runs. (The script also marks pre-existing incidents `notified_at = now()` so
+  only its fresh incidents fan out.)
+- Quotas/rate are **env now** (`NOTIFY_QUOTA_GROUP_PER_HOUR` default 30,
+  `NOTIFY_QUOTA_GLOBAL_PER_DAY` default 500, `NOTIFY_RATE_PER_SECOND` 25) — export
+  high quotas before a storm or the default 30/group/h freezes sends at 30.
 - asyncpg `copy_records_to_table` has no binary jsonb encoder — seeder uses
   text-format COPY.
 - Run `ANALYZE alert_events` after bulk seed (seeder does) or plans lie.
