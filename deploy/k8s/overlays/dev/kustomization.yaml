@@ -32,6 +32,11 @@ secretGenerator:
       - OIDC_REDIRECT_URI=
 
 patches:
+  # Per-env MIMIR_* override (strategic merge over the base atlas-config).
+  - path: atlas-config-patch.yaml
+    target:
+      kind: ConfigMap
+      name: atlas-config
   # Dev runs everything single-replica and over plain http.
   - patch: |-
       - op: replace
@@ -67,20 +72,9 @@ patches:
       - op: add
         path: /data/ATLAS_PUBLIC_URL
         value: https://atlas-dev.sktelecom.com/alert-hub
-      # Observability endpoints — per-overlay so dev/prod can point at different
-      # stacks. Each backend (mimir/loki/tempo) sits behind its own gateway in
-      # its own namespace; port 80 is the canonical gateway port (8080 is the
-      # deprecated legacy-http-metrics port). All Mimir traffic (ruler/query/
-      # alertmanager) shares the one mimir-gateway host.
-      - op: add
-        path: /data/MIMIR_RULER_URL
-        value: http://mimir-gateway.mimir.svc:80/prometheus/config/v1/rules
-      - op: add
-        path: /data/MIMIR_ALERTMANAGER_URL
-        value: http://mimir-gateway.mimir.svc:80
-      - op: add
-        path: /data/MIMIR_QUERY_URL
-        value: http://mimir-gateway.mimir.svc:80/prometheus
+      # MIMIR_* endpoints moved to atlas-config-patch.yaml (strategic merge).
+      # Loki/Tempo/Grafana stay here for now; each sits behind its own gateway,
+      # port 80 canonical (8080 = deprecated legacy-http-metrics port).
       - op: add
         path: /data/LOKI_URL
         value: http://loki-gateway.loki.svc:80
